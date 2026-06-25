@@ -25,10 +25,145 @@
 
 require_once(__DIR__ . '/../../../../lib/behat/behat_base.php');
 
+use local_adele\task\update_user_path;
+
 /**
  * Steps definitions for Adele.
  */
 class behat_local_adele extends behat_base {
+    /**
+     * Create a mod_adele activity in a course, linked to a named learning path.
+     *
+     * Creates the activity with participantslist = [1] ("all participants of this
+     * course"), so the course_module_created event fires mod_adele_observer::saved_module,
+     * which subscribes every enrolled user to the learning path (creating their
+     * local_adele_path_user snapshot) - the same chain the PHPUnit harness drives.
+     *
+     * @Given /^a learning path activity "(?P<name>[^"]+)" for "(?P<lpname>[^"]+)" exists in course "(?P<shortname>[^"]+)"$/
+     *
+     * @param string $name      The activity name.
+     * @param string $lpname    The learning path name (from the learningpaths generator).
+     * @param string $shortname The course shortname.
+     */
+    public function a_learning_path_activity_exists_in_course(string $name, string $lpname, string $shortname): void {
+        global $DB, $CFG;
+        require_once($CFG->dirroot . '/lib/testing/generator/lib.php');
+
+        $courseid = $DB->get_field('course', 'id', ['shortname' => $shortname], MUST_EXIST);
+        $lpid = $DB->get_field('local_adele_learning_paths', 'id', ['name' => $lpname], MUST_EXIST);
+
+        $generator = \testing_util::get_data_generator();
+        $generator->get_plugin_generator('mod_adele')->create_instance([
+            'course'           => $courseid,
+            'name'             => $name,
+            'participantslist' => [1],
+            'learningpathid'   => $lpid,
+            // view = 1 (top-level path view) is required for view.php to render the
+            // SPA; it defaults to 0 in the table, which would bail out before output.
+            'view'             => 1,
+            'userlist'         => 1,
+        ]);
+    }
+
+    /**
+     * Open the timed restriction window for a node in every active learner snapshot.
+     *
+     * Mirrors the PHPUnit harness' set_window(): it rewrites the node's `timed`
+     * restriction condition (data.label == 'timed') in each local_adele_path_user
+     * row so the window is now open (start in the past, end in the future) WITHOUT
+     * recomputing - exactly as the world reaching the scheduled boundary would.
+     * The subsequent "I run the scheduled learning path update tasks" step then
+     * recomputes and unlocks/enrols.
+     *
+     * @Given /^the timed restriction window for node "(?P<node>[^"]+)" is now open$/
+     *
+     * @param string $node The node id (e.g. dndnode_2).
+     */
+    public function the_timed_window_for_node_is_now_open(string $node): void {
+        global $DB;
+        $start = date('Y-m-d\TH:i', strtotime('-1 hour'));
+        $end   = date('Y-m-d\TH:i', strtotime('+7 days'));
+        $updated = 0;
+        foreach ($DB->get_records('local_adele_path_user', ['status' => 'active']) as $record) {
+            $json = json_decode($record->json, true);
+            if (!is_array($json) || empty($json['tree']['nodes'])) {
+                continue;
+            }
+            $changed = false;
+            foreach ($json['tree']['nodes'] as &$tn) {
+                if (($tn['id'] ?? '') !== $node || empty($tn['restriction']['nodes'])) {
+                    continue;
+                }
+                // NB: iterate the real array (no "?? []" - that returns a by-value
+                // copy and silently defeats the &$cn reference, so the write is lost).
+                foreach ($tn['restriction']['nodes'] as &$cn) {
+                    if (($cn['data']['label'] ?? '') === 'timed') {
+                        $cn['data']['value']['start'] = $start;
+                        $cn['data']['value']['end']   = $end;
+                        $changed = true;
+                    }
+                }
+                unset($cn);
+            }
+            unset($tn);
+            if ($changed) {
+                $DB->set_field('local_adele_path_user', 'json', json_encode($json), ['id' => $record->id]);
+                $updated++;
+            }
+        }
+        if ($updated === 0) {
+            throw new \RuntimeException(
+                "No active learner snapshot carried a timed restriction on node '{$node}'."
+            );
+        }
+    }
+
+    /**
+     * Assert that a timed node scheduled a per-user adhoc update task (#438).
+     *
+     * Proves the SCHEDULING half of the timed-restriction rework: subscribing a
+     * learner to a future-windowed timed node must queue an
+     * \local_adele\task\update_user_path adhoc task for the boundary.
+     *
+     * @Then /^a learning path update task should be scheduled$/
+     */
+    public function a_learning_path_update_task_should_be_scheduled(): void {
+        $tasks = \core\task\manager::get_adhoc_tasks('\\' . update_user_path::class);
+        if (empty($tasks)) {
+            throw new \RuntimeException(
+                'Expected a scheduled \\local_adele\\task\\update_user_path adhoc task, but none were queued.'
+            );
+        }
+    }
+
+    /**
+     * Force-run every queued update_user_path adhoc task.
+     *
+     * The core "I run all adhoc tasks" step only fires tasks whose next-run-time
+     * has already passed; a timed boundary task is scheduled in the future, so it
+     * would be skipped. This step executes the queued update_user_path tasks
+     * directly (as the PHPUnit harness does), simulating cron reaching the
+     * boundary, so the real task drives the recompute -> unlock -> enrol.
+     *
+     * @When /^I run the scheduled learning path update tasks$/
+     */
+    public function i_run_the_scheduled_learning_path_update_tasks(): void {
+        global $DB;
+        $tasks = \core\task\manager::get_adhoc_tasks('\\' . update_user_path::class);
+        foreach ($tasks as $task) {
+            ob_start();
+            try {
+                $task->execute();
+            } finally {
+                ob_end_clean();
+            }
+            // The task ran to completion; remove its queue record (mirrors a
+            // successful cron run) so re-running this step is idempotent. We delete
+            // the record directly rather than via adhoc_task_complete(), which
+            // expects a lock acquired through get_next_adhoc_task().
+            $DB->delete_records('task_adhoc', ['id' => $task->get_id()]);
+        }
+    }
     /**
      * Drag and drop with HTML5 data transfer, optionally targeting a dropzone.
      *

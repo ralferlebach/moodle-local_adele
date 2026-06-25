@@ -30,6 +30,7 @@ namespace local_adele;
 use local_adele\course_completion\course_completion_status;
 use local_adele\course_restriction\course_restriction_status;
 use local_adele\helper\user_path_relation;
+use local_adele\helper\adhoc_task_helper;
 use local_adele\event\node_finished;
 use context_system;
 use local_adele\event\user_path_updated;
@@ -61,6 +62,7 @@ class relation_update {
                 $creation = true;
             }
             self::subscribe_user_starting_node($userpath);
+            self::reschedule_timed_restrictions_for_all_nodes($userpath);
             if (!empty($userpath->json['tree']['nodes'])) {
                 foreach ($userpath->json['tree']['nodes'] as &$node) {
                     $completioncriteria = $completionclass->get_condition_status($node, $userpath->user_id);
@@ -1025,6 +1027,30 @@ class relation_update {
     }
 
     /**
+     * Reschedule the timed-restriction adhoc tasks for every node in the user path.
+     *
+     * enrol_user_into_node() only schedules for nodes it actually (re-)enrols, so a
+     * child node that was already unlocked earlier would never have its task updated
+     * when a restriction date is moved in the editor. This iterates ALL non-dropzone
+     * nodes; the per-slot dedup key makes reschedule_or_queue_adhoc_task() idempotent,
+     * so re-covering the enrolled nodes here is harmless.
+     *
+     * @param object $userpath The user-path object (json already decoded as array).
+     * @return void
+     */
+    public static function reschedule_timed_restrictions_for_all_nodes(&$userpath) {
+        if (empty($userpath->json['tree']['nodes'])) {
+            return;
+        }
+        foreach ($userpath->json['tree']['nodes'] as $node) {
+            if (($node['type'] ?? '') === 'dropzone') {
+                continue;
+            }
+            adhoc_task_helper::set_scheduled_adhoc_tasks($node, $userpath);
+        }
+    }
+
+    /**
      * Subscribe to starting nodes
      * @param object $userpath
      */
@@ -1063,6 +1089,11 @@ class relation_update {
             if (!isset($node['data']['first_enrolled'])) {
                 $node['data']['first_enrolled'] = time();
             }
+            // Schedule tasks for any future restriction boundaries. The helper skips
+            // past boundaries internally, so calling this on every evaluation handles
+            // both initial enrolment and later restriction-date edits; the dedup key
+            // keeps it idempotent.
+            adhoc_task_helper::set_scheduled_adhoc_tasks($node, $userpath);
             if (isset($instances[$courseid])) {
                 $instance = $instances[$courseid];
             } else {

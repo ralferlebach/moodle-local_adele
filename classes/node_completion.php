@@ -30,6 +30,7 @@ namespace local_adele;
 use completion_info;
 use context_system;
 use local_adele\event\user_path_updated;
+use local_adele\helper\adhoc_task_helper;
 use stdClass;
 
 defined('MOODLE_INTERNAL') || die();
@@ -95,6 +96,13 @@ class node_completion {
                         $node->data->first_enrolled = time();
                         $firstenrollededit = true;
                     }
+                    // Schedule tasks for any future restriction boundaries on this node.
+                    // The helper skips past boundaries, so calling it on every evaluation
+                    // covers both initial enrolment and later restriction-date edits.
+                    adhoc_task_helper::set_scheduled_adhoc_tasks(
+                        json_decode(json_encode($node), true),
+                        $event->other['userpath']
+                    );
                     $selectedrole = get_config('local_adele', 'enroll_as_setting');
                     $context = \context_course::instance($subscribecourse);
                     $isenrolled = is_enrolled($context, $event->other['userpath']->user_id);

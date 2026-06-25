@@ -60,11 +60,33 @@ class update_user_path extends \core\task\adhoc_task {
      */
     public function execute() {
 
+        global $DB;
         $taskdata = $this->get_custom_data();
 
-        $helper = new user_path_relation();
-        $currentuserpath = $helper->get_user_path_relation($taskdata->learning_path_id, $taskdata->user_id, $taskdata->course_id);
+        // Look up the user path by primary key when available (preferred, unambiguous).
+        // Fall back to the 3-field combo for backward compatibility with tasks that
+        // were queued before userpath_id was stored.
+        if (!empty($taskdata->userpath_id)) {
+            $currentuserpath = $DB->get_record(
+                'local_adele_path_user',
+                ['id' => $taskdata->userpath_id, 'status' => 'active']
+            );
+        } else {
+            $helper = new user_path_relation();
+            $currentuserpath = $helper->get_user_path_relation(
+                $taskdata->learning_path_id,
+                $taskdata->user_id,
+                $taskdata->course_id
+            );
+        }
+        // The path may have been deleted/deactivated since the task was queued.
+        if (empty($currentuserpath)) {
+            return true;
+        }
         try {
+            // Re-read the CURRENT json: a boundary task always recomputes the real,
+            // present-day state, so a task that fires against a since-changed window
+            // (date moved, condition removed) simply re-evaluates correctly.
             $currentuserpath->json = json_decode($currentuserpath->json, true);
             learning_path_update::trigger_user_path_update($currentuserpath);
         } catch (\Exception $e) {

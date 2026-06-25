@@ -195,7 +195,7 @@ class modquiz implements course_completion {
                           $record->cmid .
                           '" target="_blank">' .
                           // #464 H4: escape the quiz name inside the intended anchor (v-html sink).
-                          format_string($record->name, true, ['context' => \context_system::instance()]) .
+                          format_string($record->name, true, ['context' => \context_system::instance(), 'filter' => false]) .
                           '</a>';
                         $modquizzes[$completion['id']]['placeholders']['minnumb'] =
                         $completion['data']['value']['grade'] ?? $record->sumgrades ?? 0;

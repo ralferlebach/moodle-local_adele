@@ -98,11 +98,14 @@ class learning_path_courses {
             // #464 M5: the course summary is rendered via v-html in the expanded node card,
             // so sanitise it server-side (format_text purifies scripts/handlers while keeping
             // legitimate formatting). summary is declared PARAM_RAW precisely to carry this
-            // already-purified HTML.
+            // already-purified HTML. filter => false: this runs from the get_availablecourses
+            // web service where $PAGE has no context, and the text filters (emoticon/multilang)
+            // dereference $PAGE->context and throw a codingerror; the purify (the security part)
+            // is independent of filtering, and filters were never applied to this field before.
             $entry->summary = format_text(
                 $entry->summary,
                 $entry->summaryformat ?? FORMAT_HTML,
-                ['context' => $context]
+                ['context' => $context, 'filter' => false]
             );
             $fs = get_file_storage();
             $files = $fs->get_area_files($context->id, 'course', 'overviewfiles', 0, 'itemid, filepath, filename', false);

@@ -39,6 +39,7 @@ $string['RUSTY_RED'] = '#c76413';
 $string['VERY_DARK_GRAY'] = '#373737';
 $string['activefilter'] = '[' . __LINE__ . ']Activate filter';
 $string['activefilter_desc'] = '[' . __LINE__ . ']The filters will effect the available courses for the creation of learning paths';
+$string['adele:assist'] = '[' . __LINE__ . ']Assist with learning paths';
 $string['adele:canmanage'] = '[' . __LINE__ . ']Is allowed to manage Learning path Plugins';
 $string['adele:edit'] = '[' . __LINE__ . ']Edit learning path';
 $string['adele:teacheredit'] = '[' . __LINE__ . ']Teacher edit';

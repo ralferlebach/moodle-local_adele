@@ -39,6 +39,7 @@ $string['RUSTY_RED'] = '#c76413';
 $string['VERY_DARK_GRAY'] = '#373737';
 $string['activefilter'] = 'Filter aktivieren';
 $string['activefilter_desc'] = 'Die Filter wirken sich auf die verfügbaren Kurse für die Erstellung von Lernpfaden aus';
+$string['adele:assist'] = 'Bei Lernpfaden assistieren';
 $string['adele:canmanage'] = 'Darf Lernpfad-Plugins verwalten';
 $string['adele:edit'] = 'Lernpfad bearbeiten';
 $string['adele:teacheredit'] = 'TrainerIn bearbeiten';

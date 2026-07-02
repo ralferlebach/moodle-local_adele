@@ -26,6 +26,8 @@
 require_once(__DIR__ . '/../../../../lib/behat/behat_base.php');
 
 use local_adele\task\update_user_path;
+use local_adele\relation_update;
+use local_adele\event\user_path_updated;
 
 /**
  * Steps definitions for Adele.
@@ -461,5 +463,172 @@ class behat_local_adele extends behat_base {
             })();
             JS;
         $this->getSession()->executeScript($script);
+    }
+
+    /**
+     * Mark a course complete for every subscribed learner and recompute their paths.
+     *
+     * Mirrors the PHPUnit completion harness (uc03_parent_courses_restriction):
+     *  1. Insert/update a course_completions row for the course (found by shortname)
+     *     for every user that has an active local_adele_path_user snapshot, and purge
+     *     the coursecompletion MUC entry - so completion_completion::is_complete()
+     *     reads the fresh row.
+     *  2. Fire a fresh \local_adele\event\user_path_updated per stored path record so
+     *     relation_update::updated_single re-evaluates: the completing node's
+     *     completion feedback flips to 'completed', and any dependent node whose
+     *     parent_courses restriction references it then unlocks (and enrols the user).
+     *
+     * This is the event-driven chain \core\event\course_completed would trigger via
+     * local_adele\completion::completed, exercised deterministically without relying
+     * on Moodle's completion cron aggregation.
+     *
+     * @Given /^the course "(?P<shortname>[^"]+)" is completed for every subscribed learner$/
+     *
+     * @param string $shortname The course shortname whose completion should be recorded.
+     */
+    public function the_course_is_completed_for_every_subscribed_learner(string $shortname): void {
+        global $DB;
+        $courseid = (int) $DB->get_field('course', 'id', ['shortname' => $shortname], MUST_EXIST);
+
+        $records = $DB->get_records('local_adele_path_user', ['status' => 'active']);
+        if (empty($records)) {
+            throw new \RuntimeException('No active learner snapshots found to complete a course for.');
+        }
+
+        $cache = \cache::make('core', 'coursecompletion');
+        foreach ($records as $record) {
+            $userid = (int) $record->user_id;
+            if (!$DB->record_exists('course_completions', ['course' => $courseid, 'userid' => $userid])) {
+                $DB->insert_record('course_completions', (object) [
+                    'course'        => $courseid,
+                    'userid'        => $userid,
+                    'timeenrolled'  => time(),
+                    'timestarted'   => time(),
+                    'timecompleted' => time(),
+                    'reaggregate'   => 0,
+                ]);
+            } else {
+                $DB->set_field('course_completions', 'timecompleted', time(),
+                    ['course' => $courseid, 'userid' => $userid]);
+            }
+            $cache->delete($userid . '_' . $courseid);
+        }
+
+        // Re-evaluate each stored path from the current DB state so the restriction
+        // that references the now-completed parent node unlocks. Two passes: the first
+        // stamps the parent node's completion feedback as 'completed', the second lets
+        // the dependent node's parent_courses restriction observe it.
+        for ($pass = 0; $pass < 2; $pass++) {
+            foreach ($DB->get_records('local_adele_path_user', ['status' => 'active']) as $fresh) {
+                $fresh->json = json_decode($fresh->json, true);
+                $event = user_path_updated::create([
+                    'objectid' => $fresh->id,
+                    'context'  => \context_system::instance(),
+                    'other'    => ['userpath' => $fresh],
+                ]);
+                ob_start();
+                try {
+                    relation_update::updated_single($event);
+                } finally {
+                    ob_end_clean();
+                }
+            }
+        }
+    }
+
+    /**
+     * Assert the current page carries no Moodle exception / coding-error notice.
+     *
+     * Guards scenarios (e.g. #464 get_availablecourses $PAGE codingerror) where a
+     * server-side exception would render as an errorbox/exception notification or a
+     * debugging block rather than a hard 500 - the SPA would still shell out but the
+     * web service feeding it would have failed.
+     *
+     * @Then /^I should not see a coding error notice$/
+     */
+    public function i_should_not_see_a_coding_error_notice(): void {
+        $script = <<<'JS'
+            (function() {
+              const text = document.body ? document.body.innerText : '';
+              const markers = ['Coding error detected', 'Exception - ', 'Debug info:',
+                'Error reading from database', 'Uncaught Error', 'must be overridden'];
+              for (const m of markers) {
+                if (text.indexOf(m) !== -1) {
+                  return m;
+                }
+              }
+              // A rendered Moodle exception/errorbox element.
+              if (document.querySelector('.errorbox, .alert-danger .stacktrace, .stacktrace')) {
+                return 'errorbox';
+              }
+              return '';
+            })();
+            JS;
+        $found = $this->getSession()->evaluateScript($script);
+        if (!empty($found)) {
+            throw new \RuntimeException("A coding-error / exception notice was rendered on the page: '{$found}'.");
+        }
+    }
+
+    /**
+     * Open a runtime node's feedback panel (the fa-comment toggle in UserInformation).
+     *
+     * The toggle-button lives inside a Vue-Flow-transformed node card that may be
+     * partially off-screen or overlapped, so a native Behat click can be reported as
+     * "element not interactable". This dispatches a real click on the toggle-button
+     * directly, flipping showFeedbackarea so the v-html-bound feedback string renders.
+     *
+     * @When /^I open the runtime feedback panel for node "(?P<node>[^"]+)"$/
+     *
+     * @param string $node The node id (e.g. dndnode_2).
+     */
+    public function i_open_the_runtime_feedback_panel_for_node(string $node): void {
+        $nodejson = json_encode($node, JSON_UNESCAPED_SLASHES);
+        $script = <<<JS
+            (function() {
+              const container = document.querySelector('.' + $nodejson + '_user_info_listener');
+              if (!container) {
+                throw new Error('Runtime info container not found for node: ' + $nodejson);
+              }
+              const toggle = container.querySelector('.toggle-button');
+              if (!toggle) {
+                throw new Error('Feedback toggle button not found for node: ' + $nodejson);
+              }
+              toggle.scrollIntoView({block: 'center', inline: 'center'});
+              toggle.click();
+            })();
+            JS;
+        $this->getSession()->executeScript($script);
+    }
+
+    /**
+     * Assert an XSS payload name is rendered inert - present as text, never as a live element.
+     *
+     * Proves #464 H4/M5 end to end: a course/node name containing
+     * "<img src=x onerror=...>" must never materialise as a real <img> element with an
+     * onerror handler in the DOM (which would execute), even though its textual content
+     * may legitimately appear (escaped) inside a v-html-bound feedback string.
+     *
+     * @Then /^no live "(?P<tag>[^"]+)" element with an "(?P<attr>[^"]+)" attribute should exist$/
+     *
+     * @param string $tag  The element tag name to look for (e.g. img).
+     * @param string $attr The dangerous attribute (e.g. onerror).
+     */
+    public function no_live_element_with_attribute_should_exist(string $tag, string $attr): void {
+        $tagjson = json_encode($tag, JSON_UNESCAPED_SLASHES);
+        $attrjson = json_encode($attr, JSON_UNESCAPED_SLASHES);
+        $script = <<<JS
+            (function() {
+              const els = Array.from(document.querySelectorAll($tagjson));
+              const live = els.filter(el => el.hasAttribute($attrjson));
+              return live.length;
+            })();
+            JS;
+        $count = (int) $this->getSession()->evaluateScript($script);
+        if ($count > 0) {
+            throw new \RuntimeException(
+                "Found {$count} live <{$tag}> element(s) carrying the '{$attr}' attribute - the payload was not neutralised."
+            );
+        }
     }
 }

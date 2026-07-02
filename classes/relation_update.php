@@ -79,7 +79,7 @@ class relation_update {
                     ) {
                         $restrictionnodepaths[] = 'master';
                     } else if (isset($node['restriction'])) {
-                        foreach ($node['restriction']['nodes'] as $restrictionnodepath) {
+                        foreach (($node['restriction']['nodes'] ?? []) as $restrictionnodepath) {
                             $failedrestriction = false;
                             $validationconditionstring = [];
                             if (
@@ -186,6 +186,16 @@ class relation_update {
                             $restrictioncriteria,
                             $nodecompletedname
                         );
+                    } else {
+                        // A node with neither a master completion nor a `completion` structure
+                        // yields the same empty envelope validatenodecompletion() returns for an
+                        // empty completion set, so downstream getconditionnode() sees an empty
+                        // (valid=false) path instead of an undefined variable.
+                        $validatenodecompletion = [
+                            'completionnodepaths' => [],
+                            'singlecompletionnode' => [],
+                            'feedback' => self::getfeedback($node, $completioncriteria, $restrictioncriteria),
+                        ];
                     }
                     $completionnode = self::getconditionnode($validatenodecompletion['completionnodepaths'], 'completion');
                     $restrictionnode = self::getconditionnode($restrictionnodepaths, 'restriction');
@@ -287,7 +297,7 @@ class relation_update {
         $completionnodepaths = [];
         $singlecompletionnode = [];
         $feedback = self::getfeedback($node, $completioncriteria, $restrictioncriteria);
-        foreach ($node['completion']['nodes'] as $completionnode) {
+        foreach (($node['completion']['nodes'] ?? []) as $completionnode) {
             $failedcompletion = false;
             $validationconditionstring = [];
             if (
@@ -383,7 +393,7 @@ class relation_update {
             $feedback,
             $completionnodepaths,
             $completioncriteria,
-            $node['completion']['nodes']
+            $node['completion']['nodes'] ?? []
         );
         $feedback['status'] = self::getnodestatus(
             $feedback,
@@ -773,7 +783,7 @@ class relation_update {
           ],
         ];
 
-        foreach ($node['completion']['nodes'] as $conditionnode) {
+        foreach (($node['completion']['nodes'] ?? []) as $conditionnode) {
             if (
                 strpos($conditionnode['id'], '_feedback') !== false &&
                 isset($conditionnode['data']['visibility'])
@@ -831,8 +841,8 @@ class relation_update {
         }
 
         if (isset($node['restriction'])) {
-            foreach ($node['restriction']['nodes'] as $restrictionnode) {
-                if (strpos($restrictionnode['id'], '_feedback') !== false && $restrictionnode['data']['visibility']) {
+            foreach (($node['restriction']['nodes'] ?? []) as $restrictionnode) {
+                if (strpos($restrictionnode['id'], '_feedback') !== false && ($restrictionnode['data']['visibility'] ?? false)) {
                     $feedbacks['restriction']['before'][$restrictionnode['id']] =
                       isset($restrictionnode['data']['feedback_before']) ?
                         self::render_placeholders(
@@ -854,12 +864,12 @@ class relation_update {
                 }
             }
         }
-        if ($restrictioncriteria['master']) {
+        if ($restrictioncriteria['master'] ?? false) {
             $feedbacks['restriction']['before'] = [get_string('course_description_master', 'local_adele')];
             $feedbacks['status_restriction'] = 'accessible';
             $feedbacks['status'] = 'accessible';
         }
-        if ($completioncriteria['master']) {
+        if ($completioncriteria['master'] ?? false) {
             $feedbacks['completion']['after'] = [get_string('course_description_master', 'local_adele')];
             $feedbacks['status_completion'] = 'completed';
             $feedbacks['status'] = 'completed';

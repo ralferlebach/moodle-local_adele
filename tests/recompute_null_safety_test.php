@@ -41,26 +41,36 @@ final class recompute_null_safety_test extends advanced_testcase {
         $this->resetAfterTest();
     }
 
-    /** getfeedback() always returns the completion+restriction envelope. */
+    /**
+     * getfeedback() always returns the completion+restriction envelope.
+     *
+     * @param mixed $result
+     */
     private function assert_envelope($result): void {
         $this->assertIsArray($result);
         $this->assertArrayHasKey('completion', $result);
         $this->assertArrayHasKey('restriction', $result);
     }
 
-    /** A node with NO completion key must not crash getfeedback (foreach over null). */
+    /**
+     * A node with NO completion key must not crash getfeedback (foreach over null).
+     */
     public function test_getfeedback_missing_completion_key(): void {
         $node = ['id' => 'n1', 'data' => [], 'restriction' => ['nodes' => []]];
         $this->assert_envelope(relation_update::getfeedback($node, [], []));
     }
 
-    /** A node whose completion is explicitly null must not crash (the exact live error). */
+    /**
+     * A node whose completion is explicitly null must not crash (the exact live error).
+     */
     public function test_getfeedback_null_completion(): void {
         $node = ['id' => 'n1', 'data' => [], 'completion' => null, 'restriction' => ['nodes' => []]];
         $this->assert_envelope(relation_update::getfeedback($node, [], []));
     }
 
-    /** A restriction feedback-node with null data must not crash (visibility read). */
+    /**
+     * A restriction feedback-node with null data must not crash (visibility read).
+     */
     public function test_getfeedback_restriction_feedbacknode_null_data(): void {
         $node = [
             'id' => 'n1',
@@ -71,13 +81,17 @@ final class recompute_null_safety_test extends advanced_testcase {
         $this->assert_envelope(relation_update::getfeedback($node, [], []));
     }
 
-    /** A restriction that has no 'nodes' key must not crash getfeedback. */
+    /**
+     * A restriction that has no 'nodes' key must not crash getfeedback.
+     */
     public function test_getfeedback_restriction_without_nodes(): void {
         $node = ['id' => 'n1', 'data' => [], 'completion' => ['nodes' => []], 'restriction' => []];
         $this->assert_envelope(relation_update::getfeedback($node, [], []));
     }
 
-    /** validatenodecompletion() over a node with null completion returns the empty envelope. */
+    /**
+     * validatenodecompletion() over a node with null completion returns the empty envelope.
+     */
     public function test_validatenodecompletion_null_completion(): void {
         $node = ['id' => 'n1', 'data' => [], 'completion' => null, 'restriction' => ['nodes' => []]];
         $nodecompletedname = [];
@@ -91,7 +105,9 @@ final class recompute_null_safety_test extends advanced_testcase {
         $this->assertArrayHasKey('feedback', $result);
     }
 
-    /** validatenodecompletion() over a node with BOTH completion and restriction null recomputes safely. */
+    /**
+     * validatenodecompletion() over a node with BOTH completion and restriction null recomputes safely.
+     */
     public function test_validatenodecompletion_null_restriction_and_completion(): void {
         $node = ['id' => 'n1', 'data' => [], 'completion' => null, 'restriction' => null];
         $nodecompletedname = [];
@@ -104,7 +120,9 @@ final class recompute_null_safety_test extends advanced_testcase {
         $this->assertArrayHasKey('status', $result['feedback']);
     }
 
-    /** getconditionnode([]) - the consumer of the empty default - is valid=false, not a crash. */
+    /**
+     * getconditionnode([]) - the consumer of the empty default - is valid=false, not a crash.
+     */
     public function test_getconditionnode_empty_is_invalid_not_fatal(): void {
         $result = relation_update::getconditionnode([], 'completion');
         $this->assertFalse($result['valid']);

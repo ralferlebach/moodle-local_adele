@@ -60,7 +60,7 @@ class behat_local_adele extends behat_base {
             'name'             => $name,
             'participantslist' => [1],
             'learningpathid'   => $lpid,
-            // view = 1 (top-level path view) is required for view.php to render the
+            // View = 1 (top-level path view) is required for view.php to render the
             // SPA; it defaults to 0 in the table, which would bail out before output.
             'view'             => 1,
             'userlist'         => 1,

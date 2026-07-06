@@ -48,7 +48,7 @@ final class external_read_services_test extends advanced_testcase {
     protected function setUp(): void {
         parent::setUp();
         $this->resetAfterTest();
-        // get_availablecourses builds its SQL from these config values; make them
+        // Get_availablecourses builds its SQL from these config values; make them
         // explicit so the query is deterministic and free of "undefined property".
         set_config('includetags', '', 'local_adele');
         set_config('excludetags', '', 'local_adele');
@@ -163,7 +163,7 @@ final class external_read_services_test extends advanced_testcase {
         $this->assertIsArray($result);
         $this->assertSame($lpid, (int) $result['id']);
         $this->assertSame('Fetch me', $result['name']);
-        // json is present and decodes back to the stored tree.
+        // Json is present and decodes back to the stored tree.
         $decoded = json_decode($result['json'], true);
         $this->assertArrayHasKey('tree', $decoded);
     }

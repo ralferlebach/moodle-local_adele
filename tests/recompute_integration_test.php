@@ -38,9 +38,9 @@ use advanced_testcase;
 use context_system;
 use local_adele\event\user_path_updated;
 
-defined('MOODLE_INTERNAL') || die();
-
 /**
+ * End-to-end recompute integration test.
+ *
  * @package    local_adele
  * @copyright  2026 Wunderbyte GmbH
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later

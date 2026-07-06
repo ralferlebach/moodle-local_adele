@@ -32,9 +32,9 @@ namespace local_adele;
 use advanced_testcase;
 use context_system;
 
-defined('MOODLE_INTERNAL') || die();
-
 /**
+ * Coverage-gap tests for the learning_paths access helpers.
+ *
  * @package    local_adele
  * @copyright  2026 Wunderbyte GmbH
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
@@ -72,7 +72,7 @@ final class learning_paths_access_test extends advanced_testcase {
     }
 
     // -------------------------------------------------------------------------
-    // check_access() / return_learningpaths()
+    // Check_access() / return_learningpaths().
 
     /**
      * A plain user who is not an editor of anything and has no manage/assist
@@ -133,7 +133,7 @@ final class learning_paths_access_test extends advanced_testcase {
     }
 
     // -------------------------------------------------------------------------
-    // require_lp_editor_access()
+    // Require_lp_editor_access().
 
     /**
      * The owner (lp_editors member) may edit their own path - no exception.

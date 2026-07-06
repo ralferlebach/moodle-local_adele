@@ -1,4 +1,10 @@
-@local @local_adele @javascript
+# Tagged @local_catquiz (NOT @local_adele) on purpose: this scenario asserts the
+# "Catquiz Quiz" completion option and its palette ordering, so it hard-depends on the
+# optional local_catquiz plugin being installed AND rendering. `moodle-plugin-ci behat`
+# runs `--tags @local_adele`, so dropping that tag excludes this from the default CI
+# run; run it explicitly with `--tags @local_catquiz` in an environment where catquiz
+# is cleanly installed.
+@local @local_catquiz @javascript
 
 Feature: As an admin I perform editing of the adele learning plan.
 

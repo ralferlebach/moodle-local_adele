@@ -117,6 +117,10 @@ final class catquiz_test extends advanced_testcase {
 
         $this->resetAfterTest(true);
 
+        if (!class_exists('local_catquiz\catquiz')) {
+            $this->markTestSkipped('local_catquiz is not installed; catquiz completion cannot be exercised.');
+        }
+
         // Initialize catquiz object.
         $this->catquiz = new catquiz();
 

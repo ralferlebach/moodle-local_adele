@@ -105,6 +105,19 @@ final class uc09_catquiz_completion_test extends adele_learningpath_testcase {
     private const SCALE_ID = '1';
 
     /**
+     * Skip the whole catquiz use case when local_catquiz is not installed:
+     * the condition needs the local_catquiz\catquiz class and its
+     * local_catquiz_attempts table, so it cannot be exercised without it.
+     */
+    protected function setUp(): void {
+        parent::setUp();
+
+        if (!class_exists('local_catquiz\catquiz')) {
+            $this->markTestSkipped('local_catquiz is not installed; catquiz completion cannot be exercised.');
+        }
+    }
+
+    /**
      * Uses the main fixture.  patch_node_ids() replaces dndnode_1's
      * course_completed condition with a catquiz condition.
      */
@@ -207,9 +220,10 @@ final class uc09_catquiz_completion_test extends adele_learningpath_testcase {
             'timemodified'             => time(),
         ]);
 
-        // get_percentage_of_right_answers_by_scale() always calls progress::load()
-        // before iterating $catscaleids.  Without a local_catquiz_progress row
-        // it falls through to create_new(null) which throws a TypeError.
+        // The get_percentage_of_right_answers_by_scale() call always invokes
+        // progress::load() before iterating $catscaleids.  Without a
+        // local_catquiz_progress row it falls through to create_new(null),
+        // which throws a TypeError.
         // Insert a minimal progress record keyed to the same synthetic attemptid.
         $DB->insert_record('local_catquiz_progress', (object)[
             'userid'       => $userid,

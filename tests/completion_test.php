@@ -43,6 +43,8 @@ use PHPUnit\Framework\Attributes\RunInSeparateProcess;
  * @copyright  2023 Georg Maißer <info@wunderbyte.at>
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  *
+ * @runTestsInSeparateProcesses
+ * @preserveGlobalState disabled
  */
 #[CoversMethod(relation_update::class, 'searchnestedarray')]
 final class completion_test extends advanced_testcase {

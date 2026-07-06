@@ -35,7 +35,6 @@ use advanced_testcase;
  * @covers \local_adele\relation_update::validatenodecompletion
  */
 final class recompute_null_safety_test extends advanced_testcase {
-
     protected function setUp(): void {
         parent::setUp();
         $this->resetAfterTest();
@@ -98,7 +97,15 @@ final class recompute_null_safety_test extends advanced_testcase {
         $userpath = (object) ['user_id' => 1, 'json' => ['tree' => ['nodes' => []]]];
 
         $result = relation_update::validatenodecompletion(
-            [], $node, [], $userpath, [], 1, [], $nodecompletedname);
+            [],
+            $node,
+            [],
+            $userpath,
+            [],
+            1,
+            [],
+            $nodecompletedname
+        );
 
         // Same shape the empty case already yields, so downstream getconditionnode() sees [].
         $this->assertSame([], $result['completionnodepaths']);
@@ -114,7 +121,15 @@ final class recompute_null_safety_test extends advanced_testcase {
         $userpath = (object) ['user_id' => 1, 'json' => ['tree' => ['nodes' => []]]];
 
         $result = relation_update::validatenodecompletion(
-            [], $node, [], $userpath, [], 1, [], $nodecompletedname);
+            [],
+            $node,
+            [],
+            $userpath,
+            [],
+            1,
+            [],
+            $nodecompletedname
+        );
 
         $this->assertArrayHasKey('feedback', $result);
         $this->assertArrayHasKey('status', $result['feedback']);

@@ -43,7 +43,6 @@ use context_system;
  * @covers \local_adele\learning_paths::require_lp_editor_access
  */
 final class learning_paths_access_test extends advanced_testcase {
-
     protected function setUp(): void {
         parent::setUp();
         $this->resetAfterTest(true);

@@ -134,8 +134,11 @@ class specific_course implements course_restriction {
                                 // Ticket #464 H4: node_name is rendered via v-html, so escape the
                                 // name (the id match above is unaffected).
                                 $specificcourses[$restriction['id']]['placeholders']['node_name'] =
-                                    [format_string($usernode['data']['fullname'], true,
-                                        ['context' => \context_system::instance(), 'filter' => false])];
+                                    [format_string(
+                                        $usernode['data']['fullname'],
+                                        true,
+                                        ['context' => \context_system::instance(), 'filter' => false]
+                                    )];
                                 if (
                                     isset($usernode['data']['completion']) &&
                                     $usernode['data']['completion']['feedback']['status'] == 'completed'

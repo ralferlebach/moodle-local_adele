@@ -143,7 +143,7 @@ final class uc16_or_completion_test extends adele_learningpath_testcase {
      */
     private function enrol_complete_and_eval(
         bool $completechild = false,
-        bool $manualset     = false
+        bool $manualset = false
     ): void {
         global $DB;
 

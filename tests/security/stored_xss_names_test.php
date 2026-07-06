@@ -38,7 +38,6 @@ use local_adele\course_restriction\conditions\parent_courses;
  * @covers \local_adele\course_restriction\conditions\parent_courses::get_restriction_status
  */
 final class stored_xss_names_test extends advanced_testcase {
-
     /** A stored-XSS payload with a trailing marker, so we can prove the tag is removed
      *  while ordinary text content survives. */
     private const PAYLOAD = '<img src=x onerror=alert(1)>PWN';
@@ -53,16 +52,24 @@ final class stored_xss_names_test extends advanced_testcase {
     /**
      * Assert a produced display string neutralises the payload: no raw executable
      * tag, and the dangerous '<' is entity-encoded.
+     *
+     * @param string $haystack
      */
     private function assert_inert(string $haystack): void {
         foreach (['<img', '<script', 'onerror', 'javascript:'] as $bad) {
-            $this->assertStringNotContainsString($bad, $haystack,
-                "XSS token '$bad' leaked into a v-html-bound string (#464 H4).");
+            $this->assertStringNotContainsString(
+                $bad,
+                $haystack,
+                "XSS token '$bad' leaked into a v-html-bound string (#464 H4)."
+            );
         }
         // The format_string call strips the tag but keeps ordinary text, so the marker survives,
         // proving the name is still shown, just inert.
-        $this->assertStringContainsString('PWN', $haystack,
-            'format_string should keep the textual content while removing markup.');
+        $this->assertStringContainsString(
+            'PWN',
+            $haystack,
+            'format_string should keep the textual content while removing markup.'
+        );
     }
 
     // Course_completed condition.
@@ -73,9 +80,11 @@ final class stored_xss_names_test extends advanced_testcase {
      */
     public function test_course_completed_escapes_name_and_keeps_matching(): void {
         $payloadcourse = $this->getDataGenerator()->create_course(
-            ['fullname' => self::PAYLOAD, 'enablecompletion' => 1]);
+            ['fullname' => self::PAYLOAD, 'enablecompletion' => 1]
+        );
         $ampcourse = $this->getDataGenerator()->create_course(
-            ['fullname' => self::AMPNAME, 'enablecompletion' => 1]);
+            ['fullname' => self::AMPNAME, 'enablecompletion' => 1]
+        );
 
         $node = [
             'data' => ['course_node_id' => [$payloadcourse->id, $ampcourse->id]],
@@ -150,8 +159,10 @@ final class stored_xss_names_test extends advanced_testcase {
     public function test_modquiz_escapes_name_but_keeps_anchor(): void {
         global $DB;
         $course = $this->getDataGenerator()->create_course();
-        $quiz = $this->getDataGenerator()->create_module('quiz',
-            ['course' => $course->id, 'name' => self::PAYLOAD]);
+        $quiz = $this->getDataGenerator()->create_module(
+            'quiz',
+            ['course' => $course->id, 'name' => self::PAYLOAD]
+        );
 
         $node = [
             'completion' => ['nodes' => [[

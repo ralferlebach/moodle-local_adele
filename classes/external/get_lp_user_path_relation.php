@@ -93,9 +93,11 @@ class get_lp_user_path_relation extends external_api {
         // otherwise any student could read any other student's progress + email by id
         // (IDOR). The owner viewing their own path is always allowed (StudentView.vue
         // passes userId == own).
-        if ((int)$params['userpathid'] !== (int)$USER->id
+        if (
+            (int)$params['userpathid'] !== (int)$USER->id
                 && !has_capability('local/adele:teacheredit', $context)
-                && !learning_paths::check_access()) {
+                && !learning_paths::check_access()
+        ) {
             throw new \required_capability_exception(
                 $context,
                 'local/adele:teacheredit',

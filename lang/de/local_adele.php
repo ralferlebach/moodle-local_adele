@@ -558,4 +558,3 @@ $string['user_view_username'] = 'Nutzername';
 $string['userlistranking'] = 'Rang';
 $string['view'] = 'Anschauen';
 $string['warning_empty_space'] = 'Achten Sie bitte auf Leerzeichen und enden Sie nicht mit einem Komma';
-

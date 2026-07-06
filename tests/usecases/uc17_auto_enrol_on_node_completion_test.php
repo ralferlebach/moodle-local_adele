@@ -74,7 +74,6 @@ require_once(__DIR__ . '/../adele_learningpath_testcase.php');
  * @covers \local_adele\relation_update::updated_single
  */
 final class uc17_auto_enrol_on_node_completion_test extends adele_learningpath_testcase {
-
     // -------------------------------------------------------------------------
     // Fixture wiring.
 
@@ -97,6 +96,8 @@ final class uc17_auto_enrol_on_node_completion_test extends adele_learningpath_t
      * course is sufficient to satisfy the completion gate.
      *
      * {@inheritdoc}
+     *
+     * @param array $nodes
      */
     protected function patch_node_ids(array &$nodes): void {
         $coursemap = [
@@ -324,7 +325,8 @@ final class uc17_auto_enrol_on_node_completion_test extends adele_learningpath_t
                 $json['user_path_relation'] ?? null,
                 "user_path_relation must exist. Keys in json: " . implode(', ', array_keys($json))
             );
-            $this->assertNotNull($rel,
+            $this->assertNotNull(
+                $rel,
                 "user_path_relation must have an entry for dndnode_2. "
                 . "Keys present: " . implode(', ', array_keys($json['user_path_relation']))
             );

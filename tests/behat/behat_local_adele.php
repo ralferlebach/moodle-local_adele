@@ -508,8 +508,12 @@ class behat_local_adele extends behat_base {
                     'reaggregate'   => 0,
                 ]);
             } else {
-                $DB->set_field('course_completions', 'timecompleted', time(),
-                    ['course' => $courseid, 'userid' => $userid]);
+                $DB->set_field(
+                    'course_completions',
+                    'timecompleted',
+                    time(),
+                    ['course' => $courseid, 'userid' => $userid]
+                );
             }
             $cache->delete($userid . '_' . $courseid);
         }

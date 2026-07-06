@@ -55,7 +55,6 @@ use stdClass;
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class adhoc_task_helper {
-
     /**
      * Seconds added after a boundary before the task runs, so the boundary has
      * definitely passed (clock skew / cron granularity) when the path is recomputed.

@@ -43,8 +43,11 @@ final class issue456_placeholder_leak_test extends advanced_testcase {
 
         $result = relation_update::render_placeholders_single_restriction($string, 'n1', [], $condition);
 
-        $this->assertStringNotContainsString('{node_name}', $result,
-            'Unresolved {node_name} leaked into the student-facing feedback (#456).');
+        $this->assertStringNotContainsString(
+            '{node_name}',
+            $result,
+            'Unresolved {node_name} leaked into the student-facing feedback (#456).'
+        );
     }
 
     /**
@@ -59,8 +62,11 @@ final class issue456_placeholder_leak_test extends advanced_testcase {
 
         $result = relation_update::render_placeholders($string, $placeholders, 'n1', []);
 
-        $this->assertStringNotContainsString('{node_name}', $result,
-            'Unresolved {node_name} leaked through render_placeholders (#456).');
+        $this->assertStringNotContainsString(
+            '{node_name}',
+            $result,
+            'Unresolved {node_name} leaked through render_placeholders (#456).'
+        );
     }
 
     /**

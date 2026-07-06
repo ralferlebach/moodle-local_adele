@@ -48,7 +48,6 @@ use local_adele\event\user_path_updated;
  * @covers \local_adele\relation_update::getnodestatus
  */
 final class recompute_integration_test extends advanced_testcase {
-
     /**
      * A completion structure with a single course_completed criterion, matching
      * the shape the editor produces (starting_condition -> condition_1 -> feedback).

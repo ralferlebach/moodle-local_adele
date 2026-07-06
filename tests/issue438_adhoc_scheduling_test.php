@@ -34,7 +34,6 @@ use local_adele\task\update_user_path;
  * @covers \local_adele\helper\adhoc_task_helper
  */
 final class issue438_adhoc_scheduling_test extends advanced_testcase {
-
     /**
      * RUNTIME_BUFFER mirrored from the helper (boundary -> nextruntime offset).
      */
@@ -47,6 +46,10 @@ final class issue438_adhoc_scheduling_test extends advanced_testcase {
 
     /**
      * A userpath stub carrying the fields the scheduler reads.
+     *
+     * @param int $id
+     * @param int $timecreated
+     * @return \stdClass
      */
     private function userpath(int $id = 11, int $timecreated = 0): \stdClass {
         return (object) [
@@ -60,6 +63,10 @@ final class issue438_adhoc_scheduling_test extends advanced_testcase {
 
     /**
      * A node carrying a single timed restriction with the given start/end.
+     *
+     * @param string $startexpr
+     * @param string $endexpr
+     * @return array
      */
     private function timed_node(string $startexpr, string $endexpr): array {
         return ['restriction' => ['nodes' => [[
@@ -87,7 +94,9 @@ final class issue438_adhoc_scheduling_test extends advanced_testcase {
         $start = strtotime('+1 day');
         $end = strtotime('+7 days');
         adhoc_task_helper::set_scheduled_adhoc_tasks(
-            $this->timed_node('+1 day', '+7 days'), $this->userpath());
+            $this->timed_node('+1 day', '+7 days'),
+            $this->userpath()
+        );
 
         $tasks = $this->scheduled();
         $this->assertCount(2, $tasks);
@@ -101,7 +110,9 @@ final class issue438_adhoc_scheduling_test extends advanced_testcase {
      */
     public function test_past_boundary_is_not_scheduled(): void {
         adhoc_task_helper::set_scheduled_adhoc_tasks(
-            $this->timed_node('-1 hour', '-30 minutes'), $this->userpath());
+            $this->timed_node('-1 hour', '-30 minutes'),
+            $this->userpath()
+        );
         $this->assertCount(0, $this->scheduled());
     }
 
@@ -110,7 +121,9 @@ final class issue438_adhoc_scheduling_test extends advanced_testcase {
      */
     public function test_empty_slot_is_ignored(): void {
         adhoc_task_helper::set_scheduled_adhoc_tasks(
-            $this->timed_node('+1 day', ''), $this->userpath());
+            $this->timed_node('+1 day', ''),
+            $this->userpath()
+        );
         $this->assertCount(1, $this->scheduled());
     }
 
@@ -149,9 +162,9 @@ final class issue438_adhoc_scheduling_test extends advanced_testcase {
             'restriction' => ['nodes' => [[
                 'id' => 'rd',
                 'data' => ['label' => 'timed_duration', 'value' => [
-                    'selectedOption' => '1',        // Enrolment-based start.
-                    'durationValue' => '0',         // Days.
-                    'selectedDuration' => 1,        // One day.
+                    'selectedOption' => '1', // Enrolment-based start.
+                    'durationValue' => '0', // Days.
+                    'selectedDuration' => 1, // One day.
                 ]],
             ]]],
         ];
@@ -173,8 +186,8 @@ final class issue438_adhoc_scheduling_test extends advanced_testcase {
                 'id' => 'rd',
                 'data' => ['label' => 'timed_duration', 'value' => [
                     'selectedOption' => '1',
-                    'durationValue' => '0',     // Days.
-                    'selectedDuration' => 1,    // 1-day window -> closed 2 days ago.
+                    'durationValue' => '0', // Days.
+                    'selectedDuration' => 1, // 1-day window -> closed 2 days ago.
                 ]],
             ]]],
         ];
@@ -308,8 +321,8 @@ final class issue438_adhoc_scheduling_test extends advanced_testcase {
      */
     public function test_restriction_without_label_is_skipped(): void {
         $node = ['restriction' => ['nodes' => [
-            ['id' => 'feedbacknode'],                                  // No data/label (e.g. a feedback node).
-            ['id' => 'r1', 'data' => []],                              // No label.
+            ['id' => 'feedbacknode'], // No data/label (e.g. a feedback node).
+            ['id' => 'r1', 'data' => []], // No label.
         ]]];
         adhoc_task_helper::set_scheduled_adhoc_tasks($node, $this->userpath());
         $this->assertCount(0, $this->scheduled());

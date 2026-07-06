@@ -35,7 +35,6 @@ use local_adele\external\search_users;
  */
 #[\PHPUnit\Framework\Attributes\PreserveGlobalState(false)]
 final class search_users_access_test extends advanced_testcase {
-
     protected function setUp(): void {
         parent::setUp();
         $this->resetAfterTest();

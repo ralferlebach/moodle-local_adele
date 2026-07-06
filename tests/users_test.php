@@ -57,7 +57,7 @@ final class users_test extends advanced_testcase {
         $sqllikecallindex = 0;
         $DB->expects($this->exactly(2))
             ->method('sql_like')
-            ->willReturnCallback(function() use (&$sqllikecalls, &$sqllikecallindex) {
+            ->willReturnCallback(function () use (&$sqllikecalls, &$sqllikecallindex) {
                 $call = $sqllikecalls[$sqllikecallindex++];
                 return $call[1];
             });

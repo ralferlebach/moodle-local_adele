@@ -37,7 +37,6 @@ use local_adele\external\get_lp_user_path_relations;
  */
 #[\PHPUnit\Framework\Attributes\PreserveGlobalState(false)]
 final class user_path_relation_access_test extends advanced_testcase {
-
     /** @var \stdClass The course the path is delivered in. */
     private $course;
     /** @var \context_course */
@@ -60,6 +59,8 @@ final class user_path_relation_access_test extends advanced_testcase {
 
     /**
      * Insert an active path_user snapshot for the given user.
+     *
+     * @param int $userid
      */
     private function make_relation(int $userid): void {
         global $DB;

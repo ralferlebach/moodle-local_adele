@@ -155,7 +155,14 @@ final class issue450_incomplete_condition_test extends advanced_testcase {
 
         $this->expectException(\moodle_exception::class);
         save_learningpath::execute(
-            2, 0, 'Broken modquiz', '', $this->tree_with_completion('modquiz', ['quizid' => null]), $ctxid, '');
+            2,
+            0,
+            'Broken modquiz',
+            '',
+            $this->tree_with_completion('modquiz', ['quizid' => null]),
+            $ctxid,
+            ''
+        );
     }
 
     /**
@@ -187,7 +194,14 @@ final class issue450_incomplete_condition_test extends advanced_testcase {
         $ctxid = context_system::instance()->id;
 
         $result = save_learningpath::execute(
-            2, 0, 'Catquiz parent scale', '', $this->tree_with_completion('catquiz', ['testid' => 0]), $ctxid, '');
+            2,
+            0,
+            'Catquiz parent scale',
+            '',
+            $this->tree_with_completion('catquiz', ['testid' => 0]),
+            $ctxid,
+            ''
+        );
 
         $this->assertTrue($DB->record_exists('local_adele_learning_paths', ['id' => $result['learningpath']->id]));
     }

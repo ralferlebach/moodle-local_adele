@@ -177,8 +177,11 @@ class course_completed implements course_completion {
                 $progresses[] = $progress;
                 // Ticket #464 H4: this list is rendered via v-html in the node feedback, so the
                 // course name must be HTML-escaped (matching is keyed on course id, not name).
-                $courseprogresslist[] = format_string($course->fullname, true,
-                    ['context' => \context_system::instance(), 'filter' => false]) . ' - ' . $progress . '%';
+                $courseprogresslist[] = format_string(
+                    $course->fullname,
+                    true,
+                    ['context' => \context_system::instance(), 'filter' => false]
+                ) . ' - ' . $progress . '%';
             }
             $coursecompletion['completed'][$courseid] = $completed;
         }

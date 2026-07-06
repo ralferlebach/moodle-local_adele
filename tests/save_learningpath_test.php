@@ -477,5 +477,4 @@ final class save_learningpath_test extends adele_learningpath_testcase {
 
         $this->sink->close();
     }
-
 }

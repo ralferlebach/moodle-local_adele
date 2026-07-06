@@ -98,9 +98,11 @@ class get_lp_user_path_relations extends external_api {
         // (TeacherView.vue), so enrolled participants must still pass; this only blocks
         // enumeration of unrelated courses/paths.
         $coursecontext = \context_course::instance($params['courseid']);
-        if (!has_capability('local/adele:teacheredit', $coursecontext)
+        if (
+            !has_capability('local/adele:teacheredit', $coursecontext)
                 && !learning_paths::check_access()
-                && !is_enrolled($coursecontext, $USER->id)) {
+                && !is_enrolled($coursecontext, $USER->id)
+        ) {
             throw new \required_capability_exception(
                 $coursecontext,
                 'local/adele:teacheredit',

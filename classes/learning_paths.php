@@ -135,8 +135,8 @@ class learning_paths {
         // {quiz_name}) and/or be unsatisfiable, so saving it is refused (#450, #456).
         $requiredvalue = [
             'specific_course' => 'courseid', // Specific node completed - needs a node.
-            'modquiz' => 'quizid',           // Mod quiz completion - needs a quiz.
-            'catquiz' => 'testid',           // Catquiz completion - needs a test.
+            'modquiz' => 'quizid', // Mod quiz completion - needs a quiz.
+            'catquiz' => 'testid', // Catquiz completion - needs a test.
         ];
         foreach ($json['tree']['nodes'] as $node) {
             foreach (['restriction', 'completion'] as $type) {
@@ -995,10 +995,12 @@ class learning_paths {
             if (!empty(self::check_access())) {
                 return;
             }
-        } else if ($DB->record_exists('local_adele_lp_editors', [
+        } else if (
+            $DB->record_exists('local_adele_lp_editors', [
             'learningpathid' => $learningpathid,
             'userid' => $USER->id,
-        ])) {
+            ])
+        ) {
             return;
         }
         throw new required_capability_exception($context, 'local/adele:canmanage', 'nopermissions', '');

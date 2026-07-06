@@ -36,7 +36,6 @@ require_once(__DIR__ . '/adele_learningpath_testcase.php'); // phpcs:ignore mood
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 final class issue438_adhoc_timed_restriction_test extends adele_learningpath_testcase {
-
     /**
      * The fixture learning path this test suite subscribes users to.
      *
@@ -94,6 +93,9 @@ final class issue438_adhoc_timed_restriction_test extends adele_learningpath_tes
 
     /**
      * Overwrite dndnode_2's timed window in every active row WITHOUT recomputing.
+     *
+     * @param string $start
+     * @param string $end
      */
     private function set_window(string $start, string $end): void {
         global $DB;
@@ -162,6 +164,9 @@ final class issue438_adhoc_timed_restriction_test extends adele_learningpath_tes
 
     /**
      * The set of course ids a user currently has any enrolment in (sorted).
+     *
+     * @param int $userid
+     * @return array
      */
     private function enrolled_courseids(int $userid): array {
         global $DB;
@@ -195,6 +200,9 @@ final class issue438_adhoc_timed_restriction_test extends adele_learningpath_tes
 
     /**
      * Assert dndnode_2's restriction status across all active rows.
+     *
+     * @param string $statusrestriction
+     * @param string $status
      */
     private function assert_node2_status(string $statusrestriction, string $status): void {
         $found = 0;
@@ -221,8 +229,10 @@ final class issue438_adhoc_timed_restriction_test extends adele_learningpath_tes
     public function test_future_window_schedules_a_task(): void {
         $this->subscribe_and_evaluate();
         $this->assert_node2_status('before', 'not_accessible');
-        $this->assertNotEmpty($this->scheduled(),
-            'A future timed window must queue a boundary task for each subscribed user.');
+        $this->assertNotEmpty(
+            $this->scheduled(),
+            'A future timed window must queue a boundary task for each subscribed user.'
+        );
     }
 
     /**
@@ -232,15 +242,21 @@ final class issue438_adhoc_timed_restriction_test extends adele_learningpath_tes
     public function test_scheduled_task_unlocks_and_enrols_when_window_open(): void {
         $this->subscribe_and_evaluate();                 // Future window -> locked, task queued.
         $uid = $this->a_userid();
-        $this->assertNotContains((int) $this->courseids[2], $this->enrolled_courseids($uid),
-            'Precondition: the locked node course is not enrolled yet.');
+        $this->assertNotContains(
+            (int) $this->courseids[2],
+            $this->enrolled_courseids($uid),
+            'Precondition: the locked node course is not enrolled yet.'
+        );
 
         $this->set_window('-1 hour', '+7 days');         // Boundary reached: window now open.
         $this->run_adhoc_tasks();                        // The queued task fires.
 
         $this->assert_node2_status('inbetween', 'accessible');
-        $this->assertContains((int) $this->courseids[2], $this->enrolled_courseids($uid),
-            'The fired task must unlock the node and enrol the user.');
+        $this->assertContains(
+            (int) $this->courseids[2],
+            $this->enrolled_courseids($uid),
+            'The fired task must unlock the node and enrol the user.'
+        );
     }
 
     /**
@@ -260,15 +276,21 @@ final class issue438_adhoc_timed_restriction_test extends adele_learningpath_tes
         $this->set_window('+5 days', '+30 days');
         $this->recompute_via_event();
         $this->assert_node2_status('before', 'not_accessible');
-        $this->assertEquals($baseline, $this->enrolled_courseids($uid),
-            'Re-locking must not enrol the user again.');
+        $this->assertEquals(
+            $baseline,
+            $this->enrolled_courseids($uid),
+            'Re-locking must not enrol the user again.'
+        );
 
         // Time brought back so the window is open again -> recompute must be idempotent.
         $this->set_window('-1 hour', '+7 days');
         $this->recompute_via_event();
         $this->assert_node2_status('inbetween', 'accessible');
-        $this->assertEquals($baseline, $this->enrolled_courseids($uid),
-            'Re-opening must not enrol the user a second time (idempotent).');
+        $this->assertEquals(
+            $baseline,
+            $this->enrolled_courseids($uid),
+            'Re-opening must not enrol the user a second time (idempotent).'
+        );
     }
 
     /**
@@ -290,8 +312,11 @@ final class issue438_adhoc_timed_restriction_test extends adele_learningpath_tes
         $this->recompute_via_event();
 
         $this->assert_node2_status('after', 'not_accessible');
-        $this->assertEquals($before, $this->enrolled_courseids($uid),
-            'Closing the window must not change enrolment (no re-enrol, no spurious enrolment).');
+        $this->assertEquals(
+            $before,
+            $this->enrolled_courseids($uid),
+            'Closing the window must not change enrolment (no re-enrol, no spurious enrolment).'
+        );
     }
 
     /**
@@ -347,16 +372,25 @@ final class issue438_adhoc_timed_restriction_test extends adele_learningpath_tes
 
         // Rescheduled, not duplicated.
         $after = $this->scheduled();
-        $this->assertCount($countbefore, $after,
-            'Editing the restriction date must reschedule the existing tasks, not create duplicates.');
+        $this->assertCount(
+            $countbefore,
+            $after,
+            'Editing the restriction date must reschedule the existing tasks, not create duplicates.'
+        );
 
         // The start-slot tasks now fire at the new boundary (~ +5 days).
-        $starttasks = array_filter($after,
-            fn($t) => str_contains(json_encode($t->get_custom_data()), '_start_'));
+        $starttasks = array_filter(
+            $after,
+            fn($t) => str_contains(json_encode($t->get_custom_data()), '_start_')
+        );
         $this->assertNotEmpty($starttasks);
         foreach ($starttasks as $t) {
-            $this->assertEqualsWithDelta(strtotime('+5 days') + 120, $t->get_next_run_time(), 120,
-                'The start-boundary task must be rescheduled to the edited date.');
+            $this->assertEqualsWithDelta(
+                strtotime('+5 days') + 120,
+                $t->get_next_run_time(),
+                120,
+                'The start-boundary task must be rescheduled to the edited date.'
+            );
         }
     }
 
@@ -403,8 +437,11 @@ final class issue438_adhoc_timed_restriction_test extends adele_learningpath_tes
         learning_path_update::updated_learning_path($event);
 
         // No restriction -> node accessible and the user enrolled into its course.
-        $this->assertContains((int) $this->courseids[2], $this->enrolled_courseids($uid),
-            'Removing the restriction must unlock the node and enrol the user.');
+        $this->assertContains(
+            (int) $this->courseids[2],
+            $this->enrolled_courseids($uid),
+            'Removing the restriction must unlock the node and enrol the user.'
+        );
     }
 
     /**
@@ -418,8 +455,11 @@ final class issue438_adhoc_timed_restriction_test extends adele_learningpath_tes
         $this->run_adhoc_tasks();                        // Task fires, window still in the future.
 
         $this->assert_node2_status('before', 'not_accessible');
-        $this->assertNotContains((int) $this->courseids[2], $this->enrolled_courseids($uid),
-            'Firing the task while the window is still closed must not enrol the user.');
+        $this->assertNotContains(
+            (int) $this->courseids[2],
+            $this->enrolled_courseids($uid),
+            'Firing the task while the window is still closed must not enrol the user.'
+        );
     }
 
     /**
@@ -441,7 +481,10 @@ final class issue438_adhoc_timed_restriction_test extends adele_learningpath_tes
 
         // Any stale task firing now must be harmless.
         $this->run_adhoc_tasks();
-        $this->assertEquals($baseline, $this->enrolled_courseids($uid),
-            'A stale task firing after re-lock must not change enrolment.');
+        $this->assertEquals(
+            $baseline,
+            $this->enrolled_courseids($uid),
+            'A stale task firing after re-lock must not change enrolment.'
+        );
     }
 }

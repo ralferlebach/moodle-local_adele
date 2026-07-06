@@ -107,8 +107,10 @@ final class modquiz_test extends advanced_testcase {
     }
 }
 
+// phpcs:disable PSR1.Classes.ClassDeclaration.MultipleClasses -- Lightweight test double kept beside its test.
 /**
  * Fake DB stub with the methods used by modquiz tests.
+ *
  * @package local_adele
  */
 class FakeModquizDB {
@@ -133,3 +135,4 @@ class FakeModquizDB {
         return ['', []];
     }
 }
+// phpcs:enable PSR1.Classes.ClassDeclaration.MultipleClasses

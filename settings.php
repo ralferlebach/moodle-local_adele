@@ -95,12 +95,12 @@ if ($hassiteconfig) {
         return $item['name'];
     }, $restrictions);
 
-    $default_values = array_keys($matchedrestrictions);
+    $defaultvalues = array_keys($matchedrestrictions);
     $settings->add(new admin_setting_configmultiselect(
         $componentname . '/restrictionfilter',
         get_string('nodes_restriction', $componentname),
         get_string('nodes_edit_restriction', $componentname),
-        $default_values,
+        $defaultvalues,
         $matchedrestrictions
     ));
 

@@ -35,9 +35,9 @@ namespace local_adele;
 use advanced_testcase;
 use local_adele\event\learnpath_updated;
 
-defined('MOODLE_INTERNAL') || die();
-
 /**
+ * End-to-end regression test for issue #449: removing a node's access criteria propagates to subscribed users and opens it.
+ *
  * @package    local_adele
  * @copyright  2026 Wunderbyte GmbH
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later

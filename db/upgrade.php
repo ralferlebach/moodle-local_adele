@@ -196,7 +196,7 @@ function xmldb_local_adele_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2025081200, 'local', 'adele');
     }
     if ($oldversion < 2026061800) {
-        // #431: the local/adele:teacheredit capability gained the editingteacher
+        // Ticket #431: the local/adele:teacheredit capability gained the editingteacher
         // archetype so editing-teachers can operate master conditions without the
         // over-broad local/adele:canmanage. Archetype defaults only apply to fresh
         // installs, so grant it to existing editing-teacher roles here too. Do not

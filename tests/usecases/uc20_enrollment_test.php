@@ -60,6 +60,11 @@ require_once(__DIR__ . '/../adele_learningpath_testcase.php'); // phpcs:ignore m
 #[CoversClass(enrollment::class)]
 final class uc20_enrollment_test extends adele_learningpath_testcase {
 
+    /**
+     * Name of the learning path fixture file used by this use case.
+     *
+     * @return string
+     */
     protected function fixturefile(): string {
         return 'alise_zugangs_lp_einfach.json';
     }

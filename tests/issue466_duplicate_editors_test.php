@@ -30,9 +30,9 @@ namespace local_adele;
 
 use advanced_testcase;
 
-defined('MOODLE_INTERNAL') || die();
-
 /**
+ * Regression test for issue #466: create_editors must be idempotent so duplicate rows don't break the unique-key lookup.
+ *
  * @package    local_adele
  * @copyright  2026 Wunderbyte GmbH
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later

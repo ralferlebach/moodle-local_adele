@@ -37,6 +37,11 @@ require_once(__DIR__ . '/adele_learningpath_testcase.php'); // phpcs:ignore mood
  */
 final class issue438_adhoc_timed_restriction_test extends adele_learningpath_testcase {
 
+    /**
+     * The fixture learning path this test suite subscribes users to.
+     *
+     * @return string
+     */
     protected function fixturefile(): string {
         return 'alise_zugangs_lp_einfach.json';
     }
@@ -75,9 +80,11 @@ final class issue438_adhoc_timed_restriction_test extends adele_learningpath_tes
         unset($node);
     }
 
-    // ------------------------------------------------------------------ helpers.
+    // Helpers.
 
-    /** Subscribe the two users and run the first evaluation (creates path_user rows). */
+    /**
+     * Subscribe the two users and run the first evaluation (creates path_user rows).
+     */
     private function subscribe_and_evaluate(): void {
         $this->subscribe_users_to_lp();
         foreach ($this->get_update_events() as $event) {
@@ -85,7 +92,9 @@ final class issue438_adhoc_timed_restriction_test extends adele_learningpath_tes
         }
     }
 
-    /** Overwrite dndnode_2's timed window in every active row WITHOUT recomputing. */
+    /**
+     * Overwrite dndnode_2's timed window in every active row WITHOUT recomputing.
+     */
     private function set_window(string $start, string $end): void {
         global $DB;
         foreach ($DB->get_records('local_adele_path_user', ['status' => 'active']) as $record) {
@@ -107,7 +116,9 @@ final class issue438_adhoc_timed_restriction_test extends adele_learningpath_tes
         }
     }
 
-    /** Recompute every active path the normal way (as an LP edit or a view would). */
+    /**
+     * Recompute every active path the normal way (as an LP edit or a view would).
+     */
     private function recompute_via_event(): void {
         global $DB;
         foreach ($DB->get_records('local_adele_path_user', ['status' => 'active']) as $record) {
@@ -142,12 +153,16 @@ final class issue438_adhoc_timed_restriction_test extends adele_learningpath_tes
         }
     }
 
-    /** Queued update_user_path tasks. */
+    /**
+     * Queued update_user_path tasks.
+     */
     private function scheduled(): array {
         return \core\task\manager::get_adhoc_tasks('\\' . update_user_path::class);
     }
 
-    /** The set of course ids a user currently has any enrolment in (sorted). */
+    /**
+     * The set of course ids a user currently has any enrolment in (sorted).
+     */
     private function enrolled_courseids(int $userid): array {
         global $DB;
         $sql = "SELECT DISTINCT e.courseid
@@ -159,20 +174,28 @@ final class issue438_adhoc_timed_restriction_test extends adele_learningpath_tes
         return $ids;
     }
 
-    /** A user id taken from the seeded learning-path rows. */
+    /**
+     * A user id taken from the seeded learning-path rows.
+     */
     private function a_userid(): int {
         global $DB;
         $records = $DB->get_records('local_adele_path_user', ['status' => 'active'], 'id', 'id, user_id', 0, 1);
         return (int) reset($records)->user_id;
     }
 
-    /** @return array<int, object> active path_user rows keyed by id. */
+    /**
+     * Active path_user rows keyed by id.
+     *
+     * @return array<int, object>
+     */
     private function rows(): array {
         global $DB;
         return $DB->get_records('local_adele_path_user', ['status' => 'active']);
     }
 
-    /** Assert dndnode_2's restriction status across all active rows. */
+    /**
+     * Assert dndnode_2's restriction status across all active rows.
+     */
     private function assert_node2_status(string $statusrestriction, string $status): void {
         $found = 0;
         foreach ($this->rows() as $row) {
@@ -188,7 +211,7 @@ final class issue438_adhoc_timed_restriction_test extends adele_learningpath_tes
         $this->assertGreaterThan(0, $found, 'Expected at least one real learning-path row to assert on.');
     }
 
-    // -------------------------------------------------------------------- tests.
+    // Tests.
 
     /**
      * Subscribing with a future window leaves the node locked but SCHEDULES a per-user
@@ -207,13 +230,13 @@ final class issue438_adhoc_timed_restriction_test extends adele_learningpath_tes
      * learner is enrolled into the node course - without ever opening the course.
      */
     public function test_scheduled_task_unlocks_and_enrols_when_window_open(): void {
-        $this->subscribe_and_evaluate();                 // future window -> locked, task queued.
+        $this->subscribe_and_evaluate();                 // Future window -> locked, task queued.
         $uid = $this->a_userid();
         $this->assertNotContains((int) $this->courseids[2], $this->enrolled_courseids($uid),
             'Precondition: the locked node course is not enrolled yet.');
 
-        $this->set_window('-1 hour', '+7 days');         // boundary reached: window now open.
-        $this->run_adhoc_tasks();                        // the queued task fires.
+        $this->set_window('-1 hour', '+7 days');         // Boundary reached: window now open.
+        $this->run_adhoc_tasks();                        // The queued task fires.
 
         $this->assert_node2_status('inbetween', 'accessible');
         $this->assertContains((int) $this->courseids[2], $this->enrolled_courseids($uid),
@@ -228,7 +251,7 @@ final class issue438_adhoc_timed_restriction_test extends adele_learningpath_tes
     public function test_enrolment_idempotent_across_time_changes(): void {
         $this->subscribe_and_evaluate();
         $this->set_window('-1 hour', '+7 days');
-        $this->run_adhoc_tasks();                        // open -> enrolled.
+        $this->run_adhoc_tasks();                        // Open -> enrolled.
         $uid = $this->a_userid();
         $baseline = $this->enrolled_courseids($uid);
         $this->assertContains((int) $this->courseids[2], $baseline);
@@ -258,12 +281,12 @@ final class issue438_adhoc_timed_restriction_test extends adele_learningpath_tes
     public function test_closing_window_keeps_enrolment(): void {
         $this->subscribe_and_evaluate();
         $this->set_window('-1 hour', '+7 days');
-        $this->run_adhoc_tasks();                        // open -> enrolled.
+        $this->run_adhoc_tasks();                        // Open -> enrolled.
         $uid = $this->a_userid();
         $before = $this->enrolled_courseids($uid);
         $this->assertContains((int) $this->courseids[2], $before);
 
-        $this->set_window('-30 days', '-1 hour');        // window expired.
+        $this->set_window('-30 days', '-1 hour');        // Window expired.
         $this->recompute_via_event();
 
         $this->assert_node2_status('after', 'not_accessible');
@@ -279,7 +302,7 @@ final class issue438_adhoc_timed_restriction_test extends adele_learningpath_tes
      */
     public function test_editing_date_in_editor_reschedules_all_user_tasks(): void {
         global $DB;
-        $this->subscribe_and_evaluate();                 // future window -> tasks queued at +1 day.
+        $this->subscribe_and_evaluate();                 // Future window -> tasks queued at +1 day.
         $before = $this->scheduled();
         $countbefore = count($before);
         $this->assertGreaterThan(0, $countbefore, 'Precondition: tasks were queued for the future window.');
@@ -345,7 +368,7 @@ final class issue438_adhoc_timed_restriction_test extends adele_learningpath_tes
      */
     public function test_removing_condition_in_editor_unlocks_and_enrols(): void {
         global $DB;
-        $this->subscribe_and_evaluate();                 // future window -> locked.
+        $this->subscribe_and_evaluate();                 // Future window -> locked.
         $uid = $this->a_userid();
         $this->assert_node2_status('before', 'not_accessible');
         $this->assertNotContains((int) $this->courseids[2], $this->enrolled_courseids($uid));
@@ -389,10 +412,10 @@ final class issue438_adhoc_timed_restriction_test extends adele_learningpath_tes
      * recompute to the real state and leave the node locked - never blindly unlock.
      */
     public function test_task_firing_on_still_closed_window_does_not_enrol(): void {
-        $this->subscribe_and_evaluate();                 // future window -> locked, task queued.
+        $this->subscribe_and_evaluate();                 // Future window -> locked, task queued.
         $uid = $this->a_userid();
 
-        $this->run_adhoc_tasks();                        // task fires, window still in the future.
+        $this->run_adhoc_tasks();                        // Task fires, window still in the future.
 
         $this->assert_node2_status('before', 'not_accessible');
         $this->assertNotContains((int) $this->courseids[2], $this->enrolled_courseids($uid),
@@ -406,7 +429,7 @@ final class issue438_adhoc_timed_restriction_test extends adele_learningpath_tes
     public function test_stale_task_after_relock_keeps_enrolment(): void {
         $this->subscribe_and_evaluate();
         $this->set_window('-1 hour', '+7 days');
-        $this->run_adhoc_tasks();                        // open -> enrolled.
+        $this->run_adhoc_tasks();                        // Open -> enrolled.
         $uid = $this->a_userid();
         $baseline = $this->enrolled_courseids($uid);
         $this->assertContains((int) $this->courseids[2], $baseline);

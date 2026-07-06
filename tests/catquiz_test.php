@@ -31,10 +31,6 @@ use PHPUnit\Framework\Attributes\CoversClass;
  */
 #[CoversClass(catquiz::class)]
 final class catquiz_test extends advanced_testcase {
-    protected function setUp(): void {
-        parent::setUp();
-    }
-
     /**
      * Test the get_catquiz_tests function.
      */

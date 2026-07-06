@@ -34,9 +34,9 @@ use local_adele\external\get_restrictions;
 use local_adele\external\get_completions;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
-defined('MOODLE_INTERNAL') || die();
-
 /**
+ * Tests that editing-teachers can read the condition palettes without canmanage (issue #431).
+ *
  * @package    local_adele
  * @copyright  2026 Wunderbyte GmbH
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
@@ -66,6 +66,7 @@ final class issue431_teacher_master_conditions_test extends advanced_testcase {
      * An editing-teacher (WITHOUT local/adele:canmanage) must be able to read the
      * restriction palette - it is what populates the master-condition editor (#431).
      *
+     * @covers \local_adele\external\get_restrictions
      * @return void
      */
     public function test_editingteacher_can_read_restrictions(): void {
@@ -81,6 +82,7 @@ final class issue431_teacher_master_conditions_test extends advanced_testcase {
     /**
      * Same for the completion palette read gate (#431).
      *
+     * @covers \local_adele\external\get_completions
      * @return void
      */
     public function test_editingteacher_can_read_completions(): void {
@@ -96,6 +98,7 @@ final class issue431_teacher_master_conditions_test extends advanced_testcase {
      * Guard against over-granting: a plain student (no canmanage, no teacheredit)
      * must STILL be refused the condition palette (#431).
      *
+     * @covers \local_adele\external\get_restrictions
      * @return void
      */
     public function test_student_is_still_blocked(): void {

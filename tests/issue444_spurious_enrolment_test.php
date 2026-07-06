@@ -42,8 +42,6 @@ namespace local_adele;
 
 use advanced_testcase;
 
-defined('MOODLE_INTERNAL') || die();
-
 /**
  * Reproduces the spurious cross-course enrolment from issue #444.
  *

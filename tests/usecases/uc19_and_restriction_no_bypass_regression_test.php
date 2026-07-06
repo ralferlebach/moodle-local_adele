@@ -135,7 +135,7 @@ final class uc19_and_restriction_no_bypass_regression_test extends adele_learnin
                     fn($cn) => $cn['id'] !== 'condition_2'
                 ));
             } else {
-                // dndnode_2: AND restriction chain intact.
+                // Dndnode_2: AND restriction chain intact.
                 $node['data']['course_node_id'] = [$this->courseids[2]];
             }
         }

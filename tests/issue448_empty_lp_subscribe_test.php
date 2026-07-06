@@ -29,9 +29,9 @@ namespace local_adele;
 
 use advanced_testcase;
 
-defined('MOODLE_INTERNAL') || die();
-
 /**
+ * Regression test for issue #448: subscribing a user to an empty learning path must not throw an undefined-key error.
+ *
  * @package    local_adele
  * @copyright  2026 Wunderbyte GmbH
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later

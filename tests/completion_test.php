@@ -44,9 +44,9 @@ use PHPUnit\Framework\Attributes\RunInSeparateProcess;
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  *
  * @runTestsInSeparateProcesses
- * @preserveGlobalState disabled
  */
 #[CoversMethod(relation_update::class, 'searchnestedarray')]
+#[\PHPUnit\Framework\Attributes\PreserveGlobalState(false)]
 final class completion_test extends advanced_testcase {
     /**
      * Test the searchnestedarray method.

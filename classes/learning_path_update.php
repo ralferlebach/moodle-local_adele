@@ -34,8 +34,6 @@ use core_completion\progress;
 use mod_adele_observer;
 use stdClass;
 
-defined('MOODLE_INTERNAL') || die();
-
 /**
  * External Service for local adele.
  *

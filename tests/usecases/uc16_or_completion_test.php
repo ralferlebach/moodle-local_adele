@@ -118,7 +118,7 @@ final class uc16_or_completion_test extends adele_learningpath_testcase {
             if ($node['id'] === 'dndnode_1') {
                 $node['data']['course_node_id'] = [$this->courseids[0]];
             } else {
-                // dndnode_2.
+                // Dndnode_2.
                 $node['data']['course_node_id'] = [$this->courseids[2]];
             }
         }

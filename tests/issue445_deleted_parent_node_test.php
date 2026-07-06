@@ -34,6 +34,8 @@ require_once(__DIR__ . '/adele_learningpath_testcase.php'); // phpcs:ignore mood
 
 // phpcs:disable moodle.PHPUnit.TestCaseCovers.Missing
 /**
+ * Regression test for issue #445: a start node with a dangling parent_courses reference must be accessible.
+ *
  * @package    local_adele
  * @copyright  2026 Wunderbyte GmbH
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
@@ -60,7 +62,7 @@ final class issue445_deleted_parent_node_test extends adele_learningpath_testcas
         foreach ($nodes as &$node) {
             if (($node['id'] ?? '') === 'dndnode_2') {
                 $node['data']['course_node_id'] = [$this->courseids[2]];
-                // dndnode_2 is now a start node (its only parent was deleted) ...
+                // Dndnode_2 is now a start node (its only parent was deleted) ...
                 $node['parentCourse'] = ['starting_node'];
                 // ... but its parent_courses criterion still references dndnode_1.
                 // Keep only condition_1 (parent_courses) + its feedback.

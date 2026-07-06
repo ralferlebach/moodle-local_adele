@@ -40,21 +40,23 @@ use local_adele\external\delete_learningpath;
 use local_adele\external\duplicate_learningpath;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
-defined('MOODLE_INTERNAL') || die();
-
 /**
+ * Tests that mutating learning-path web services are restricted to the caller's own paths (issue #458).
+ *
  * @package    local_adele
  * @copyright  2026 Wunderbyte GmbH
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
- * @covers \local_adele\learning_paths::require_lp_editor_access
- * @covers \local_adele\external\save_learningpath
  *
  * @runInSeparateProcess
  * @runTestsInSeparateProcesses
  */
 #[RunTestsInSeparateProcesses]
 final class issue458_per_lp_authorization_test extends advanced_testcase {
-    /** Empty-tree json used for all fixtures. */
+    /**
+     * Empty-tree json used for all fixtures.
+     *
+     * @return string
+     */
     private function emptytree(): string {
         return json_encode(['tree' => ['nodes' => [], 'edges' => []], 'modules' => null]);
     }
@@ -85,6 +87,7 @@ final class issue458_per_lp_authorization_test extends advanced_testcase {
      * An editor of LP-B must NOT be able to overwrite LP-A (which they do not
      * own) via save_learningpath - the core IDOR (#458).
      *
+     * @covers \local_adele\external\save_learningpath
      * @return void
      */
     public function test_non_owner_editor_cannot_overwrite_others_lp(): void {
@@ -103,6 +106,7 @@ final class issue458_per_lp_authorization_test extends advanced_testcase {
     /**
      * The owner (lp_editors member) can update their own LP.
      *
+     * @covers \local_adele\external\save_learningpath
      * @return void
      */
     public function test_owner_can_update_own_lp(): void {
@@ -121,6 +125,7 @@ final class issue458_per_lp_authorization_test extends advanced_testcase {
     /**
      * Creating a new LP (learningpathid = 0) stays open to any editor/assistant.
      *
+     * @covers \local_adele\external\save_learningpath
      * @return void
      */
     public function test_any_editor_can_create_new_lp(): void {
@@ -144,6 +149,7 @@ final class issue458_per_lp_authorization_test extends advanced_testcase {
     /**
      * A manager/admin may update any LP (full access bypass).
      *
+     * @covers \local_adele\external\save_learningpath
      * @return void
      */
     public function test_manager_can_update_any_lp(): void {
@@ -163,6 +169,7 @@ final class issue458_per_lp_authorization_test extends advanced_testcase {
      * The same per-LP rule must apply to the other mutators - a non-owner cannot
      * toggle another path's visibility (#458).
      *
+     * @covers \local_adele\external\update_lp_visiblity
      * @return void
      */
     public function test_non_owner_cannot_toggle_others_visibility(): void {
@@ -181,6 +188,7 @@ final class issue458_per_lp_authorization_test extends advanced_testcase {
     /**
      * A non-owner cannot add a named person (editor) to another path (#458).
      *
+     * @covers \local_adele\external\create_lp_edit_users
      * @return void
      */
     public function test_non_owner_cannot_add_editor_to_others_lp(): void {
@@ -203,6 +211,7 @@ final class issue458_per_lp_authorization_test extends advanced_testcase {
      * loading the empty editors panel while creating a new LP). Per-LP ownership
      * must NOT be required for id 0 (#458 regression).
      *
+     * @covers \local_adele\external\get_lp_edit_users
      * @return void
      */
     public function test_new_unsaved_lp_does_not_require_ownership(): void {
@@ -219,6 +228,7 @@ final class issue458_per_lp_authorization_test extends advanced_testcase {
     /**
      * The owner can delete their own LP, and its editor rows are cleaned up (#458).
      *
+     * @covers \local_adele\external\delete_learningpath
      * @return void
      */
     public function test_owner_can_delete_own_lp_and_editors_cleaned(): void {
@@ -241,6 +251,7 @@ final class issue458_per_lp_authorization_test extends advanced_testcase {
     /**
      * A non-owner cannot delete another's LP (#458).
      *
+     * @covers \local_adele\external\delete_learningpath
      * @return void
      */
     public function test_non_owner_cannot_delete_others_lp(): void {
@@ -260,6 +271,7 @@ final class issue458_per_lp_authorization_test extends advanced_testcase {
      * The owner can duplicate their own LP, and becomes editor of the copy so it
      * shows in their editable list (#458).
      *
+     * @covers \local_adele\external\duplicate_learningpath
      * @return void
      */
     public function test_owner_can_duplicate_own_and_owns_copy(): void {
@@ -283,6 +295,7 @@ final class issue458_per_lp_authorization_test extends advanced_testcase {
     /**
      * A non-owner cannot duplicate another's LP (#458).
      *
+     * @covers \local_adele\external\duplicate_learningpath
      * @return void
      */
     public function test_non_owner_cannot_duplicate_others_lp(): void {

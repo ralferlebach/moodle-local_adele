@@ -73,7 +73,7 @@ require_once(__DIR__ . '/../adele_learningpath_testcase.php');
  * @covers \local_adele\node_completion::enrol_child_courses
  * @covers \local_adele\relation_update::updated_single
  */
-class uc17_auto_enrol_on_node_completion_test extends adele_learningpath_testcase {
+final class uc17_auto_enrol_on_node_completion_test extends adele_learningpath_testcase {
 
     // -------------------------------------------------------------------------
     // Fixture wiring.
@@ -299,7 +299,7 @@ class uc17_auto_enrol_on_node_completion_test extends adele_learningpath_testcas
         $records = $this->complete_node1_and_trigger_chain();
         $this->assertNotEmpty($records, 'Expected active user path records.');
 
-        // enrol_child_courses() fires a second user_path_updated (for
+        // Enrol_child_courses() fires a second user_path_updated (for
         // first_enrolled) and observer re-enqueues it.  Keep dispatching until
         // no new update events are produced (max 3 rounds to avoid infinite
         // loops in unexpected situations).

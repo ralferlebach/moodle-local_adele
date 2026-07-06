@@ -84,7 +84,7 @@ class get_lp_user_path_relation extends external_api {
             $params['courseid'] = $coursecontext->instanceid;
         }
 
-        // #464 H2: local/adele:view is granted to the `user` archetype, so every
+        // Ticket #464 H2: local/adele:view is granted to the `user` archetype, so every
         // authenticated user holds it - it is NOT a boundary. This getter returns the
         // requested user's email plus their full progress snapshot, so reading a path
         // that is not your own must be restricted to a course teacher (:teacheredit,

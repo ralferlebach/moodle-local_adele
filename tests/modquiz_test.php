@@ -14,11 +14,21 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
+/**
+ * PHPUnit tests for the modquiz completion condition helper.
+ *
+ * @package    local_adele
+ * @copyright  2023 Georg Maißer <info@wunderbyte.at>
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
+
 namespace local_adele;
 
 use advanced_testcase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\RunInSeparateProcess;
+
+defined('MOODLE_INTERNAL') || die();
 
 // phpcs:disable moodle.PHPUnit.TestCaseCovers.Missing
 /**
@@ -31,10 +41,6 @@ use PHPUnit\Framework\Attributes\RunInSeparateProcess;
  */
 #[CoversClass(modquiz::class)]
 final class modquiz_test extends advanced_testcase {
-    protected function setUp(): void {
-        parent::setUp();
-    }
-
     /**
      * Test get_mod_quizzes function with no data.
      */
@@ -103,18 +109,23 @@ final class modquiz_test extends advanced_testcase {
 
 /**
  * Fake DB stub with the methods used by modquiz tests.
+ * @package local_adele
  */
 class FakeModquizDB {
     /**
+     * Stubbed get_records_sql returning no records.
+     *
      * @param string $sql
      * @param array|null $params
      * @return array
      */
-    public function get_records_sql(string $sql, array $params = null): array {
+    public function get_records_sql(string $sql, ?array $params = null): array {
         return [];
     }
 
     /**
+     * Stubbed get_in_or_equal returning an empty clause.
+     *
      * @param mixed $items
      * @return array
      */

@@ -103,7 +103,7 @@ final class uc18_stacked_node_enrolment_test extends adele_learningpath_testcase
             if ($node['id'] === 'dndnode_1') {
                 $node['data']['course_node_id'] = [$this->courseids[0]];
             } else {
-                // dndnode_2 carries 3 courses.
+                // Dndnode_2 carries 3 courses.
                 $node['data']['course_node_id'] = [
                     $this->courseids[1],
                     $this->courseids[2],
@@ -239,7 +239,7 @@ final class uc18_stacked_node_enrolment_test extends adele_learningpath_testcase
         $records = $this->complete_parent_and_trigger_chain();
         $this->assertNotEmpty($records, 'Expected active user path records.');
 
-        // ---- Enrolment check ------------------------------------------------
+        // Enrolment check.
         foreach ($records as $record) {
             foreach ([$this->courseids[1], $this->courseids[2], $this->courseids[3]] as $cid) {
                 $context = \context_course::instance((int)$cid);
@@ -250,8 +250,8 @@ final class uc18_stacked_node_enrolment_test extends adele_learningpath_testcase
             }
         }
 
-        // ---- first_enrolled stamp check -------------------------------------
-        // enrol_child_courses() fires a second user_path_updated event after
+        // First_enrolled stamp check.
+        // Enrol_child_courses() fires a second user_path_updated event after
         // stamping first_enrolled.  Drain new events in rounds (max 3) to
         // ensure the persisted JSON is updated before we read it.
         $dispatched = 0;
@@ -290,7 +290,7 @@ final class uc18_stacked_node_enrolment_test extends adele_learningpath_testcase
                 "User {$record->user_id}: first_enrolled must be a positive timestamp."
             );
 
-            // ---- Accessibility check ----------------------------------------
+            // Accessibility check.
             $fb = $json['user_path_relation']['dndnode_2']['feedback'];
             $this->assertEquals(
                 'inbetween',

@@ -35,8 +35,6 @@ use local_adele\event\node_finished;
 use context_system;
 use local_adele\event\user_path_updated;
 
-defined('MOODLE_INTERNAL') || die();
-
 /**
  * External Service for local adele.
  *
@@ -155,7 +153,7 @@ class relation_update {
                                         $activecolumnfeedback
                                     );
                                 $restrictionnodepathsall[] = $allconditions;
-                                // $feedback is null when the condition's feedback node is not
+                                // The $feedback value is null when the condition's feedback node is not
                                 // wired up (empty childCondition); there is then nothing to key
                                 // the per-feedback-node hint by, so skip it instead of fataling.
                                 if (isset($feedback['id'])) {
@@ -505,7 +503,7 @@ class relation_update {
             // (feedback-node id string) directly into $restrictionnodepaths
             // alongside the path arrays. Skip anything that is not an array
             // so the inner foreach never tries to iterate a string.
-            // No logic change – pure null-safety guard. (Tier 2 AND-chain tests)
+            // No logic change – pure null-safety guard. (Tier 2 AND-chain tests).
             if (!is_array($signlerestrictionpatharray)) {
                 continue;
             }
@@ -587,7 +585,7 @@ class relation_update {
                     }
                 }
                 if ($isvalid) {
-                    // childCondition can be empty when the feedback node is not wired
+                    // The childCondition can be empty when the feedback node is not wired
                     // (auto-created restriction left unedited); skip rather than fatal.
                     $childconditionid = $restnode['childCondition'][0] ?? null;
                     if ($childconditionid !== null && isset($feedback['restriction']['before'][$childconditionid])) {
@@ -778,7 +776,7 @@ class relation_update {
             // Defensive: the old isset($node["data"]["completion"]) guard only
             // checked one level; deeper keys could still be absent. Replaced
             // with a null-coalescing chain that short-circuits the whole path.
-            // No logic change – pure null-safety guard. (Tier 2 AND-chain tests)
+            // No logic change – pure null-safety guard. (Tier 2 AND-chain tests).
             'before_active' => $node["data"]["completion"]["feedback"]["restriction"]["before_active"] ?? '',
           ],
         ];

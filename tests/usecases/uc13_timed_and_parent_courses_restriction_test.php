@@ -128,7 +128,7 @@ final class uc13_timed_and_parent_courses_restriction_test extends adele_learnin
                     fn($cn) => $cn['id'] !== 'condition_2'
                 ));
             } else {
-                // dndnode_2: restriction AND chain (parent_courses → timed) intact.
+                // Dndnode_2: restriction AND chain (parent_courses → timed) intact.
                 $node['data']['course_node_id'] = [$this->courseids[2]];
             }
         }
@@ -358,7 +358,7 @@ final class uc13_timed_and_parent_courses_restriction_test extends adele_learnin
                 $fb['status_restriction'],
                 "User {$record->user_id}: expected 'after' — timed window expired closes the AND column."
             );
-            // getnodestatus() returns 'not_accessible' rather than 'closed' due to
+            // Getnodestatus() returns 'not_accessible' rather than 'closed' due to
             // strpos('timed', 'timed') === 0 being falsy (see class docblock).
             $this->assertEquals(
                 'not_accessible',

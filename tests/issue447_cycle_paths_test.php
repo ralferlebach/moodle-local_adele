@@ -28,9 +28,9 @@ namespace local_adele;
 
 use advanced_testcase;
 
-defined('MOODLE_INTERNAL') || die();
-
 /**
+ * Regression test for issue #447: a learning path with a loop must not make findpaths() recurse forever.
+ *
  * @package    local_adele
  * @copyright  2026 Wunderbyte GmbH
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later

@@ -33,9 +33,9 @@ namespace local_adele;
 
 use advanced_testcase;
 
-defined('MOODLE_INTERNAL') || die();
-
 /**
+ * Regression test for issue #449: a present-but-empty restriction must be treated like no restriction and open the node.
+ *
  * @package    local_adele
  * @copyright  2026 Wunderbyte GmbH
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later

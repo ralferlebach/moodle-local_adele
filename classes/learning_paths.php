@@ -134,9 +134,9 @@ class learning_paths {
         // that must be set. An empty selection would leak its placeholder ({node_name},
         // {quiz_name}) and/or be unsatisfiable, so saving it is refused (#450, #456).
         $requiredvalue = [
-            'specific_course' => 'courseid', // "specific node completed" - needs a node.
-            'modquiz' => 'quizid',           // mod quiz completion - needs a quiz.
-            'catquiz' => 'testid',           // catquiz completion - needs a test.
+            'specific_course' => 'courseid', // Specific node completed - needs a node.
+            'modquiz' => 'quizid',           // Mod quiz completion - needs a quiz.
+            'catquiz' => 'testid',           // Catquiz completion - needs a test.
         ];
         foreach ($json['tree']['nodes'] as $node) {
             foreach (['restriction', 'completion'] as $type) {
@@ -148,7 +148,7 @@ class learning_paths {
                     if (!isset($requiredvalue[$label])) {
                         continue;
                     }
-                    // "not selected" = null / unset / empty string. NOT a numeric 0,
+                    // Not-selected = null / unset / empty string. NOT a numeric 0,
                     // which is a legitimate selection for catquiz (parent-scale mode).
                     $selected = $condition['data']['value'][$requiredvalue[$label]] ?? null;
                     if ($selected === null || $selected === '') {

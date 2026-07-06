@@ -59,13 +59,13 @@ final class stored_xss_names_test extends advanced_testcase {
             $this->assertStringNotContainsString($bad, $haystack,
                 "XSS token '$bad' leaked into a v-html-bound string (#464 H4).");
         }
-        // format_string strips the tag but keeps ordinary text, so the marker survives -
+        // The format_string call strips the tag but keeps ordinary text, so the marker survives,
         // proving the name is still shown, just inert.
         $this->assertStringContainsString('PWN', $haystack,
             'format_string should keep the textual content while removing markup.');
     }
 
-    // ---------------------------------------------------------- course_completed.
+    // Course_completed condition.
 
     /**
      * The course_list placeholder embeds the course fullname; a payload name must be
@@ -98,7 +98,7 @@ final class stored_xss_names_test extends advanced_testcase {
         $this->assertFalse($status['completed'][$payloadcourse->id]);
     }
 
-    // ----------------------------------------------------------- specific_course.
+    // Specific_course condition.
 
     /**
      * specific_course node_name embeds the node fullname; payload escaped, the
@@ -121,7 +121,7 @@ final class stored_xss_names_test extends advanced_testcase {
         $this->assertEquals(1, $status[12]['completed']['id']);
     }
 
-    // ------------------------------------------------------------ parent_courses.
+    // Parent_courses condition.
 
     /**
      * parent_courses courselist embeds node fullnames; payload escaped, match kept.
@@ -141,7 +141,7 @@ final class stored_xss_names_test extends advanced_testcase {
         $this->assert_inert(implode(' ', $status[20]['placeholders']['node_name']));
     }
 
-    // ------------------------------------------------------------------- modquiz.
+    // Modquiz condition.
 
     /**
      * modquiz quiz_name_link wraps the quiz name in an anchor; the name must be
@@ -171,7 +171,7 @@ final class stored_xss_names_test extends advanced_testcase {
         $this->assert_inert($link);
     }
 
-    // ------------------------------------------------------ course summary (M5).
+    // Course summary (M5).
 
     /**
      * get_availablecourses() returns the course summary that the expanded node card

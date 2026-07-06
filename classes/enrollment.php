@@ -30,8 +30,6 @@ namespace local_adele;
 use local_adele\event\user_path_updated;
 use context_system;
 
-defined('MOODLE_INTERNAL') || die();
-
 /**
  * External Service for local adele.
  *

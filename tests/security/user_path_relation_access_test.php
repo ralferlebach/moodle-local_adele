@@ -32,10 +32,10 @@ use local_adele\external\get_lp_user_path_relations;
  * @copyright  2026 cbadusch
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  * @runTestsInSeparateProcesses
- * @preserveGlobalState disabled
  * @covers \local_adele\external\get_lp_user_path_relation
  * @covers \local_adele\external\get_lp_user_path_relations
  */
+#[\PHPUnit\Framework\Attributes\PreserveGlobalState(false)]
 final class user_path_relation_access_test extends advanced_testcase {
 
     /** @var \stdClass The course the path is delivered in. */
@@ -73,7 +73,7 @@ final class user_path_relation_access_test extends advanced_testcase {
         ]);
     }
 
-    // ---------------------------------------------------------------- singular.
+    // Singular getter.
 
     /**
      * IDOR core: a student must not be able to read ANOTHER student's path
@@ -134,7 +134,7 @@ final class user_path_relation_access_test extends advanced_testcase {
         $this->assertEquals($student->id, $result['user_id']);
     }
 
-    // ------------------------------------------------------------------ plural.
+    // Plural getter.
 
     /**
      * A user with no relationship to the course must not read its leaderboard.

@@ -38,11 +38,11 @@ use local_adele\external\get_learningpath;
  * @copyright  2026 Wunderbyte GmbH
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  * @runTestsInSeparateProcesses
- * @preserveGlobalState disabled
  * @covers \local_adele\external\get_availablecourses
  * @covers \local_adele\external\get_learningpaths
  * @covers \local_adele\external\get_learningpath
  */
+#[\PHPUnit\Framework\Attributes\PreserveGlobalState(false)]
 final class external_read_services_test extends advanced_testcase {
 
     protected function setUp(): void {

@@ -34,9 +34,9 @@ namespace local_adele;
 use advanced_testcase;
 use local_adele\event\user_path_updated;
 
-defined('MOODLE_INTERNAL') || die();
-
 /**
+ * Regression test for issue #452: enrolment must follow accessibility so an accessible node's course is enrolled into.
+ *
  * @package    local_adele
  * @copyright  2026 Wunderbyte GmbH
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later

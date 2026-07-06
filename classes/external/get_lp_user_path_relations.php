@@ -90,7 +90,7 @@ class get_lp_user_path_relations extends external_api {
             $params['courseid'] = $coursecontext->instanceid;
         }
 
-        // #464 H2: local/adele:view is held by every authenticated user, so it is not a
+        // Ticket #464 H2: local/adele:view is held by every authenticated user, so it is not a
         // boundary. This leaderboard returns the whole participant roster (names +
         // progress) for the path/course, so restrict it to course teachers / managers /
         // path editors, or a user actually enrolled in the course it belongs to. The

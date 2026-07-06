@@ -39,7 +39,7 @@ interface Store {
 }
 
 describe('setStartingNode', () => {
-  let removeNodesMock: jest.Mock, updateNodesMock: jest.Mock, nextTickMock: jest.Mock, addNodesMock: jest.Mock, storeMock: Store, nodes: Node[];
+  let removeNodesMock: jest.Mock, updateNodesMock: jest.Mock, nextTickMock: jest.Mock, addNodesMock: jest.Mock, storeMock: Store, nodes: any[];
 
     beforeEach(() => {
     removeNodesMock = jest.fn(); // Mock for removeNodes

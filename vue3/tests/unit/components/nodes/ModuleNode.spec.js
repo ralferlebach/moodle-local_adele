@@ -14,6 +14,7 @@ describe('ModuleNode.vue', () => {
   });
 
   it('renders correctly with given props', async () => {
+    darkenColor.mockReturnValue('#104703'); // deterministic; the real darkenColor is covered by its own spec.
     const wrapper = mount(ModuleNode, {
       props: {
         data: {
@@ -27,10 +28,11 @@ describe('ModuleNode.vue', () => {
       },
     });
 
-    // Check the initial rendering and styles
+    // The module renders in its own colour (#FF5733) at the given opacity...
     expect(wrapper.find('.custom-node').exists()).toBe(true);
-    expect(wrapper.find('.custom-node').attributes('style')).toContain('background-color: rgb(16, 71, 3)');
-    expect(wrapper.find('.module-name').attributes('style')).toContain('border: 5px solid #1047033');
+    expect(wrapper.find('.custom-node').attributes('style')).toContain('background-color: rgba(255, 87, 51, 0.5)');
+    // ...and the module-name border binds the darkened colour.
+    expect(wrapper.find('.module-name').attributes('style')).toContain('border: 5px solid #104703');
   });
 
   it('computes backgroundColor and darkerColor correctly on mount', async () => {
@@ -70,6 +72,7 @@ describe('ModuleNode.vue', () => {
   });
 
   it('applies correct styles to the custom node and module name', () => {
+    darkenColor.mockReturnValue('#104703'); // deterministic; the real darkenColor is covered by its own spec.
     const wrapper = mount(ModuleNode, {
       props: {
         data: {
@@ -84,11 +87,11 @@ describe('ModuleNode.vue', () => {
     });
 
     const customNodeStyle = wrapper.find('.custom-node').attributes('style');
-    expect(customNodeStyle).toContain('background-color: rgb(16, 71, 3)');
+    expect(customNodeStyle).toContain('background-color: rgba(255, 87, 51, 0.75)');
     expect(customNodeStyle).toContain('height: 150px');
     expect(customNodeStyle).toContain('width: 250px');
 
     const moduleNameStyle = wrapper.find('.module-name').attributes('style');
-    expect(moduleNameStyle).toContain('border: 5px solid #1047033');
+    expect(moduleNameStyle).toContain('border: 5px solid #104703');
   });
 });

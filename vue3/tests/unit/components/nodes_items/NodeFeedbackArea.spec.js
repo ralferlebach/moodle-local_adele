@@ -12,6 +12,7 @@ describe('NodeFeedbackArea.vue', () => {
     store = createStore({
       state: {
         view: 'admin', // default view for the test
+        strings: { edit_feedback: 'Edit feedback' },
       },
     });
 

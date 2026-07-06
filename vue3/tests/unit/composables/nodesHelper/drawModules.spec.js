@@ -117,7 +117,9 @@ describe('drawModules', () => {
     expect(module1.position.y).toBe(460);
   });
 
-  it('should make the opacity higher', async () => {
+  it('sets the inserted module opacity to 0.2', async () => {
+    // An inserted module always gets opacity '0.2'. The "0.6" boost for active modules
+    // has been commented out in drawModules.js since 2024, so 0.2 is the intended behaviour.
     learningpath = {
       json: {
         modules: [
@@ -134,6 +136,6 @@ describe('drawModules', () => {
     await drawModules(learningpath, addNodes, removeNodes, findNode, draggedNode);
     const addedModules = addNodes.mock.calls[0][0];
     const module1 = addedModules.find(module => module.id === 'module1_module');
-    expect(module1.data.opacity).toBe('0.6');
+    expect(module1.data.opacity).toBe('0.2');
   });
 });

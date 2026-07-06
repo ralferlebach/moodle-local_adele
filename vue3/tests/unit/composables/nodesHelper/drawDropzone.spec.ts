@@ -52,11 +52,11 @@ describe('drawDropzone', () => {
     };
   });
 
-  it('should handle nodes without parent/childCourse properly', () => {
+  it('should handle nodes without parent/childCourse properly', async () => {
     closestNode.parentCourse = [];
     closestNode.childCourse = [];
 
-    const result = drawDropzone(closestNode, store);
+    const result = await drawDropzone(closestNode, store);
 
     const parentDropZone = result.nodes.find(node => node.id === 'dropzone_parent');
     const childDropZone = result.nodes.find(node => node.id === 'dropzone_child');
@@ -73,11 +73,11 @@ describe('drawDropzone', () => {
     }
   });
 
-  it('should offset x-position when parentCourse or childCourse is not empty', () => {
+  it('should offset x-position when parentCourse or childCourse is not empty', async () => {
     closestNode.parentCourse = ['some_course'];
     closestNode.childCourse = ['some_course'];
 
-    const result = drawDropzone(closestNode, store);
+    const result = await drawDropzone(closestNode, store);
 
     const parentDropZone = result.nodes.find(node => node.id === 'dropzone_parent');
     const childDropZone = result.nodes.find(node => node.id === 'dropzone_child');

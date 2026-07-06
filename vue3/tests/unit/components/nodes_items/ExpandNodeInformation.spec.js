@@ -22,19 +22,22 @@ describe('ExpandNodeInformation.vue', () => {
     useStore.mockReturnValue(storeMock);
   })
 
-  it('renders correctly with given props', async () => {
-    const courses = [
-      {
-        id: 1,
-        description: 'This is a test course description.',
+  it('colours the info badge by course completion status', async () => {
+    const courses = [{ id: 1, description: 'This is a test course description.' }];
+
+    // Not completed -> the "not finished" status colour (courseNodeNotFinishedColor, #db8d31).
+    const notDone = mount(ExpandNodeInformation, { props: { courses } });
+    expect(notDone.find('.icon-container').exists()).toBe(true);
+    expect(notDone.find('.information').element.style.backgroundColor).toBe('rgb(219, 141, 49)');
+
+    // Completed -> the "finished" status colour (courseNodeFinishedColor, #63aa43).
+    const done = mount(ExpandNodeInformation, {
+      props: {
+        courses,
+        data: { course_id: 1, completion: { completioncriteria: { course_completed: { completed: { 1: true } } } } },
       },
-    ];
-    const wrapper = mount(ExpandNodeInformation, {
-      props: { courses },
     });
-    expect(wrapper.find('.icon-container').exists()).toBe(true);
-    const informationDiv = wrapper.find('.information');
-    expect(informationDiv.element.style.backgroundColor).toBe('rgb(240, 240, 240)');
+    expect(done.find('.information').element.style.backgroundColor).toBe('rgb(99, 170, 67)');
   });
 
   it('toggles the additional card visibility on click', async () => {
@@ -180,7 +183,7 @@ describe('ExpandNodeInformation.vue', () => {
     expect(wrapper.find('.additional-card').exists()).toBe(false);
   });
 
-  it('renders with a different background color if the store state changes', async () => {
+  it('uses the store LIGHT_GRAY for the popup card background', async () => {
     storeMock.state.strings.LIGHT_GRAY = '#aaaaaa';
 
     const courses = [
@@ -194,9 +197,10 @@ describe('ExpandNodeInformation.vue', () => {
       props: { courses },
     });
 
-    // Check if the new background color is applied
-    const informationDiv = wrapper.find('.information');
-    expect(informationDiv.element.style.backgroundColor).toBe('rgb(170, 170, 170)'); // rgb of #aaaaaa
+    // LIGHT_GRAY drives the popup card (.additional-card), not the status badge; reveal it first.
+    await wrapper.find('.icon-container').trigger('click');
+    const card = wrapper.find('.additional-card');
+    expect(card.element.style.backgroundColor).toBe('rgb(170, 170, 170)'); // #aaaaaa
   });
 
 });

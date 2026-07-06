@@ -35,6 +35,7 @@ use local_adele\external\get_lp_user_path_relations;
  * @covers \local_adele\external\get_lp_user_path_relation
  * @covers \local_adele\external\get_lp_user_path_relations
  */
+#[\PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses]
 #[\PHPUnit\Framework\Attributes\PreserveGlobalState(false)]
 final class user_path_relation_access_test extends advanced_testcase {
     /** @var \stdClass The course the path is delivered in. */

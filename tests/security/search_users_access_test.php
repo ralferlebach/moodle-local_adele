@@ -33,6 +33,7 @@ use local_adele\external\search_users;
  * @runTestsInSeparateProcesses
  * @covers \local_adele\external\search_users
  */
+#[\PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses]
 #[\PHPUnit\Framework\Attributes\PreserveGlobalState(false)]
 final class search_users_access_test extends advanced_testcase {
     protected function setUp(): void {

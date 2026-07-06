@@ -47,6 +47,11 @@ final class stored_xss_names_test extends advanced_testcase {
     protected function setUp(): void {
         parent::setUp();
         $this->resetAfterTest();
+        // The learning_path_update::get_course() call keeps a process-lived static cache
+        // that resetAfterTest does not clear; with reused course ids (postgres) it would
+        // otherwise serve a stale course name here. Reset it so the escaping assertions
+        // see the freshly-created payload course.
+        \local_adele\learning_path_update::$courses = [];
     }
 
     /**

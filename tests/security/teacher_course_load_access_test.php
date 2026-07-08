@@ -38,7 +38,6 @@ use local_adele\external\get_learningpaths;
 #[\PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses]
 #[\PHPUnit\Framework\Attributes\PreserveGlobalState(false)]
 final class teacher_course_load_access_test extends advanced_testcase {
-
     protected function setUp(): void {
         parent::setUp();
         $this->resetAfterTest();
@@ -47,6 +46,8 @@ final class teacher_course_load_access_test extends advanced_testcase {
     /**
      * An editing teacher who owns no learning path may load the teacher-view list
      * service in their course context without a capability exception.
+     *
+     * @covers \local_adele\external\get_learningpaths::execute
      */
     public function test_editing_teacher_can_load_learningpaths(): void {
         $course = $this->getDataGenerator()->create_course();
@@ -68,6 +69,8 @@ final class teacher_course_load_access_test extends advanced_testcase {
     /**
      * A plain enrolled student (no teacheredit, no editor rights) is still denied the
      * editor-list service, so the relaxation stays limited to course teachers.
+     *
+     * @covers \local_adele\external\get_learningpaths::execute
      */
     public function test_plain_student_still_denied_learningpaths(): void {
         $course = $this->getDataGenerator()->create_course();

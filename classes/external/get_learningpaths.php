@@ -87,8 +87,12 @@ class get_learningpaths extends external_api {
         $pathscreatedfornamedperson = learning_paths::return_learningpaths_owned();
         $sessionvalue = learning_paths::check_access();
         // Listing learning paths requires general editor access; the set is filtered
-        // to the user's own paths below for non-managers (clean denial, #458).
-        if (empty($sessionvalue)) {
+        // to the user's own paths below for non-managers (clean denial, #458). A course
+        // teacher (local/adele:teacheredit on the activity's context) may also load it to
+        // drive the in-course teacher view; the filter below scopes the result to their
+        // own (zero) editor paths, so no other path leaks. Editing the path structure
+        // stays gated on check_access()/canmanage elsewhere (save_learningpath etc.).
+        if (empty($sessionvalue) && !has_capability('local/adele:teacheredit', $context)) {
             throw new required_capability_exception($context, 'local/adele:canmanage', 'nopermissions', '');
         }
 

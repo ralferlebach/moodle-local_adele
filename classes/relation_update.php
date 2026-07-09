@@ -157,8 +157,22 @@ class relation_update {
                                 // wired up (empty childCondition); there is then nothing to key
                                 // the per-feedback-node hint by, so skip it instead of fataling.
                                 if (isset($feedback['id'])) {
-                                    $node['data']['completion']['feedback']['restriction']['before_active'][$feedback['id']] =
-                                    $activefeedbackfornode;
+                                    $fbdata = $feedback['data'] ?? [];
+                                    if (
+                                        empty($fbdata['feedback_before_checkmark'])
+                                        && !empty($fbdata['visibility'])
+                                        && !empty($fbdata['feedback_before'])
+                                    ) {
+                                        $node['data']['completion']['feedback']['restriction']['before_active'][$feedback['id']] =
+                                            self::render_placeholders_single_restriction(
+                                                $fbdata['feedback_before'],
+                                                $feedback['id'],
+                                                $node['restriction']['nodes']
+                                            );
+                                    } else {
+                                        $node['data']['completion']['feedback']['restriction']['before_active'][$feedback['id']] =
+                                            $activefeedbackfornode;
+                                    }
                                 }
                             }
                         }

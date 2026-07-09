@@ -34,6 +34,8 @@ use external_value;
 use external_single_structure;
 use external_multiple_structure;
 use local_adele\course_restriction\course_restriction_info;
+use local_adele\learning_paths;
+use required_capability_exception;
 
 defined('MOODLE_INTERNAL') || die();
 
@@ -68,11 +70,16 @@ class get_restrictions extends external_api {
     public static function execute($contextid): array {
         require_login();
         $context = context::instance_by_id($contextid);
-        // Managers keep full access; editing-teachers may read the condition
-        // palette via the dedicated teacheredit capability (#431) without the
-        // over-broad canmanage.
-        if (!has_capability('local/adele:canmanage', $context)) {
-            require_capability('local/adele:teacheredit', $context);
+        // Managers keep full access; editing-teachers may read the condition palette via
+        // the dedicated teacheredit capability (#431), and a per-learning-path editor
+        // (local_adele_lp_editors membership, surfaced by check_access()) may read it to
+        // edit their own path's restrictions - all without the over-broad canmanage.
+        if (
+            !has_capability('local/adele:canmanage', $context)
+                && !has_capability('local/adele:teacheredit', $context)
+                && !learning_paths::check_access()
+        ) {
+            throw new required_capability_exception($context, 'local/adele:teacheredit', 'nopermissions', '');
         }
 
         return course_restriction_info::get_restrictions(true);

@@ -119,8 +119,13 @@ const renderFeedback = (action, emitting) => {
       nextNode = null
     }
   }
-    feedback.value['feedback_' + action] = renderedFeedback
     feedback.value['information'] = renderedInformation
+  // Only overwrite the feedback text with the rendered default when "use default"
+  // is selected; otherwise the teacher's custom text must be preserved (mirrors the
+  // completion feedback node). Without this guard a re-render wiped custom feedback.
+  if (checked) {
+    feedback.value['feedback_' + action] = renderedFeedback
+  }
   if (emitting) {
     emit('updateFeedback', feedback.value)
   }

@@ -158,9 +158,16 @@ class relation_update {
                                 // the per-feedback-node hint by, so skip it instead of fataling.
                                 if (isset($feedback['id'])) {
                                     $fbdata = $feedback['data'] ?? [];
+                                    if (empty($fbdata['visibility'])) {
+                                        // Hidden ("Verbergen"): a hidden feedback node contributes no student-facing
+                                        // text - neither the custom message nor the default description -
+                                        // so the speech bubble stays empty, consistent with
+                                        // restriction.before/information in getfeedback(). Display-only:
+                                        // the lock verdict (status_restriction) is unaffected. See #474.
+                                        continue;
+                                    }
                                     if (
                                         empty($fbdata['feedback_before_checkmark'])
-                                        && !empty($fbdata['visibility'])
                                         && !empty($fbdata['feedback_before'])
                                     ) {
                                         $node['data']['completion']['feedback']['restriction']['before_active'][$feedback['id']] =
@@ -602,9 +609,15 @@ class relation_update {
                     // The childCondition can be empty when the feedback node is not wired
                     // (auto-created restriction left unedited); skip rather than fatal.
                     $childconditionid = $restnode['childCondition'][0] ?? null;
-                    if ($childconditionid !== null && isset($feedback['restriction']['before'][$childconditionid])) {
+                    if ($childconditionid !== null) {
+                        // The status_restriction must mirror the ACTUAL restriction state at all
+                        // times: $isvalid means this column is still blocking, so the node is
+                        // 'before' (requirements not fulfilled). Key before_valid off $isvalid,
+                        // NOT off whether the feedback text is present - hiding a feedback node
+                        // ("Verbergen") empties the display string but must never flip a locked
+                        // node to 'after'. The stored value is the (possibly empty) display text.
                         $feedback['restriction']['before_valid'][$childconditionid] =
-                        $feedback['restriction']['before'][$childconditionid];
+                            $feedback['restriction']['before'][$childconditionid] ?? '';
                     }
                 }
             }
@@ -625,7 +638,12 @@ class relation_update {
      * @return string
      */
     public static function getnodestatus($feedback, $restrictionnodepaths, $node) {
-        if ($feedback['completion']['after']) {
+        // Derive 'completed' from the completion verdict (status_completion, computed
+        // from the condition evaluation just above), NOT from the presence of the
+        // after-feedback text. The two are equivalent for a completed node, but reading
+        // the verdict means hiding a completed node's feedback ("Verbergen") empties the
+        // text without dropping the completed status/colour. Display-only. See #474.
+        if (($feedback['status_completion'] ?? '') === 'after') {
             return 'completed';
         }
         if (
@@ -800,8 +818,15 @@ class relation_update {
                 strpos($conditionnode['id'], '_feedback') !== false &&
                 isset($conditionnode['data']['visibility'])
             ) {
+                // The "Verbergen" toggle is display-only: it empties the criterion text
+                // the info symbol and speech bubble render, but never changes a status
+                // verdict. All four display fields (information, before, inbetween and the
+                // completed message after_all) honour visibility. after_all can be gated
+                // safely because getnodestatus() now derives 'completed' from
+                // status_completion (the condition verdict), not from this text. See #474.
+                $visible = $conditionnode['data']['visibility'] ?? false;
                 $feedbacks['completion']['before'][] =
-                    isset($conditionnode['data']['feedback_before']) ?
+                    ($visible && isset($conditionnode['data']['feedback_before'])) ?
                     self::render_placeholders(
                         $conditionnode['data']['feedback_before'],
                         $completioncriteria,
@@ -810,7 +835,7 @@ class relation_update {
                     ) :
                     '';
                 $feedbacks['completion']['information'][] =
-                isset($conditionnode['data']['information']) ?
+                ($visible && isset($conditionnode['data']['information'])) ?
                 self::render_placeholders(
                     $conditionnode['data']['information'],
                     $completioncriteria,
@@ -820,7 +845,7 @@ class relation_update {
                 '';
                 $conditionnodename = str_replace('_feedback', '', $conditionnode['id']);
                 $feedbacks['completion']['after_all'][$conditionnodename] =
-                    isset($conditionnode['data']['feedback_after']) ?
+                    ($visible && isset($conditionnode['data']['feedback_after'])) ?
                         self::render_placeholders(
                             $conditionnode['data']['feedback_after'],
                             $completioncriteria,
@@ -829,8 +854,8 @@ class relation_update {
                         ) :
                         '';
 
-                if ($conditionnode['data']['feedback_inbetween_checkmark']) {
-                    $feedbacks['completion']['inbetween'][] = isset($conditionnode['data']['feedback_inbetween']) ?
+                $feedbacks['completion']['inbetween'][] =
+                    ($visible && isset($conditionnode['data']['feedback_inbetween'])) ?
                         self::render_placeholders(
                             $conditionnode['data']['feedback_inbetween'],
                             $completioncriteria,
@@ -838,17 +863,6 @@ class relation_update {
                             $node['completion']['nodes']
                         ) :
                         '';
-                } else {
-                    $feedbacks['completion']['inbetween'][] =
-                        isset($conditionnode['data']['feedback_inbetween']) ?
-                            self::render_placeholders(
-                                $conditionnode['data']['feedback_inbetween'],
-                                $completioncriteria,
-                                $conditionnode['id'],
-                                $node['completion']['nodes']
-                            ) :
-                        '';
-                }
             }
         }
 

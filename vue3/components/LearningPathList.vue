@@ -66,7 +66,8 @@
               <a
                 v-if="
                   store.state.editablepaths[singlelearningpath.id] != undefined ||
-                  store.state.view == 'manager'
+                  store.state.view == 'manager' ||
+                  singlelearningpath.isowner == 'true'
                 "
                 class="icon-link position-absolute"
                 href=""

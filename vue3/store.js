@@ -57,6 +57,25 @@ function hasIncompleteCondition(json) {
     );
 }
 
+/**
+ * A "starting" node has no predecessor, so a parent_courses ("according to predecessor
+ * nodes") restriction on it can never be satisfied and would lock it forever (#476).
+ *
+ * @param {object} json The learning-path tree json.
+ * @returns {boolean} True if any first node carries a parent_courses restriction.
+ */
+export function hasParentRestrictionOnFirstNode(json) {
+    const nodes = json && json.tree && json.tree.nodes ? json.tree.nodes : [];
+    return nodes.some(node => {
+        const isfirst = node && Array.isArray(node.parentCourse) && node.parentCourse.includes('starting_node');
+        if (!isfirst) {
+            return false;
+        }
+        const conditions = node.restriction && node.restriction.nodes ? node.restriction.nodes : [];
+        return conditions.some(c => c && c.data && c.data.label === 'parent_courses');
+    });
+}
+
 // Defining store for application
 export function createAppStore() {
     return createStore({
@@ -324,6 +343,15 @@ export function createAppStore() {
                         context.state.strings.criterion_incomplete_modal
                     );
                     throw new Error('local_adele/incomplete-criterion');
+                }
+                // Frontend guard (#476): a first node has no predecessor, so a
+                // parent_courses restriction on it can never unlock. Refuse the save.
+                if (hasParentRestrictionOnFirstNode(payload.json)) {
+                    Notification.alert(
+                        context.state.strings.restriction_incomplete_title,
+                        context.state.strings.first_node_parent_restriction_modal
+                    );
+                    throw new Error('local_adele/first-node-parent-restriction');
                 }
                 let result;
                 try {

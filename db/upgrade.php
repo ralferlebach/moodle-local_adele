@@ -209,5 +209,19 @@ function xmldb_local_adele_upgrade($oldversion) {
         // Adele savepoint reached.
         upgrade_plugin_savepoint(true, 2026061800, 'local', 'adele');
     }
+    if ($oldversion < 2026071500) {
+        // Ticket #482: the local/adele:teacheredit capability gained the manager
+        // archetype so a course Manager operates a learning path like an editing
+        // teacher. Archetype defaults only apply to fresh installs, so grant it to
+        // existing manager roles here too. Do not overwrite any explicit admin
+        // override (overwrite = false).
+        $systemcontext = \context_system::instance();
+        foreach (get_archetype_roles('manager') as $role) {
+            assign_capability('local/adele:teacheredit', CAP_ALLOW, $role->id, $systemcontext->id, false);
+        }
+
+        // Adele savepoint reached.
+        upgrade_plugin_savepoint(true, 2026071500, 'local', 'adele');
+    }
     return true;
 }

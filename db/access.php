@@ -48,6 +48,9 @@ $capabilities = [
             'archetypes' => [
                 'editingteacher' => CAP_ALLOW,
                 'teacher' => CAP_ALLOW,
+                // A course Manager must operate a learning path like an editing teacher
+                // (#482): grant them the same course-level editor capability.
+                'manager' => CAP_ALLOW,
             ],
         ],
         'local/adele:view' => [

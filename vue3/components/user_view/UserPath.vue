@@ -164,6 +164,9 @@ onMounted( async () => {
       }
     }else {
       params = route.params
+      // Remember which list row was opened so the user list can scroll back to it
+      // when the teacher returns via "Close" (#481).
+      store.commit('setFocusUser', route.params.userId)
     }
     user_learningpath.value  = await store.dispatch('fetchUserPathRelation', params)
   } else {

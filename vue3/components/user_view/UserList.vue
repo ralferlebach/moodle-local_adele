@@ -96,16 +96,26 @@ watch(
       sortedRelations.value = [...newVal];
     }
 
-    if (store.state.view === 'student') {
-      focusEntry.value = store.state.lpuserpathrelation.user_id;
-    }
+    setFocusEntry()
     scrollIntoFocus()
   },
 );
 
 onMounted(() => {
+  setFocusEntry()
   scrollIntoFocus()
 });
+
+// The row to highlight + scroll to: the student's own row in student view, or the
+// list row a teacher last opened (focususer) so returning from a participant's edit
+// view lands on the same position instead of jumping to the top (#481).
+const setFocusEntry = () => {
+  if (store.state.view === 'student') {
+    focusEntry.value = store.state.lpuserpathrelation?.user_id ?? null;
+  } else if (store.state.focususer) {
+    focusEntry.value = Number(store.state.focususer);
+  }
+}
 
 const scrollIntoFocus = () => {
   nextTick(() => {

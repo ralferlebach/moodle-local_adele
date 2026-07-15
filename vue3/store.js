@@ -100,6 +100,9 @@ export function createAppStore() {
                 startnode: null,
                 lpuserpathrelations: [],
                 lpuserpathrelation: null,
+                // The learning-path-user list row a teacher last opened, so the list can
+                // scroll back to it when returning from a participant's edit view (#481).
+                focususer: null,
                 feedback: null,
                 modules: null,
                 version: 0,
@@ -119,6 +122,9 @@ export function createAppStore() {
         mutations: {
             setlearningPathID(state, id) {
                 state.learningPathID = id;
+            },
+            setFocusUser(state, id) {
+                state.focususer = id;
             },
             setStrings(state, strings) {
                 state.strings = strings;

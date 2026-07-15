@@ -32,6 +32,7 @@ const buildStore = (overrides = {}) =>
       learningPathID: 7,
       lpuserpathrelations: overrides.relations || relations,
       lpuserpathrelation: overrides.lpuserpathrelation || { user_id: null, image: '' },
+      focususer: overrides.focususer,
     },
   });
 
@@ -96,6 +97,20 @@ describe('UserList.vue', () => {
     names = wrapper.findAll('tbody tr td:nth-child(2)').map((td) => td.text());
     expect(names).toEqual(['Cara', 'Bea', 'Alan']);
     expect(firstNameHeader.classes()).toContain('descending');
+  });
+
+  it('highlights the last-opened participant so the teacher returns to that position (#481)', async () => {
+    // route params are strings; focususer stores the opened row's id.
+    const wrapper = factory({ focususer: '2' });
+    await wrapper.vm.$nextTick(); // focusEntry is set in onMounted -> flush the re-render
+    const highlighted = wrapper.findAll('tbody tr.highlighted-row');
+    expect(highlighted).toHaveLength(1);
+    expect(highlighted[0].text()).toContain('Bea'); // relation id 2 -> Bea
+  });
+
+  it('highlights no row for a teacher who has not opened anyone yet (#481)', () => {
+    const wrapper = factory(); // focususer undefined
+    expect(wrapper.findAll('tbody tr.highlighted-row')).toHaveLength(0);
   });
 
   it('filters to the current user only when student view and userlist === 2', async () => {

@@ -28,6 +28,7 @@
 import { Panel, useVueFlow } from '@vue-flow/core'
 import { useStore } from 'vuex';
 import { useRoute, useRouter } from 'vue-router';
+import { notify } from '@kyvg/vue3-notification';
 import removeModules from '../../composables/nodesHelper/removeModules';
 import { ref } from 'vue';
 
@@ -47,10 +48,15 @@ const showCancelConfirmation = ref(false)
     await store.dispatch('saveUserPathRelation', {
         nodes: completion.nodes,
         route: route_params});
-    router.push({
-      path: '/learningpaths/edit/',
-      query: {notify: true}
-    })
+    // Stay on the current participant within the learning path instead of navigating
+    // back to the overview: the teacher can keep working, and the saved toast is shown
+    // in place (UserPath mounts <notifications>). "Close" returns to the list at the
+    // previously-opened position (#481).
+    notify({
+      title: store.state.strings.title_save,
+      text: store.state.strings.description_save,
+      type: 'success',
+    });
  };
 
  // Cancel learning path edition and return to overview

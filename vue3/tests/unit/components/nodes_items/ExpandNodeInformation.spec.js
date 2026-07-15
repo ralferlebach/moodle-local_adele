@@ -183,6 +183,37 @@ describe('ExpandNodeInformation.vue', () => {
     expect(wrapper.find('.additional-card').exists()).toBe(false);
   });
 
+  it('renders the node description defined in the editor, even without a course description (#484)', async () => {
+    const wrapper = mount(ExpandNodeInformation, {
+      props: {
+        courses: [{ id: 1 }], // no course description or summary
+        data: { description: 'Node description from the learning-path editor' },
+      },
+    });
+
+    await wrapper.find('.icon-container').trigger('click');
+    await wrapper.vm.$nextTick();
+    const text = wrapper.find('.list-group-text').text();
+    expect(text).toContain('Node description from the learning-path editor');
+    // Must NOT fall back to the "no course description" hint when a node description exists.
+    expect(text).not.toBe(storeMock.state.strings.nodes_no_description);
+  });
+
+  it('prioritises the node description over the course description (#484)', async () => {
+    const wrapper = mount(ExpandNodeInformation, {
+      props: {
+        courses: [{ id: 1, description: 'Course level description' }],
+        data: { description: 'Node level description' },
+      },
+    });
+
+    await wrapper.find('.icon-container').trigger('click');
+    await wrapper.vm.$nextTick();
+    const text = wrapper.find('.list-group-text').text();
+    expect(text).toContain('Node level description');
+    expect(text).not.toContain('Course level description');
+  });
+
   it('uses the store LIGHT_GRAY for the popup card background', async () => {
     storeMock.state.strings.LIGHT_GRAY = '#aaaaaa';
 

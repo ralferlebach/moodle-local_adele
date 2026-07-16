@@ -98,7 +98,8 @@
                 <div class="overlay">
                   <a
                     v-if="
-                      store.state.view == 'manager'||store.state.view == 'assistant'
+                      store.state.view == 'manager' ||
+                      (store.state.view == 'assistant' && singlelearningpath.isowner == 'true')
                     "
                     class="icon-link"
                     href=""
@@ -148,6 +149,14 @@
                   {{ store.state.strings.main_description }}
                 </b>
                 {{ singlelearningpath.description }}
+              </div>
+              <div v-if="singlelearningpath.owner && singlelearningpath.owner.name">
+                <b>
+                  {{ store.state.strings.main_owner }}
+                </b>
+                {{ singlelearningpath.owner.name }}<span
+                  v-if="singlelearningpath.owner.email"
+                > ({{ singlelearningpath.owner.email }})</span>
               </div>
             </div>
           </div>
@@ -230,6 +239,14 @@
                   {{ store.state.strings.main_description }}
                 </b>
                 {{ viewablelearningpath.description }}
+              </div>
+              <div v-if="viewablelearningpath.owner && viewablelearningpath.owner.name">
+                <b>
+                  {{ store.state.strings.main_owner }}
+                </b>
+                {{ viewablelearningpath.owner.name }}<span
+                  v-if="viewablelearningpath.owner.email"
+                > ({{ viewablelearningpath.owner.email }})</span>
               </div>
             </div>
           </div>

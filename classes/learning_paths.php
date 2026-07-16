@@ -193,7 +193,7 @@ class learning_paths {
             'local_adele_learning_paths',
             null,
             '',
-            'id, name, description, image, visibility'
+            'id, name, description, image, visibility, createdby'
         );
         $learningpaths = [
             'edit' => [],
@@ -1004,5 +1004,138 @@ class learning_paths {
             return;
         }
         throw new required_capability_exception($context, 'local/adele:canmanage', 'nopermissions', '');
+    }
+
+    /**
+     * Require that the current user OWNS (created) the given learning path.
+     *
+     * Managers and site admins keep full access; everyone else must be the creator.
+     * Being merely an editor (lp_editors membership) is NOT enough - actions like
+     * duplicating are reserved for the path's owner (#471).
+     *
+     * @param int $learningpathid
+     * @param \context $context
+     * @return void
+     * @throws required_capability_exception when the user does not own the path
+     */
+    public static function require_lp_owner_access($learningpathid, $context) {
+        global $USER, $DB;
+
+        if (has_capability('local/adele:canmanage', $context) || is_siteadmin()) {
+            return;
+        }
+        $createdby = $DB->get_field('local_adele_learning_paths', 'createdby', ['id' => $learningpathid]);
+        if ($createdby !== false && (int) $createdby === (int) $USER->id) {
+            return;
+        }
+        throw new required_capability_exception($context, 'local/adele:canmanage', 'nopermissions', '');
+    }
+
+    /**
+     * Scope the full set of learning paths to what the requesting user may see.
+     *
+     * - Managers/admins ($privileged) see everything, all marked as owner.
+     * - Assistants see every VISIBLE path plus their own (even if hidden); paths they
+     *   may edit (lp_editors membership) land in 'edit', the rest in 'view' (#472).
+     * - Everyone else sees only the paths they may edit.
+     *
+     * @param array $allpaths ['edit' => [...], 'view' => [...]] as built by get_learning_paths().
+     * @param array $editablekeys Learning-path ids the user may edit (lp_editors membership).
+     * @param array $ownedkeys Learning-path ids the user created.
+     * @param bool $isassistant Whether the user holds local/adele:assist (Adele Assistant).
+     * @param bool $privileged Whether the user is a manager or site admin (sees all).
+     * @return array ['edit' => [...], 'view' => [...]] with each path's 'isowner' set.
+     */
+    public static function scope_paths_for_user(
+        array $allpaths,
+        array $editablekeys,
+        array $ownedkeys,
+        bool $isassistant,
+        bool $privileged
+    ): array {
+        if ($privileged) {
+            foreach ($allpaths as &$typepaths) {
+                foreach ($typepaths as &$path) {
+                    if (is_array($path)) {
+                        $path['isowner'] = "true";
+                    }
+                }
+                unset($path);
+            }
+            unset($typepaths);
+            return $allpaths;
+        }
+
+        $scoped = ['edit' => [], 'view' => []];
+        // The get_learning_paths(true, ...) master set places every path in 'edit'; iterate it.
+        foreach ($allpaths['edit'] as $lp) {
+            if (!is_array($lp)) {
+                continue;
+            }
+            $id = (int) $lp['id'];
+            $iseditor = in_array($id, $editablekeys);
+            $isowner = in_array($id, $ownedkeys);
+            if ($isassistant) {
+                $visible = ((int) ($lp['visibility'] ?? 0)) === 1;
+                // Hidden paths a non-owner did not create stay hidden (#472).
+                if (!$visible && !$isowner) {
+                    continue;
+                }
+            } else if (!$iseditor) {
+                continue;
+            }
+            $lp['isowner'] = $isowner ? "true" : "false";
+            if ($iseditor) {
+                $scoped['edit'][] = $lp;
+            } else {
+                $scoped['view'][] = $lp;
+            }
+        }
+        return $scoped;
+    }
+
+    /**
+     * Annotate each learning path with its owner (creator) and editors, so the overview
+     * tiles can show who is responsible - e.g. so an assistant knows whom to ask for
+     * edit rights (#487). Adds 'owner' => ['name', 'email'] and 'editors' => [['name'], ...],
+     * and drops the internal 'createdby'.
+     *
+     * @param array $paths ['edit' => [...], 'view' => [...]] path structure to decorate in place.
+     * @return void
+     */
+    public static function add_path_people(array &$paths): void {
+        global $DB;
+        $usercache = [];
+        foreach ($paths as &$typepaths) {
+            foreach ($typepaths as &$path) {
+                if (!is_array($path)) {
+                    continue;
+                }
+                $createdby = (int) ($path['createdby'] ?? 0);
+                unset($path['createdby']);
+                $owner = ['name' => '', 'email' => ''];
+                if ($createdby) {
+                    if (!isset($usercache[$createdby])) {
+                        // Select all name fields so fullname() has everything it may format.
+                        $fields = 'id, email, ' . implode(', ', \core_user\fields::get_name_fields());
+                        $usercache[$createdby] = $DB->get_record('user', ['id' => $createdby], $fields);
+                    }
+                    if ($usercache[$createdby]) {
+                        $owner = [
+                            'name' => fullname($usercache[$createdby]),
+                            'email' => $usercache[$createdby]->email,
+                        ];
+                    }
+                }
+                $path['owner'] = $owner;
+                $editors = [];
+                foreach (learning_path_editors::get_editors((int) $path['id']) as $editor) {
+                    $editors[] = ['name' => trim(($editor['firstname'] ?? '') . ' ' . ($editor['lastname'] ?? ''))];
+                }
+                $path['editors'] = $editors;
+            }
+            unset($path);
+        }
+        unset($typepaths);
     }
 }

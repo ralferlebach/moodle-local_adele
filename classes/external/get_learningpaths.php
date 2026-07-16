@@ -105,37 +105,20 @@ class get_learningpaths extends external_api {
             $learningpaths
         );
 
-        $lpkeys = array_keys($learningpaths);
-        $lpownedkeys = array_keys($pathscreatedfornamedperson);
+        // Scope the master set to what this user may see (assistants see all visible
+        // paths + their own, #472), then annotate each tile with its owner + editors
+        // (#487). Both live in learning_paths so they are unit-testable without the
+        // external-api isolated-process requirement.
+        $scoped = learning_paths::scope_paths_for_user(
+            $allpaths,
+            array_keys($learningpaths),
+            array_keys($pathscreatedfornamedperson),
+            has_capability('local/adele:assist', $context),
+            ($ismanager || $isadmin)
+        );
+        learning_paths::add_path_people($scoped);
 
-        if ($ismanager || $isadmin) {
-            foreach ($allpaths as &$typepaths) {
-                foreach ($typepaths as &$path) {
-                    $path['isowner'] = "true";
-                }
-            }
-            return $allpaths;
-        }
-
-        $filteredpaths = [
-            'edit' => array_map(function ($lp) use ($lpkeys, $lpownedkeys) {
-                if (in_array((int)$lp['id'], $lpkeys)) {
-                    $lp['isowner'] = in_array((int)$lp['id'], $lpownedkeys) ? "true" : "false";
-                    return $lp;
-                }
-            }, $allpaths['edit']),
-            'view' => array_map(function ($lp) use ($lpkeys, $lpownedkeys) {
-                if (in_array((int)$lp['id'], $lpkeys)) {
-                    $lp['isowner'] = in_array((int)$lp['id'], $lpownedkeys) ? "true" : "false";
-                    return $lp;
-                }
-            }, $allpaths['view']),
-        ];
-
-        $filteredpaths['edit'] = array_filter($filteredpaths['edit']);
-        $filteredpaths['view'] = array_filter($filteredpaths['view']);
-
-        return $filteredpaths;
+        return $scoped;
     }
 
     /**
@@ -153,6 +136,15 @@ class get_learningpaths extends external_api {
                     'image' => new external_value(PARAM_TEXT, 'Item image'),
                     'visibility' => new external_value(PARAM_TEXT, 'visibility'),
                     'isowner' => new external_value(PARAM_TEXT, 'canbedeleted'),
+                    'owner' => new external_single_structure([
+                        'name' => new external_value(PARAM_TEXT, 'Owner (creator) full name'),
+                        'email' => new external_value(PARAM_TEXT, 'Owner (creator) email'),
+                    ]),
+                    'editors' => new external_multiple_structure(
+                        new external_single_structure([
+                            'name' => new external_value(PARAM_TEXT, 'Editor full name'),
+                        ])
+                    ),
                 ]),
                 VALUE_OPTIONAL
             ),
@@ -164,6 +156,15 @@ class get_learningpaths extends external_api {
                     'image' => new external_value(PARAM_TEXT, 'Item image'),
                     'visibility' => new external_value(PARAM_TEXT, 'visibility'),
                     'isowner' => new external_value(PARAM_TEXT, 'canbedeleted'),
+                    'owner' => new external_single_structure([
+                        'name' => new external_value(PARAM_TEXT, 'Owner (creator) full name'),
+                        'email' => new external_value(PARAM_TEXT, 'Owner (creator) email'),
+                    ]),
+                    'editors' => new external_multiple_structure(
+                        new external_single_structure([
+                            'name' => new external_value(PARAM_TEXT, 'Editor full name'),
+                        ])
+                    ),
                 ]),
                 VALUE_OPTIONAL
             ),

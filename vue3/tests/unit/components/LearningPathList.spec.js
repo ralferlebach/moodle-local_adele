@@ -49,4 +49,49 @@ describe('LearningPathList.vue visibility toggle', () => {
     await wrapper.vm.$nextTick();
     expect(wrapper.find('a.icon-link.position-absolute').exists()).toBe(false);
   });
+
+  it('shows the duplicate button for an assistant on their own path (#471)', async () => {
+    useStore.mockReturnValue(makeStore({ ...lpBase, isowner: 'true' }));
+    useRouter.mockReturnValue({ push: jest.fn() });
+    const wrapper = doMount();
+    await wrapper.vm.$nextTick();
+    expect(wrapper.find('.fa-copy').exists()).toBe(true);
+  });
+
+  it('hides the duplicate button for an assistant on a path they do not own (#471)', async () => {
+    useStore.mockReturnValue(makeStore({ ...lpBase, isowner: 'false' }));
+    useRouter.mockReturnValue({ push: jest.fn() });
+    const wrapper = doMount();
+    await wrapper.vm.$nextTick();
+    expect(wrapper.find('.fa-copy').exists()).toBe(false);
+  });
+
+  it('shows the owner (name + email) on the tile (#487)', async () => {
+    useStore.mockReturnValue(makeStore({
+      ...lpBase,
+      isowner: 'false',
+      owner: { name: 'Olive Owner', email: 'olive@example.com' },
+    }));
+    useRouter.mockReturnValue({ push: jest.fn() });
+    const wrapper = doMount();
+    await wrapper.vm.$nextTick();
+    const text = wrapper.text();
+    expect(text).toContain('Olive Owner');
+    expect(text).toContain('olive@example.com');
+  });
+
+  it('shows the owner on a view-only tile too (#487)', async () => {
+    const store = makeStore(lpBase);
+    store.state.learningpaths = [];
+    store.state.viewlearningpaths = [
+      { ...lpBase, visibility: 1, owner: { name: 'Vic Viewer', email: 'vic@example.com' } },
+    ];
+    useStore.mockReturnValue(store);
+    useRouter.mockReturnValue({ push: jest.fn() });
+    const wrapper = doMount();
+    await wrapper.vm.$nextTick();
+    const text = wrapper.text();
+    expect(text).toContain('Vic Viewer');
+    expect(text).toContain('vic@example.com');
+  });
 });

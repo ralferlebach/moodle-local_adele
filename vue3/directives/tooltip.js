@@ -37,6 +37,11 @@ export default {
 
     // Position the tooltip at the center of the hovered element
     const showTooltip = (event) => {
+      // Never render an empty tooltip - a missing/blank value would otherwise show
+      // as a bare black square on hover.
+      if (binding.value === undefined || binding.value === null || binding.value === '') {
+        return;
+      }
       // Clear any previous timeout
       clearTimeout(showTimeout);
 

@@ -65,6 +65,8 @@ class learning_paths {
         // "specific node completed" criterion with no node selected) - it would
         // render the {node_name} placeholder and break the path (#450).
         self::assert_conditions_complete($params['json']);
+        // Reject a name already taken by another path (#492).
+        self::assert_name_unique($params['name'], $params['learningpathid']);
         $data = new stdClass();
         $data->name = $params['name'];
         $data->description = $params['description'];
@@ -161,6 +163,28 @@ class learning_paths {
                     }
                 }
             }
+        }
+    }
+
+    /**
+     * Refuse to save a learning path whose name is already used by another path, so
+     * duplicate names (and the confusion they cause) are prevented (#492). The match is
+     * case-insensitive; the path being edited is excluded so a plain re-save is allowed.
+     *
+     * @param string $name The proposed learning-path name.
+     * @param int $learningpathid The id being saved (0 for a new path); excluded from the check.
+     * @throws \moodle_exception When another learning path already uses this name.
+     */
+    public static function assert_name_unique($name, $learningpathid) {
+        global $DB;
+        $select = $DB->sql_equal('name', ':name', false);
+        $params = ['name' => $name];
+        if (!empty($learningpathid)) {
+            $select .= ' AND id <> :id';
+            $params['id'] = $learningpathid;
+        }
+        if ($DB->record_exists_select('local_adele_learning_paths', $select, $params)) {
+            throw new \moodle_exception('error_learningpath_name_exists', 'local_adele');
         }
     }
 

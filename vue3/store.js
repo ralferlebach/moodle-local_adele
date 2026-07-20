@@ -419,12 +419,12 @@ export function createAppStore() {
                       image: payload.image,
                       json: JSON.stringify(payload.json),
                       contextid: context.state.contextid,
-                    });
+                    }, true);
                 } catch (error) {
                     // Silent backend backstop: if the server guard ever rejects (e.g. a
-                    // bypassed frontend), show its message in the same clean modal -
-                    // never the raw exception dialog with stack trace.
-                    Notification.alert(context.state.strings.restriction_incomplete_title, error.message);
+                    // bypassed frontend, or a duplicate name #492), show its message in
+                    // the same clean modal - never the raw exception dialog with a stack.
+                    Notification.alert(context.state.strings.error_save_title, error.message);
                     throw error;
                 }
                 context.dispatch('fetchLearningpaths');
@@ -577,7 +577,7 @@ export function createAppStore() {
 /**
  * Single ajax call to Moodle.
  */
-export async function ajax(method, args) {
+export async function ajax(method, args, silent = false) {
     const request = {
         methodname: method,
         args: Object.assign( args ),
@@ -586,7 +586,12 @@ export async function ajax(method, args) {
     try {
         return await moodleAjax.call([request])[0];
     } catch (e) {
-        Notification.exception(e);
+        // Callers that render their own clean message (e.g. saveLearningpath's
+        // duplicate-name guard #492) pass silent=true to suppress the raw Moodle
+        // exception/stack-trace dialog and avoid a double popup.
+        if (!silent) {
+            Notification.exception(e);
+        }
         throw e;
     }
 }

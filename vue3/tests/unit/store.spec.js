@@ -4,7 +4,7 @@ jest.mock('core/ajax', () => ({ __esModule: true, default: { call: jest.fn(() =>
 jest.mock('core/localstorage', () => ({ __esModule: true, default: { get: jest.fn(), set: jest.fn() } }), { virtual: true });
 jest.mock('core/notification', () => ({ __esModule: true, default: { alert: jest.fn() } }), { virtual: true });
 
-import { hasParentRestrictionOnFirstNode } from '../../store.js';
+import { hasParentRestrictionOnFirstNode, invalidTimedConditionLabel } from '../../store.js';
 
 describe('hasParentRestrictionOnFirstNode (#476)', () => {
   const firstNode = (label) => ({
@@ -34,5 +34,45 @@ describe('hasParentRestrictionOnFirstNode (#476)', () => {
   it('is defensive against empty / missing structures', () => {
     expect(hasParentRestrictionOnFirstNode({})).toBe(false);
     expect(hasParentRestrictionOnFirstNode(wrap(firstNode()))).toBe(false);
+  });
+});
+
+describe('invalidTimedConditionLabel (#494)', () => {
+  const wrap = (conditionData) => ({
+    tree: { nodes: [{ id: 'n1', restriction: { nodes: [{ id: 'c1', data: conditionData }] } }] },
+  });
+
+  // 'timed' (start/end): at least one of start/end is required.
+  it('flags a "timed" criterion with neither start nor end', () => {
+    expect(invalidTimedConditionLabel(wrap({ label: 'timed', value: { start: null, end: '' } }))).toBe('timed');
+  });
+
+  it('allows a "timed" criterion with only a start', () => {
+    expect(invalidTimedConditionLabel(wrap({ label: 'timed', value: { start: '2026-01-01T10:00', end: null } }))).toBeNull();
+  });
+
+  it('allows a "timed" criterion with only an end', () => {
+    expect(invalidTimedConditionLabel(wrap({ label: 'timed', value: { start: null, end: '2026-02-01T10:00' } }))).toBeNull();
+  });
+
+  // 'timed_duration': needs a positive duration AND a time unit.
+  it('flags a "timed_duration" with no time unit selected', () => {
+    expect(invalidTimedConditionLabel(wrap({ label: 'timed_duration', value: { durationValue: 3, selectedDuration: null } })))
+      .toBe('timed_duration');
+  });
+
+  it('flags a "timed_duration" with a zero/empty duration', () => {
+    expect(invalidTimedConditionLabel(wrap({ label: 'timed_duration', value: { durationValue: 0, selectedDuration: 1 } })))
+      .toBe('timed_duration');
+  });
+
+  it('allows a valid "timed_duration" (positive value + unit, including the 0 = days unit)', () => {
+    expect(invalidTimedConditionLabel(wrap({ label: 'timed_duration', value: { durationValue: 2, selectedDuration: 0 } })))
+      .toBeNull();
+  });
+
+  it('ignores unrelated criteria and is defensive against empty structures', () => {
+    expect(invalidTimedConditionLabel(wrap({ label: 'manual' }))).toBeNull();
+    expect(invalidTimedConditionLabel({})).toBeNull();
   });
 });

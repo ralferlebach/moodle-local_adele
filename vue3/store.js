@@ -58,6 +58,38 @@ function hasIncompleteCondition(json) {
 }
 
 /**
+ * Timed access criteria must carry their required inputs before they can be saved,
+ * otherwise they are unsatisfiable and render "missing date"-style hints (#494):
+ * - 'timed' (start/end time): at least one of start or end must be set;
+ * - 'timed_duration' (editing period): a positive duration value AND a time unit.
+ *
+ * @param {object} json The learning-path tree json.
+ * @returns {(string|null)} The label of the first invalid timed criterion, or null.
+ */
+export function invalidTimedConditionLabel(json) {
+    const nodes = json && json.tree && json.tree.nodes ? json.tree.nodes : [];
+    // "not provided" = null / undefined / empty string; a numeric 0 is a real value
+    // (e.g. the "days" time unit), so it must not count as empty.
+    const isEmpty = v => v === null || v === undefined || v === '';
+    for (const node of nodes) {
+        const conditions = node && node.restriction && node.restriction.nodes ? node.restriction.nodes : [];
+        for (const c of conditions) {
+            const data = c && c.data ? c.data : {};
+            const value = data.value || {};
+            if (data.label === 'timed' && isEmpty(value.start) && isEmpty(value.end)) {
+                return 'timed';
+            }
+            if (data.label === 'timed_duration') {
+                if (isEmpty(value.durationValue) || Number(value.durationValue) <= 0 || isEmpty(value.selectedDuration)) {
+                    return 'timed_duration';
+                }
+            }
+        }
+    }
+    return null;
+}
+
+/**
  * A "starting" node has no predecessor, so a parent_courses ("according to predecessor
  * nodes") restriction on it can never be satisfied and would lock it forever (#476).
  *
@@ -364,6 +396,18 @@ export function createAppStore() {
                         context.state.strings.first_node_parent_restriction_modal
                     );
                     throw new Error('local_adele/first-node-parent-restriction');
+                }
+                // Frontend guard (#494): a timed access criterion saved without its
+                // required inputs is unsatisfiable ("missing date" hints). Refuse the save.
+                const invalidtimed = invalidTimedConditionLabel(payload.json);
+                if (invalidtimed) {
+                    Notification.alert(
+                        context.state.strings.restriction_incomplete_title,
+                        invalidtimed === 'timed'
+                            ? context.state.strings.timed_incomplete_modal
+                            : context.state.strings.timed_duration_incomplete_modal
+                    );
+                    throw new Error('local_adele/incomplete-timed-criterion');
                 }
                 let result;
                 try {

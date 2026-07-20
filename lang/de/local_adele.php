@@ -248,6 +248,7 @@ $string['event_user_path_updated'] = 'Lernpfad-Nutzer-Beziehung wurde aktualisie
 $string['event_user_path_updated_description'] = 'lernpfadpfad-Nutzer-Beziehung für Nutzer {$a->user} und Lernpfad {$a->path} wurde aktualisiert';
 $string['expand_courses'] = 'Kurse ausklappen';
 $string['first_node_parent_restriction_modal'] = 'Das Zugangskriterium „Entsprechend der Vorgänger-Nodes“ kann nicht für einen Startknoten verwendet werden, da ein Startknoten keinen Vorgänger besitzt. Bitte entfernen Sie es vor dem Speichern.';
+$string['fit_view'] = 'Ansicht einpassen';
 $string['flowchart_add'] = 'Speichern';
 $string['flowchart_add_learning'] = 'Lernpaket erstellen';
 $string['flowchart_back_button'] = 'Abbrechen';

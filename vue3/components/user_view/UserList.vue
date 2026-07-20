@@ -104,6 +104,8 @@ watch(
 onMounted(() => {
   setFocusEntry()
   scrollIntoFocus()
+  // The list starts expanded; keep the shared collapsed flag in sync (#480).
+  store.commit('setUserlistCollapsed', !isTableVisible.value)
 });
 
 // The row to highlight + scroll to: the student's own row in student view, or the
@@ -136,6 +138,8 @@ const scrollIntoFocus = () => {
 
 const toggleTable = () => {
   isTableVisible.value = !isTableVisible.value;
+  // Let the graph canvas grow into the freed space when the list is hidden (#480).
+  store.commit('setUserlistCollapsed', !isTableVisible.value);
 };
 
 const sortTable = (key) => {

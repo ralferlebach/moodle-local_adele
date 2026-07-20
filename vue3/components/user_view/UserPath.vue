@@ -41,7 +41,8 @@
           </div>
         </div>
         <div
-          style="width: 100%; height: 600px;"
+          ref="flowContainer"
+          class="adele-flow-container"
           @wheel="onWheel($event, zoomLockVaraible, viewport, zoomTo)"
         >
           <VueFlow
@@ -49,13 +50,38 @@
             :edges="edges"
             :viewport="viewport"
             :default-viewport="viewport"
+            :fit-view-on-init="true"
             :max-zoom="1.55"
-            :min-zoom="0.15"
+            :min-zoom="0.05"
             :zoom-on-scroll="false"
             :zoom-on-pinch="false"
             class="learning-path-flow"
             @node-click="onNodeClickCall"
           >
+            <Panel position="top-right">
+              <div class="adele-view-controls">
+                <button
+                  type="button"
+                  class="btn btn-light btn-sm adele-fit-btn"
+                  :title="store.state.strings.fit_view"
+                  v-tooltip="store.state.strings.fit_view"
+                  @click="refitToView"
+                >
+                  <i class="fas fa-expand" />
+                </button>
+                <input
+                  type="range"
+                  class="adele-zoom-slider"
+                  min="0.05"
+                  max="1.55"
+                  step="0.01"
+                  :value="viewport.zoom"
+                  :title="Math.round(viewport.zoom * 100) + '%'"
+                  @input="(e) => zoomTo(parseFloat(e.target.value), { duration: 0 })"
+                >
+                <span class="adele-zoom-label">{{ Math.round(viewport.zoom * 100) }}%</span>
+              </div>
+            </Panel>
             <template #node-custom="{ data }">
               <CustomNodeEdit
                 :data="data"
@@ -106,10 +132,10 @@
 
   <script setup>
   // Import needed libraries
-import { nextTick, onMounted, ref, watch } from 'vue';
+import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router'
 import { useStore } from 'vuex';
-import { VueFlow, useVueFlow } from '@vue-flow/core'
+import { VueFlow, useVueFlow, Panel } from '@vue-flow/core'
 import TransitionEdge from '../edges/TransitionEdge.vue'
 import CustomNodeEdit from '../nodes/CustomNodeEdit.vue'
 import CustomStagNodeEdit from '../nodes/CustomStagNodeEdit.vue'
@@ -130,8 +156,22 @@ const store = useStore()
 
 const {
   addNodes, removeNodes, findNode,
-  zoomTo, viewport, setCenter
+  zoomTo, viewport, setCenter, fitView
 } = useVueFlow()
+
+// The graph container; a ResizeObserver re-fits the path whenever its size changes
+// (window resize, sidebar/user-list toggle) so all nodes stay reachable (#480).
+const flowContainer = ref(null)
+let resizeObserver = null
+let fitTimeout = null
+const refitToView = () => {
+  clearTimeout(fitTimeout)
+  fitTimeout = setTimeout(() => {
+    if (nodes.value.length) {
+      fitView({ padding: 0.2, duration: 400 })
+    }
+  }, 150)
+}
 
 const goBack = () => {
   router.go(-1)
@@ -176,19 +216,31 @@ onMounted( async () => {
     setFlowchart()
     setTimeout(() => {
       nextTick().then(() => {
-        const topNode = nodes.value.reduce((top, node) => (node.position.y < top.position.y ? node : top), nodes.value[0]);
-        const minX = Math.min(...nodes.value.map(node => node.position.x));
-        const maxX = Math.max(...nodes.value.map(node => node.position.x));
-        const pathCenterX = (minX + maxX) / 2;
-        setCenter(pathCenterX, topNode.position.y + 800, { duration: 1000, zoom: 0.35 })
+        // Fit the whole path into the viewport so every node is reachable, however
+        // far the path spreads - replaces the old fixed-zoom setCenter that only
+        // showed the middle of large paths (#480).
+        fitView({ padding: 0.2, duration: 1000 })
       })
     }, 300)
+  }
+  // Re-fit on any container size change (window / sidebar / user-list toggle).
+  if (flowContainer.value && typeof ResizeObserver !== 'undefined') {
+    resizeObserver = new ResizeObserver(refitToView)
+    resizeObserver.observe(flowContainer.value)
   }
   if (store.state.user == store.state.lpuserpathrelation.user_id) {
     await store.dispatch('updateUserPathRelation', {
       lpuserpathid: store.state.lpuserpathrelation.id,
     });
   }
+})
+
+onUnmounted(() => {
+  if (resizeObserver) {
+    resizeObserver.disconnect()
+    resizeObserver = null
+  }
+  clearTimeout(fitTimeout)
 })
 
 const handleZoomLock = (node) => {
@@ -274,7 +326,36 @@ function onNodeClickCall(event) {
  @import 'https://cdn.jsdelivr.net/npm/@vue-flow/minimap@latest/dist/style.css';
  @import 'https://cdn.jsdelivr.net/npm/@vue-flow/node-resizer@latest/dist/style.css';
 
+.adele-flow-container {
+  width: 100%;
+  /* Grow with the viewport so large paths get as much room as possible, and so the
+     space freed by hiding the user list is used (#480). */
+  height: 70vh;
+  min-height: 450px;
+}
+
 .learning-path-flow {
   border-radius: 1rem;
+}
+
+.adele-view-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+}
+
+.adele-zoom-slider {
+  width: 100px;
+  cursor: pointer;
+}
+
+.adele-zoom-label {
+  font-size: 11px;
+  color: #333;
 }
 </style>

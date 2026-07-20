@@ -3,6 +3,7 @@
   <div>
     <div
       class="dndflow mt-4"
+      :class="{ 'adele-flow-expanded': store.state.userlistcollapsed }"
       @drop="onDrop"
       @wheel="onWheel($event, zoomLockVaraible, viewport, zoomTo)"
     >
@@ -22,7 +23,7 @@
         :class="{ dark }"
         :fit-view-on-init="true"
         :max-zoom="1.55"
-        :min-zoom="0.15"
+        :min-zoom="0.05"
         :zoom-on-scroll="false"
         :zoom-on-pinch="false"
         class="learning-path-flow"
@@ -79,6 +80,30 @@
           v-if="shouldShowMiniMap"
           node-color="grey"
         />
+        <Panel position="top-right">
+          <div class="adele-view-controls">
+            <button
+              type="button"
+              class="btn btn-light btn-sm adele-fit-btn"
+              :title="store.state.strings.fit_view"
+              v-tooltip="store.state.strings.fit_view"
+              @click="resetView"
+            >
+              <i class="fas fa-expand" />
+            </button>
+            <input
+              type="range"
+              class="adele-zoom-slider"
+              min="0.05"
+              max="1.55"
+              step="0.01"
+              :value="viewport.zoom"
+              :title="Math.round(viewport.zoom * 100) + '%'"
+              @input="(e) => zoomTo(parseFloat(e.target.value), { duration: 0 })"
+            >
+            <span class="adele-zoom-label">{{ Math.round(viewport.zoom * 100) }}%</span>
+          </div>
+        </Panel>
       </VueFlow>
       <Sidebar
         v-if="store.state.view != 'teacher' &&editor_view"
@@ -109,7 +134,7 @@
 <script setup>
 // Import needed libraries
 import { ref, watch, nextTick, onMounted, computed, onUnmounted } from 'vue'
-import { VueFlow, useVueFlow } from '@vue-flow/core'
+import { VueFlow, useVueFlow, Panel } from '@vue-flow/core'
 import { useStore } from 'vuex'
 import Sidebar from './SidebarPath.vue'
 import Controls from './ControlsPath.vue'
@@ -172,6 +197,11 @@ const editor_view = ref(true)
 const intersectedNode = ref(null);
 // check the page width
 const dndFlowWidth = ref(0);
+let fitTimeout = null;
+
+// "Fit view" button: re-fit the whole path into the viewport after the user has
+// panned/zoomed away (#480).
+const resetView = () => fitView({ padding: 0.2, duration: 400 });
 const backgroundSidebar = store.state.strings.DEEP_SKY_BLUE
 
 const shouldShowMiniMap = computed(() => {
@@ -203,6 +233,10 @@ onMounted(() => {
   for (let entry of entries) {
       if (entry.target.classList.contains('dndflow')) {
         dndFlowWidth.value = entry.contentRect.width;
+        // Re-fit the whole path whenever the canvas resizes - window resize or the
+        // space freed by hiding the user list - so all nodes stay reachable (#480).
+        clearTimeout(fitTimeout);
+        fitTimeout = setTimeout(() => fitView({ padding: 0.2, duration: 400 }), 150);
         break;
       }
     }
@@ -572,7 +606,32 @@ async function onRemoveNode(data) {
 
 .dndflow{
   flex-direction:column;
-  display:flex;height:600px
+  display:flex;
+  /* Fill most of the viewport so large paths get room; grows further when the user
+     list is collapsed so the freed space is used (#480). */
+  height:62vh;
+  min-height:500px;
+}
+.dndflow.adele-flow-expanded{
+  height:84vh;
+}
+.adele-view-controls{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:6px;
+  padding:6px 8px;
+  background:rgba(255,255,255,.92);
+  border-radius:8px;
+  box-shadow:0 1px 4px rgba(0,0,0,.2);
+}
+.adele-zoom-slider{
+  width:100px;
+  cursor:pointer;
+}
+.adele-zoom-label{
+  font-size:11px;
+  color:#333;
 }
 .dndflow aside{
   color:#fff;

@@ -103,6 +103,9 @@ export function createAppStore() {
                 // The learning-path-user list row a teacher last opened, so the list can
                 // scroll back to it when returning from a participant's edit view (#481).
                 focususer: null,
+                // Whether the user-list panel is collapsed, so the graph canvas can grow
+                // into the freed space (#480).
+                userlistcollapsed: false,
                 feedback: null,
                 modules: null,
                 version: 0,
@@ -125,6 +128,9 @@ export function createAppStore() {
             },
             setFocusUser(state, id) {
                 state.focususer = id;
+            },
+            setUserlistCollapsed(state, collapsed) {
+                state.userlistcollapsed = collapsed;
             },
             setStrings(state, strings) {
                 state.strings = strings;

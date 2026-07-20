@@ -33,6 +33,12 @@ const buildStore = (overrides = {}) =>
       lpuserpathrelations: overrides.relations || relations,
       lpuserpathrelation: overrides.lpuserpathrelation || { user_id: null, image: '' },
       focususer: overrides.focususer,
+      userlistcollapsed: false,
+    },
+    mutations: {
+      setUserlistCollapsed(state, collapsed) {
+        state.userlistcollapsed = collapsed;
+      },
     },
   });
 
@@ -82,6 +88,16 @@ describe('UserList.vue', () => {
     await button.trigger('click');
     expect(wrapper.vm.isTableVisible).toBe(false);
     expect(button.text()).toContain('Show');
+  });
+
+  it('marks the list collapsed in the store so the graph can grow when hidden (#480)', async () => {
+    const wrapper = factory();
+    const store = wrapper.vm.$store;
+    expect(store.state.userlistcollapsed).toBe(false); // starts expanded
+    await wrapper.find('#adele-userlist-toggle').trigger('click');
+    expect(store.state.userlistcollapsed).toBe(true); // hidden -> collapsed
+    await wrapper.find('#adele-userlist-toggle').trigger('click');
+    expect(store.state.userlistcollapsed).toBe(false); // shown -> expanded
   });
 
   it('sorts ascending then descending when a column header is clicked', async () => {

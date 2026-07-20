@@ -248,6 +248,7 @@ $string['event_user_path_updated'] = '[' . __LINE__ . ']User path relation was u
 $string['event_user_path_updated_description'] = '[' . __LINE__ . ']The user path path relation for user {$a->user} and learning path {$a->path} was updated';
 $string['expand_courses'] = '[' . __LINE__ . ']Expand courses';
 $string['first_node_parent_restriction_modal'] = 'The "According to predecessor nodes" access criterion cannot be used on a starting node, because a starting node has no predecessor. Remove it before saving.';
+$string['fit_view'] = '[' . __LINE__ . ']Fit view';
 $string['flowchart_add'] = '[' . __LINE__ . ']Add';
 $string['flowchart_add_learning'] = '[' . __LINE__ . ']Add a learning module';
 $string['flowchart_back_button'] = '[' . __LINE__ . ']Continue edit';

@@ -655,6 +655,9 @@ class learning_paths {
                     'lp_deleted' => true,
                 ];
             }
+            // Re-render the feedback/info strings in the CURRENT (viewer's) language so they follow
+            // a language switch instead of the language the recompute happened to run in (#493).
+            $record->json = relation_update::rerender_feedback_language($record->json, $record->user_id);
             $record->json = self::addnodemanualcondition($record->json, $record->user_id);
             return (array)$record;
         }

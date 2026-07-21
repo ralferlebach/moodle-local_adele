@@ -163,9 +163,17 @@ class parent_courses implements course_restriction {
                             $coursescompleted = true;
                         }
                     }
-                    $parentcourses[$restriction['id']]['placeholders']['numb_courses'] =
-                        $restriction['data']['value']['min_courses'] ?? 1;
+                    $mincourses = (int) ($restriction['data']['value']['min_courses'] ?? 1);
+                    $parentcourses[$restriction['id']]['placeholders']['numb_courses'] = $mincourses;
+                    // N = number of referenced predecessors. Kept alongside node_name (the raw
+                    // list) so templates can express "K of N" without recomputing it.
+                    $parentcourses[$restriction['id']]['placeholders']['numb_courses_total'] = count($courselist);
                     $parentcourses[$restriction['id']]['placeholders']['node_name'] = $courselist;
+                    // Ready-to-render, count-aware requirement phrase (singular / all / K-of-N).
+                    // The default feedback + info-symbol templates use {node_requirement}; node_name
+                    // (a comma list) is retained only for backward compatibility with old templates.
+                    $parentcourses[$restriction['id']]['placeholders']['node_requirement'] =
+                        self::build_node_requirement($courselist, $mincourses);
                     $parentcourses[$restriction['id']]['completed'] = $coursescompleted;
                     $parentcourses[$restriction['id']]['inbetween'] = $coursescompleted;
                     $parentcourses[$restriction['id']]['inbetween_info'] = null;
@@ -180,5 +188,44 @@ class parent_courses implements course_restriction {
             }
         }
         return $parentcourses;
+    }
+
+    /**
+     * Build the count-aware "complete K of N predecessors" requirement phrase shown in the
+     * restriction feedback and info-symbol. The condition lets a learner satisfy K
+     * (min_courses) of the N referenced predecessor nodes, so the phrasing adapts:
+     *  - N == 1       -> singular   ("Abschluss des Vorgängers „X“")
+     *  - K >= N (all) -> all listed ("Abschluss der Vorgänger „X“ und „Y“")
+     *  - K <  N       -> K of the following ("Abschluss von K der folgenden Vorgänger: „X“, „Y“")
+     * Assembled from lang fragments so both languages localise. Names arrive already
+     * format_string-escaped; each is wrapped in the app's „ “ quotes (matching existing
+     * templates) before joining.
+     *
+     * @param array $names Escaped predecessor node names (the N pool).
+     * @param int $min The minimum number required (K).
+     * @return string
+     */
+    private static function build_node_requirement(array $names, int $min): string {
+        $names = array_values(array_filter($names, static function ($name) {
+            return $name !== '';
+        }));
+        $count = count($names);
+        if ($count === 0) {
+            return '';
+        }
+        $quoted = array_map(static function ($name) {
+            return '„' . $name . '“';
+        }, $names);
+        if ($count === 1) {
+            return get_string('course_restriction_parent_single', 'local_adele', $quoted[0]);
+        }
+        if ($min >= $count) {
+            $list = implode(get_string('course_condition_concatination_and', 'local_adele'), $quoted);
+            return get_string('course_restriction_parent_all', 'local_adele', $list);
+        }
+        return get_string('course_restriction_parent_kofn', 'local_adele', (object) [
+            'numb_courses' => $min,
+            'node_list' => implode(', ', $quoted),
+        ]);
     }
 }

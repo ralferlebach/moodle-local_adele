@@ -231,8 +231,14 @@ class course_completed implements course_completion {
                             $numbcourses . ' '
                             . get_string('course_description_before_condition_course_completed_kursen', 'local_adele');
                     } else {
-                        $coursecompletion[$complitionnode['id']]['placeholders']['item'] =
-                        get_string('course_description_before_condition_course_completed_item', 'local_adele');
+                        // Single course: there is no "min of total" distinction, so the
+                        // absolute {item_total} (info-symbol) equals the state {item}. Without
+                        // setting item_total here the info template's {item}->{item_total} swap
+                        // in getfeedback() would resolve to empty and drop the requirement word
+                        // (e.g. " bearbeiten." instead of "diesen Kurs bearbeiten.") (#483).
+                        $itemstring = get_string('course_description_before_condition_course_completed_item', 'local_adele');
+                        $coursecompletion[$complitionnode['id']]['placeholders']['item'] = $itemstring;
+                        $coursecompletion[$complitionnode['id']]['placeholders']['item_total'] = $itemstring;
                     }
                 }
             }

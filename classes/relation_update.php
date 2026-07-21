@@ -837,7 +837,11 @@ class relation_update {
                 $feedbacks['completion']['information'][] =
                 ($visible && isset($conditionnode['data']['information'])) ?
                 self::render_placeholders(
-                    $conditionnode['data']['information'],
+                    // The info-symbol shows the ABSOLUTE criterion (min of total), while the
+                    // feedback messages show live progress. Both templates share the {item}
+                    // token, so for the info-symbol only, render it against {item_total} - the
+                    // absolute placeholder built alongside {item} in course_completed (#483).
+                    str_replace('{item}', '{item_total}', $conditionnode['data']['information']),
                     $completioncriteria,
                     $conditionnode['id'],
                     $node['completion']['nodes']

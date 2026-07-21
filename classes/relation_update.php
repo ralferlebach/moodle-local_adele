@@ -241,6 +241,9 @@ class relation_update {
 
                     $node['data']['completion'] = $userpath->json['user_path_relation'][$node['id']];
                 }
+                // Record which language the feedback was rendered in, so the fetch-time re-render
+                // can skip when the viewer's language already matches it (#493 performance).
+                $userpath->json['feedback_lang'] = current_language();
                 $userpathid = user_path_relation::revision_user_path_relation($userpath);
                 if ($creation) {
                     global $DB;
@@ -1052,6 +1055,11 @@ class relation_update {
     public static function rerender_feedback_language($json, $userid) {
         $data = json_decode($json, true);
         if (empty($data['tree']['nodes']) || empty($data['user_path_relation'])) {
+            return $json;
+        }
+        // The feedback was already rendered in the viewer's language (the common case on a
+        // single-language site) - nothing to re-render, so avoid the per-node status reads (#493).
+        if (isset($data['feedback_lang']) && $data['feedback_lang'] === current_language()) {
             return $json;
         }
         $completionclass = new course_completion_status();

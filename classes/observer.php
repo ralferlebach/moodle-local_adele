@@ -98,12 +98,12 @@ class local_adele_observer {
     }
 
     /**
-     * Observer for the update_catscale event
+     * Observer for the mod_quiz attempt_submitted event.
      *
-     * @param base $event
+     * @param \mod_quiz\event\attempt_submitted $event
      */
-    public static function quiz_attempt_finished(base $event) {
-        $observer = learning_path_update::quiz_finished($event);
+    public static function quiz_attempt_finished(\mod_quiz\event\attempt_submitted $event) {
+        learning_path_update::quiz_finished($event);
     }
 
     /**

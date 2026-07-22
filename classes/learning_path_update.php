@@ -118,17 +118,40 @@ class learning_path_update {
     }
 
     /**
-     * Finished quiz.
+     * Observer entry point for the mod_quiz attempt_submitted event.
      *
-     * @param object $event
+     * The affected student is carried in $event->relateduserid. $event->userid
+     * is the acting user (e.g. a teacher submitting on behalf of a student) and
+     * must NOT be used to look up the learning-path owner.
+     *
+     * @param \mod_quiz\event\attempt_submitted $event
      */
-    public static function quiz_finished($event) {
+    public static function quiz_finished(\mod_quiz\event\attempt_submitted $event) {
+        self::recompute_quiz_paths(
+            (int) $event->relateduserid,
+            (int) $event->other['quizid']
+        );
+    }
+
+    /**
+     * Recompute every active learning path of a user that references a quiz.
+     *
+     * Event-independent so that all quiz change events (submission, regrading,
+     * manual grading, deletion, reopening) can share the same recompute path.
+     *
+     * @param int $userid The affected student.
+     * @param int $quizid The quiz instance id.
+     */
+    public static function recompute_quiz_paths(int $userid, int $quizid) {
+        if ($userid <= 0 || $quizid <= 0) {
+            return;
+        }
         // Get the user path relations.
         $userpathrelation = new user_path_relation();
         $records = $userpathrelation->get_learning_paths(
-            $event->userid,
+            $userid,
             null,
-            '"quizid":"' . $event->other['quizid'] . '"'
+            '"quizid":"' . $quizid . '"'
         );
         foreach ($records as $userpath) {
             $userpath->json = json_decode($userpath->json, true);

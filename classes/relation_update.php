@@ -66,6 +66,7 @@ class relation_update {
                     $completioncriteria = $completionclass->get_condition_status($node, $userpath->user_id);
                     $restrictioncriteria = $restrictionclass->get_restriction_status($node, $userpath);
                     $restrictionnodepaths = [];
+                    $restrictionnodepathsall = [];
                     $singlerestrictionnode = [];
                     if (isset($node['data']['completion']['master'])) {
                         $userpath->json['user_path_relation'][$node['id']]['master'] =

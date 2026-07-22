@@ -721,4 +721,150 @@ class behat_local_adele extends behat_base {
             );
         }
     }
+
+    /**
+     * Create a quiz in a course and wire it into a node's modquiz completion.
+     *
+     * The quiz_gated_lp fixture carries a placeholder quizid on the given node's
+     * modquiz completion condition. Since the real quiz id is only known at
+     * runtime, this step creates the quiz and patches its id into both the
+     * learning-path definition and every active learner snapshot so the
+     * submission observer can find the affected paths.
+     *
+     * @Given /^a quiz "(?P<name>[^"]+)" completing node "(?P<node>[^"]+)" exists in course "(?P<shortname>[^"]+)"$/
+     *
+     * @param string $name      The quiz activity name.
+     * @param string $node      The node id whose modquiz condition is wired.
+     * @param string $shortname The course shortname.
+     */
+    public function a_quiz_completing_node_exists_in_course(string $name, string $node, string $shortname): void {
+        global $DB, $CFG;
+        require_once($CFG->dirroot . '/lib/testing/generator/lib.php');
+
+        $course = $DB->get_record('course', ['shortname' => $shortname], '*', MUST_EXIST);
+        $generator = \testing_util::get_data_generator();
+        $quiz = $generator->create_module('quiz', [
+            'course' => $course->id,
+            'name' => $name,
+            'grade' => 10,
+            'sumgrades' => 1,
+        ]);
+        $quizid = (int) $quiz->id;
+
+        self::patch_modquiz_quizid('local_adele_learning_paths', $node, $quizid, []);
+        self::patch_modquiz_quizid('local_adele_path_user', $node, $quizid, ['status' => 'active']);
+    }
+
+    /**
+     * Patch the modquiz quizid inside the stored json of a table.
+     *
+     * @param string $table      The table carrying a json column.
+     * @param string $nodeid      The node id to patch.
+     * @param int $quizid         The real quiz instance id.
+     * @param array $conditions   Extra select conditions (e.g. status = active).
+     */
+    private static function patch_modquiz_quizid(string $table, string $nodeid, int $quizid, array $conditions): void {
+        global $DB;
+
+        $records = $DB->get_records($table, $conditions);
+        foreach ($records as $rec) {
+            $json = json_decode($rec->json, true);
+            if (!isset($json['tree']['nodes'])) {
+                continue;
+            }
+            $changed = false;
+            foreach ($json['tree']['nodes'] as &$treenode) {
+                if (($treenode['id'] ?? null) !== $nodeid) {
+                    continue;
+                }
+                foreach (($treenode['completion']['nodes'] ?? []) as &$condition) {
+                    if (($condition['data']['label'] ?? null) === 'modquiz') {
+                        $condition['data']['value']['quizid'] = (string) $quizid;
+                        $changed = true;
+                    }
+                }
+                unset($condition);
+            }
+            unset($treenode);
+            if ($changed) {
+                $DB->set_field($table, 'json', json_encode($json), ['id' => $rec->id]);
+            }
+        }
+    }
+
+    /**
+     * Submit a passing quiz attempt for every active learner, aggregated by the
+     * system.
+     *
+     * Fires the genuine \mod_quiz\event\attempt_submitted with the SYSTEM/admin
+     * as the acting user (event->userid) while the learner is carried in
+     * event->relateduserid - exactly as a teacher-side submission or an
+     * on-behalf action does. It guards the fix where the observer must resolve
+     * the learner via relateduserid rather than the acting user.
+     *
+     * @Given /^the quiz "(?P<name>[^"]+)" in course "(?P<shortname>[^"]+)" is submitted and aggregated by the system$/
+     *
+     * @param string $name      The quiz activity name.
+     * @param string $shortname The course shortname.
+     */
+    public function the_quiz_is_submitted_and_aggregated_by_the_system(string $name, string $shortname): void {
+        global $DB, $USER;
+
+        $course = $DB->get_record('course', ['shortname' => $shortname], '*', MUST_EXIST);
+        $quiz = $DB->get_record('quiz', ['course' => $course->id, 'name' => $name], '*', MUST_EXIST);
+        $cm = get_coursemodule_from_instance('quiz', $quiz->id, $course->id, false, MUST_EXIST);
+        $context = \context_module::instance($cm->id);
+
+        $records = $DB->get_records('local_adele_path_user', ['status' => 'active']);
+        if (empty($records)) {
+            throw new \RuntimeException('No active learner snapshots found to submit a quiz for.');
+        }
+
+        $olduser = $USER;
+        $admin = get_admin();
+        \core\session\manager::set_user($admin);
+
+        try {
+            foreach ($records as $record) {
+                $userid = (int) $record->user_id;
+
+                // A finished, passing attempt: raw sumgrades (10) clears the node grade.
+                $uniqueid = $DB->insert_record('question_usages', (object) [
+                    'contextid' => $context->id,
+                    'component' => 'mod_quiz',
+                    'preferredbehaviour' => 'deferredfeedback',
+                ]);
+                $attemptid = $DB->insert_record('quiz_attempts', (object) [
+                    'quiz' => $quiz->id,
+                    'userid' => $userid,
+                    'attempt' => 1,
+                    'uniqueid' => $uniqueid,
+                    'layout' => '',
+                    'currentpage' => 0,
+                    'preview' => 0,
+                    'state' => 'finished',
+                    'timestart' => time(),
+                    'timefinish' => time(),
+                    'timemodified' => time(),
+                    'sumgrades' => 10,
+                ]);
+
+                $event = \mod_quiz\event\attempt_submitted::create([
+                    'objectid' => $attemptid,
+                    'relateduserid' => $userid,
+                    'context' => $context,
+                    'courseid' => (int) $course->id,
+                    'other' => ['quizid' => (int) $quiz->id, 'submitterid' => (int) $admin->id],
+                ]);
+                ob_start();
+                try {
+                    $event->trigger();
+                } finally {
+                    ob_end_clean();
+                }
+            }
+        } finally {
+            \core\session\manager::set_user($olduser);
+        }
+    }
 }

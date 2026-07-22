@@ -373,6 +373,41 @@ class behat_local_adele extends behat_base {
     }
 
     /**
+     * Click a Vue Flow node reliably. A native Mink click on a node flakes with
+     * "element not interactable" while the node is mid-transform right after a drag/drop;
+     * this dispatches a full pointer+click gesture in the browser (same JS approach as the
+     * pan/connect steps), which cannot hit that state.
+     *
+     * @When /^I click vue flow node "(?P<selector>[^"]+)"$/
+     *
+     * @param string $selector CSS selector of the node (e.g. [data-id='starting_node']).
+     */
+    public function i_click_vue_flow_node(string $selector): void {
+        $sel = json_encode($selector, JSON_UNESCAPED_SLASHES);
+        $script = <<<JS
+            (function() {
+              const el = document.querySelector($sel);
+              if (!el) {
+                throw new Error('Vue Flow node not found: ' + $sel);
+              }
+              el.scrollIntoView({block: 'center', inline: 'center'});
+              const rect = el.getBoundingClientRect();
+              const opts = {
+                bubbles: true, cancelable: true, view: window,
+                clientX: rect.left + rect.width / 2,
+                clientY: rect.top + rect.height / 2,
+              };
+              el.dispatchEvent(new PointerEvent('pointerdown', opts));
+              el.dispatchEvent(new MouseEvent('mousedown', opts));
+              el.dispatchEvent(new PointerEvent('pointerup', opts));
+              el.dispatchEvent(new MouseEvent('mouseup', opts));
+              el.dispatchEvent(new MouseEvent('click', opts));
+            })();
+            JS;
+        $this->getSession()->executeScript($script);
+    }
+
+    /**
      * Connect two Vue Flow nodes by dragging from source handle to target handle.
      *
      * @When /^I connect vue flow node "(?P<source>[^"]+)" to "(?P<target>[^"]+)"$/

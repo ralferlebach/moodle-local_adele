@@ -220,5 +220,39 @@ function xmldb_local_adele_upgrade($oldversion) {
 
         upgrade_plugin_savepoint(true, 2026072200, 'local', 'adele');
     }
+    if ($oldversion < 2026072203) {
+        // Ticket #501: guarantee at most one active user-path relation per
+        // (user_id, course_id, learning_path_id). First remove pre-existing
+        // duplicates created by the historical check-then-insert race, keeping
+        // the most recently created row (highest id). buildsqlqueryuserpath()
+        // reads with ORDER BY id DESC, so the highest-id row is the one every
+        // read/update path already targets and therefore carries the up-to-date
+        // progress; the orphaned lower-id copies were never updated after
+        // creation, so nothing is lost. The nested derived table keeps the
+        // statement portable across PostgreSQL and MariaDB/MySQL.
+        $DB->execute("
+            DELETE FROM {local_adele_path_user}
+            WHERE id NOT IN (
+                SELECT keepid FROM (
+                    SELECT MAX(id) AS keepid
+                    FROM {local_adele_path_user}
+                    GROUP BY user_id, course_id, learning_path_id
+                ) keptrows
+            )
+        ");
+
+        // With the duplicates removed, the unique index can be created.
+        $table = new xmldb_table('local_adele_path_user');
+        $index = new xmldb_index(
+            'useridcourseidlpid',
+            XMLDB_INDEX_UNIQUE,
+            ['user_id', 'course_id', 'learning_path_id']
+        );
+        if (!$dbman->index_exists($table, $index)) {
+            $dbman->add_index($table, $index);
+        }
+
+        upgrade_plugin_savepoint(true, 2026072203, 'local', 'adele');
+    }
     return true;
 }

@@ -208,6 +208,7 @@ final class course_completed_relateduserid_test extends advanced_testcase {
      * The affected student is resolved via relateduserid (not the acting user),
      * the student's path is updated, and the node ends up 'completed'.
      *
+     * @covers \local_adele\completion::completed
      * @return void
      */
     public function test_completed_uses_relateduserid_not_actor(): void {
@@ -260,6 +261,7 @@ final class course_completed_relateduserid_test extends advanced_testcase {
      * Only the learning path of the relateduserid student is updated; another
      * user holding a path for the same course is left untouched.
      *
+     * @covers \local_adele\completion::completed
      * @return void
      */
     public function test_completed_ignores_other_users_paths(): void {
@@ -291,6 +293,7 @@ final class course_completed_relateduserid_test extends advanced_testcase {
     /**
      * A course id is matched whether it is stored as a string or as an integer.
      *
+     * @covers \local_adele\completion::completed
      * @return void
      */
     public function test_completed_matches_string_and_int_course_ids(): void {
@@ -332,6 +335,7 @@ final class course_completed_relateduserid_test extends advanced_testcase {
      * When the same course is referenced by several nodes of one path, only a
      * single recompute is triggered for that path.
      *
+     * @covers \local_adele\completion::completed
      * @return void
      */
     public function test_completed_triggers_single_recompute_per_path(): void {
@@ -370,6 +374,7 @@ final class course_completed_relateduserid_test extends advanced_testcase {
      * A structurally broken snapshot must not abort processing of other valid
      * learning paths of the same student.
      *
+     * @covers \local_adele\completion::completed
      * @return void
      */
     public function test_completed_survives_invalid_json(): void {

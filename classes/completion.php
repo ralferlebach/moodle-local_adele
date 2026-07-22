@@ -30,10 +30,6 @@ use local_adele\helper\user_path_relation;
 use context_system;
 use local_adele\event\user_path_updated;
 
-defined('MOODLE_INTERNAL') || die();
-
-require_once($CFG->libdir . '/externallib.php');
-
 /**
  * External Service for local adele.
  *
@@ -49,23 +45,29 @@ class completion {
      * @param object $event
      */
     public static function completed($event) {
-        $params = $event;
+        // The course_completed event carries the actor in userid and the affected student
+        // in relateduserid. Route by the student, otherwise a teacher- or cron-triggered
+        // completion recomputes the wrong user's paths (or none) and the node never
+        // completes (#495).
         $userpathrelation = new user_path_relation();
-        $learningpaths = $userpathrelation->get_learning_paths($params->userid);
-        if ($learningpaths) {
-            foreach ($learningpaths as $learningpath) {
-                $learningpath->json = json_decode($learningpath->json, true);
-                foreach ($learningpath->json['tree']['nodes'] as $node) {
-                    if (is_array($node['data']['course_node_id']) && in_array($params->courseid, $node['data']['course_node_id'])) {
-                        $eventsingle = user_path_updated::create([
-                            'objectid' => $learningpath->id,
-                            'context' => context_system::instance(),
-                            'other' => [
-                                'userpath' => $learningpath,
-                            ],
-                        ]);
-                        $eventsingle->trigger();
-                    }
+        $learningpaths = $userpathrelation->get_learning_paths($event->relateduserid);
+        if (!$learningpaths) {
+            return;
+        }
+        foreach ($learningpaths as $learningpath) {
+            $learningpath->json = json_decode($learningpath->json, true);
+            foreach ($learningpath->json['tree']['nodes'] as $node) {
+                if (is_array($node['data']['course_node_id']) && in_array($event->courseid, $node['data']['course_node_id'])) {
+                    // Recompute the path once per event, even if the course maps to several nodes.
+                    $eventsingle = user_path_updated::create([
+                        'objectid' => $learningpath->id,
+                        'context' => context_system::instance(),
+                        'other' => [
+                            'userpath' => $learningpath,
+                        ],
+                    ]);
+                    $eventsingle->trigger();
+                    break;
                 }
             }
         }

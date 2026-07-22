@@ -26,8 +26,6 @@ namespace local_adele\task;
 
 use local_adele\learning_path_update;
 
-defined('MOODLE_INTERNAL') || die();
-
 /**
  * Ad-hoc task that re-evaluates every active user learning path exactly once.
  *

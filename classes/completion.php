@@ -98,8 +98,9 @@ class completion {
                     $courseids = [$courseids];
                 }
 
-                // course_node_id may be stored as strings or integers depending
-                // on the JSON origin - normalise both sides for a type-safe match.
+                // The stored course_node_id values may be strings or integers
+                // depending on the JSON origin - normalise both sides for a
+                // type-safe match.
                 $courseids = array_map('intval', $courseids);
 
                 if (!in_array($courseid, $courseids, true)) {

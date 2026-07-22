@@ -43,7 +43,11 @@ use local_adele\relation_update;
  * @copyright  2026 Wunderbyte GmbH
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  * @covers \local_adele\completion::completed
+ *
+ * @runTestsInSeparateProcesses
  */
+#[\PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses]
+#[\PHPUnit\Framework\Attributes\PreserveGlobalState(false)]
 final class course_completed_relateduserid_test extends advanced_testcase {
     /**
      * A minimal, editor-shaped completion structure with a single
@@ -301,10 +305,16 @@ final class course_completed_relateduserid_test extends advanced_testcase {
         // Two active paths for the same student: one storing the course id as a
         // string, one as an integer.
         $pathstring = $this->persist_path(
-            (int) $student->id, (int) $course->id, (int) $teacher->id, $this->build_tree((string) $course->id)
+            (int) $student->id,
+            (int) $course->id,
+            (int) $teacher->id,
+            $this->build_tree((string) $course->id)
         );
         $pathint = $this->persist_path(
-            (int) $student->id, (int) $course->id, (int) $teacher->id, $this->build_tree((int) $course->id)
+            (int) $student->id,
+            (int) $course->id,
+            (int) $teacher->id,
+            $this->build_tree((int) $course->id)
         );
 
         $event = $this->make_course_completed_event((int) $course->id, (int) $student->id, (int) $teacher->id);
@@ -373,11 +383,17 @@ final class course_completed_relateduserid_test extends advanced_testcase {
 
         // A broken snapshot (not valid learning-path json) ...
         $brokenpath = $this->persist_path(
-            (int) $student->id, (int) $course->id, (int) $teacher->id, 'this-is-not-json'
+            (int) $student->id,
+            (int) $course->id,
+            (int) $teacher->id,
+            'this-is-not-json'
         );
         // ... and a valid one referencing the completed course.
         $validpath = $this->persist_path(
-            (int) $student->id, (int) $course->id, (int) $teacher->id, $this->build_tree((int) $course->id)
+            (int) $student->id,
+            (int) $course->id,
+            (int) $teacher->id,
+            $this->build_tree((int) $course->id)
         );
 
         $event = $this->make_course_completed_event((int) $course->id, (int) $student->id, (int) $teacher->id);

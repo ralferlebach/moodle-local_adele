@@ -541,6 +541,92 @@ class behat_local_adele extends behat_base {
     }
 
     /**
+     * Complete a course for every subscribed learner and let the REAL
+     * \core\event\course_completed observer chain recompute the paths.
+     *
+     * Unlike "is completed for every subscribed learner" (which fires
+     * user_path_updated directly), this step exercises the genuine event chain:
+     * it records the course completion and then triggers
+     * \core\event\course_completed with the SYSTEM/admin as the acting user
+     * (event->userid) while the affected learner is carried in
+     * event->relateduserid - exactly as Moodle's completion aggregation cron
+     * does. It therefore guards the fix where the observer must resolve the
+     * learner via relateduserid rather than the acting user.
+     *
+     * @Given /^the course "(?P<shortname>[^"]+)" is completed and aggregated by the system$/
+     *
+     * @param string $shortname The course shortname whose completion should be recorded.
+     */
+    public function the_course_is_completed_and_aggregated_by_the_system(string $shortname): void {
+        global $DB, $USER;
+
+        $course = $DB->get_record('course', ['shortname' => $shortname], '*', MUST_EXIST);
+        $courseid = (int) $course->id;
+
+        $records = $DB->get_records('local_adele_path_user', ['status' => 'active']);
+        if (empty($records)) {
+            throw new \RuntimeException('No active learner snapshots found to complete a course for.');
+        }
+
+        // Act as the system/admin user, so the triggered course_completed event
+        // carries userid = admin (the acting process) and NOT the learner.
+        $olduser = $USER;
+        \core\session\manager::set_user(get_admin());
+
+        try {
+            $cache = \cache::make('core', 'coursecompletion');
+            $coursecontext = \context_course::instance($courseid);
+
+            foreach ($records as $record) {
+                $userid = (int) $record->user_id;
+
+                if (!$DB->record_exists('course_completions', ['course' => $courseid, 'userid' => $userid])) {
+                    $ccid = $DB->insert_record('course_completions', (object) [
+                        'course'        => $courseid,
+                        'userid'        => $userid,
+                        'timeenrolled'  => time(),
+                        'timestarted'   => time(),
+                        'timecompleted' => time(),
+                        'reaggregate'   => 0,
+                    ]);
+                } else {
+                    $DB->set_field(
+                        'course_completions',
+                        'timecompleted',
+                        time(),
+                        ['course' => $courseid, 'userid' => $userid]
+                    );
+                    $ccid = (int) $DB->get_field(
+                        'course_completions',
+                        'id',
+                        ['course' => $courseid, 'userid' => $userid],
+                        MUST_EXIST
+                    );
+                }
+                $cache->delete($userid . '_' . $courseid);
+
+                // Fire the genuine core event: the affected learner is the
+                // relateduserid; the acting user is the admin set above.
+                $event = \core\event\course_completed::create([
+                    'objectid'      => $ccid,
+                    'relateduserid' => $userid,
+                    'context'       => $coursecontext,
+                    'courseid'      => $courseid,
+                    'other'         => ['relateduserid' => $userid],
+                ]);
+                ob_start();
+                try {
+                    $event->trigger();
+                } finally {
+                    ob_end_clean();
+                }
+            }
+        } finally {
+            \core\session\manager::set_user($olduser);
+        }
+    }
+
+    /**
      * Assert the current page carries no Moodle exception / coding-error notice.
      *
      * Guards scenarios (e.g. #464 get_availablecourses $PAGE codingerror) where a

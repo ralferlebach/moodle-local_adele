@@ -472,6 +472,7 @@ $string['tagsexclude_desc'] = '[' . __LINE__ . ']Define which courses according 
 $string['tagsinclude'] = '[' . __LINE__ . ']Define included tags';
 $string['tagsinclude_desc'] = '[' . __LINE__ . ']Define which courses according to their tags will be filtered. Courses with one of those tags will be filtered';
 $string['task_check_timed_restrictions'] = 'Re-evaluate timed learning-path restrictions';
+$string['task_reconcile_user_paths'] = 'Reconcile active learning paths (recompute node completion)';
 $string['title_change_visibility'] = '[' . __LINE__ . ']Changed learning path visibility';
 $string['title_delete'] = '[' . __LINE__ . ']Learning Path deleted';
 $string['title_duplicate'] = '[' . __LINE__ . ']Learning Path duplicated';

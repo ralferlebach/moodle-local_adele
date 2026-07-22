@@ -221,4 +221,23 @@ abstract class adele_learningpath_testcase extends advanced_testcase {
         $cache = \cache::make('core', 'coursecompletion');
         $cache->delete($userid . '_' . $courseid);
     }
+
+    /**
+     * Record a user_lastaccess row so that the course counts as accessed at
+     * least once (erster Kursaufruf), which is the "started"/inbetween criterion
+     * of the course_completed condition (#502).
+     *
+     * @param int $courseid
+     * @param int $userid
+     */
+    protected function mark_course_accessed_in_db(int $courseid, int $userid): void {
+        global $DB;
+        if (!$DB->record_exists('user_lastaccess', ['courseid' => $courseid, 'userid' => $userid])) {
+            $DB->insert_record('user_lastaccess', (object)[
+                'userid' => $userid,
+                'courseid' => $courseid,
+                'timeaccess' => time(),
+            ]);
+        }
+    }
 }

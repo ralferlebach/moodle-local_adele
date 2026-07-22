@@ -515,39 +515,11 @@ class learning_paths {
                     }
                 }
             }
-            $pathnodes = $relationnodes->tree->nodes ?? null;
-            $startingcondition = "starting_node";
-            $paths = [];
-            if ($pathnodes) {
-                foreach ($pathnodes as $node) {
-                    $node = (array)$node;
-                    if (
-                        isset($node['parentCourse']) &&
-                        is_array($node['parentCourse']) &&
-                        in_array($startingcondition, $node['parentCourse'])
-                    ) {
-                        self::findpaths($node, [], $paths, $pathnodes);
-                    }
-                }
-            }
-            // Filter paths ending with childCondition null.
-            $filteredpaths = array_filter($paths, function ($path) use ($pathnodes) {
-                $lastnode = self::findNodeById(end($path), $pathnodes);
-                return isset($lastnode['childCourse']) && empty($lastnode['childCourse']);
-            });
-            $progress = 0;
-            foreach ($filteredpaths as $filteredpath) {
-                $completednodes = 0;
-                foreach ($filteredpath as $node) {
-                    if ($relationnodes->user_path_relation->{$node}->completionnode->valid) {
-                        $completednodes++;
-                    }
-                }
-                $pathprogression = $completednodes / count($filteredpath);
-                if ($pathprogression > $progress) {
-                    $progress = $pathprogression;
-                }
-            }
+            // The teacher-view progress reflects how many of the path's nodes the learner has
+            // completed (completed / total), so the percentage always matches the completed-node
+            // count shown next to it. Previously it was the best single root-to-leaf path's ratio,
+            // which read as 100% on a branching path as soon as one full branch was done (#461).
+            $progress = $totalnodes > 0 ? ($validnodes / $totalnodes) : 0;
             return [
                 'completed_nodes' => $validnodes,
                 'progress' => round(100 * $progress, 2),

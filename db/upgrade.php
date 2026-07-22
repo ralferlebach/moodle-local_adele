@@ -233,8 +233,6 @@ function xmldb_local_adele_upgrade($oldversion) {
         $reconcile = new \local_adele\task\reconcile_user_paths();
         \core\task\manager::queue_adhoc_task($reconcile, true);
 
-        upgrade_plugin_savepoint(true, 2026072200, 'local', 'adele');
-
         // Ticket #501: guarantee at most one active user-path relation per
         // (user_id, course_id, learning_path_id). First remove pre-existing
         // duplicates created by the historical check-then-insert race, keeping
@@ -266,7 +264,7 @@ function xmldb_local_adele_upgrade($oldversion) {
             $dbman->add_index($table, $index);
         }
 
-        upgrade_plugin_savepoint(true, 2026072203, 'local', 'adele');
+        upgrade_plugin_savepoint(true, 2026072200, 'local', 'adele');
     }
 
     return true;

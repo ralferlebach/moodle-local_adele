@@ -275,7 +275,7 @@ const courseLinkTitle = computed(() =>
   <div @click="handleNodeClick" ref="customNodeEdit">
     <div v-if="zoomstep != '0.2'" class="card" :style="[{ minHeight: '200px', width: '400px' }, parentStyle, cardBackgroundColor]">
       <div class="card-header text-center" :style="headerBackgroundColor">
-        <NodeInformation :data :parentnode :startanimation :status="statusMessage" />
+        <NodeInformation v-if="store.state.feedbacksettings.show_info" :data :parentnode :startanimation :status="statusMessage" />
         <div class="row align-items-center">
           <div class="col">
             <h5 style="color: #000;">
@@ -325,7 +325,7 @@ const courseLinkTitle = computed(() =>
         </div>
       </div>
       <div v-if="data" class="card-footer">
-        <UserInformation :data="data" @focusChanged="zoomOnParent" :status="statusMessage" />
+        <UserInformation v-if="store.state.feedbacksettings.show_feedback" :data="data" @focusChanged="zoomOnParent" :status="statusMessage" />
       </div>
     </div>
     <div v-else class="card" :style="[{ minHeight: '300px', width: '400px' }, parentStyle]">

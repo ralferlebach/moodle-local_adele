@@ -13,6 +13,7 @@ import ExpandedCourses from '../nodes_items/ExpandedCourses.vue'
 import NodeInformation from '../nodes_items/NodeInformation.vue'
 import truncatedText from '../../composables/nodesHelper/truncatedText'
 import MasterConditions from '../nodes_items/MasterConditions.vue';
+import { expandedStacks } from '../../composables/flowHelper/expandedStacks';
 
 // Load Store
 const store = useStore();
@@ -121,7 +122,9 @@ const nodeBackgroundColor = computed(() => {
 const handleStyle = computed(() => ({ backgroundColor: props.data.color, filter: 'invert(100%)', width: '10px', height: '10px'}))
 
 const isParentNode = ref(false);
-const courseExpanded = ref(false);
+// Initialise from the shared, remount-surviving map so a stack the student expanded stays
+// expanded across the async in-tab refresh (canvas remount) and the per-card status remount (#485).
+const courseExpanded = ref(!!expandedStacks[props.data.node_id]);
 const isBlocked = ref(false);
 
 const enableButton = () => {
@@ -136,6 +139,8 @@ const parentStyle = {
 
 const expandCourses = () => {
   courseExpanded.value = !courseExpanded.value
+  // Remember the expand state so it survives a canvas remount (#485).
+  expandedStacks[props.data.node_id] = courseExpanded.value
   isBlocked.value = true
   if (courseExpanded.value) {
       emit('expanding-cards');
@@ -158,6 +163,7 @@ const expandCourses = () => {
       />
       <div class="card-header text-center">
         <NodeInformation
+          v-if="store.state.feedbacksettings.show_info"
           :data
           :parentnode
         />
@@ -247,6 +253,7 @@ const expandCourses = () => {
       >
         <CourseCarousel :courses="props.data" />
         <UserInformation
+          v-if="store.state.feedbacksettings.show_feedback"
           :data="data"
         />
       </div>

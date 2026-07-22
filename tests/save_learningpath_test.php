@@ -323,7 +323,9 @@ final class save_learningpath_test extends adele_learningpath_testcase {
         // feedback_inbetween: "[EN_216]{item} erfolgreich bearbeiten"
         // feedback_after:     "[EN_217]{item} erfolgreich bearbeitet haben"
         //
-        // {item} is assembled in course_completed.php for the inbetween branch:
+        // {item} feeds the feedback messages and reflects the CURRENT state (#483). With
+        // 1 of 2 courses done (below the minimum of 2), the inbetween branch shows the
+        // remaining count:
         // $counttodo (=1) . ' ' . get_string('course_restricition_before_condition_from')
         // . $numbcourses (=2) . ' '
         // . get_string('course_description_before_condition_course_completed_kursen')

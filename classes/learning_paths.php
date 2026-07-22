@@ -65,6 +65,8 @@ class learning_paths {
         // "specific node completed" criterion with no node selected) - it would
         // render the {node_name} placeholder and break the path (#450).
         self::assert_conditions_complete($params['json']);
+        // Reject a name already taken by another path (#492).
+        self::assert_name_unique($params['name'], $params['learningpathid']);
         $data = new stdClass();
         $data->name = $params['name'];
         $data->description = $params['description'];
@@ -165,6 +167,28 @@ class learning_paths {
     }
 
     /**
+     * Refuse to save a learning path whose name is already used by another path, so
+     * duplicate names (and the confusion they cause) are prevented (#492). The match is
+     * case-insensitive; the path being edited is excluded so a plain re-save is allowed.
+     *
+     * @param string $name The proposed learning-path name.
+     * @param int $learningpathid The id being saved (0 for a new path); excluded from the check.
+     * @throws \moodle_exception When another learning path already uses this name.
+     */
+    public static function assert_name_unique($name, $learningpathid) {
+        global $DB;
+        $select = $DB->sql_equal('name', ':name', false);
+        $params = ['name' => $name];
+        if (!empty($learningpathid)) {
+            $select .= ' AND id <> :id';
+            $params['id'] = $learningpathid;
+        }
+        if ($DB->record_exists_select('local_adele_learning_paths', $select, $params)) {
+            throw new \moodle_exception('error_learningpath_name_exists', 'local_adele');
+        }
+    }
+
+    /**
      * Save learning path.
      *
      * @param array $params
@@ -193,7 +217,7 @@ class learning_paths {
             'local_adele_learning_paths',
             null,
             '',
-            'id, name, description, image, visibility'
+            'id, name, description, image, visibility, createdby'
         );
         $learningpaths = [
             'edit' => [],
@@ -491,39 +515,11 @@ class learning_paths {
                     }
                 }
             }
-            $pathnodes = $relationnodes->tree->nodes ?? null;
-            $startingcondition = "starting_node";
-            $paths = [];
-            if ($pathnodes) {
-                foreach ($pathnodes as $node) {
-                    $node = (array)$node;
-                    if (
-                        isset($node['parentCourse']) &&
-                        is_array($node['parentCourse']) &&
-                        in_array($startingcondition, $node['parentCourse'])
-                    ) {
-                        self::findpaths($node, [], $paths, $pathnodes);
-                    }
-                }
-            }
-            // Filter paths ending with childCondition null.
-            $filteredpaths = array_filter($paths, function ($path) use ($pathnodes) {
-                $lastnode = self::findNodeById(end($path), $pathnodes);
-                return isset($lastnode['childCourse']) && empty($lastnode['childCourse']);
-            });
-            $progress = 0;
-            foreach ($filteredpaths as $filteredpath) {
-                $completednodes = 0;
-                foreach ($filteredpath as $node) {
-                    if ($relationnodes->user_path_relation->{$node}->completionnode->valid) {
-                        $completednodes++;
-                    }
-                }
-                $pathprogression = $completednodes / count($filteredpath);
-                if ($pathprogression > $progress) {
-                    $progress = $pathprogression;
-                }
-            }
+            // The teacher-view progress reflects how many of the path's nodes the learner has
+            // completed (completed / total), so the percentage always matches the completed-node
+            // count shown next to it. Previously it was the best single root-to-leaf path's ratio,
+            // which read as 100% on a branching path as soon as one full branch was done (#461).
+            $progress = $totalnodes > 0 ? ($validnodes / $totalnodes) : 0;
             return [
                 'completed_nodes' => $validnodes,
                 'progress' => round(100 * $progress, 2),
@@ -617,7 +613,8 @@ class learning_paths {
             // student view shows the same "not found" notice the editor shows, instead of
             // rendering a path that no longer exists (GitHub #446). json is emptied so the
             // frontend does not try to JSON.parse a stale snapshot.
-            if (!$DB->record_exists('local_adele_learning_paths', ['id' => $params['learning_path_id']])) {
+            $masterlp = $DB->get_record('local_adele_learning_paths', ['id' => $params['learning_path_id']], 'json');
+            if (!$masterlp) {
                 return [
                     'id' => (int)$record->id,
                     'user_id' => (int)$record->user_id,
@@ -631,6 +628,19 @@ class learning_paths {
                     'lp_deleted' => true,
                 ];
             }
+            // Reflect the CURRENT learning-path-wide settings (feedback/info toggles) rather than the
+            // frozen per-user snapshot, so toggling them takes effect for already-subscribed students (#474).
+            $mastersettings = json_decode($masterlp->json, true)['settings'] ?? null;
+            if ($mastersettings !== null) {
+                $decoded = json_decode($record->json, true);
+                if (is_array($decoded)) {
+                    $decoded['settings'] = $mastersettings;
+                    $record->json = json_encode($decoded);
+                }
+            }
+            // Re-render the feedback/info strings in the CURRENT (viewer's) language so they follow
+            // a language switch instead of the language the recompute happened to run in (#493).
+            $record->json = relation_update::rerender_feedback_language($record->json, $record->user_id);
             $record->json = self::addnodemanualcondition($record->json, $record->user_id);
             return (array)$record;
         }
@@ -1004,5 +1014,138 @@ class learning_paths {
             return;
         }
         throw new required_capability_exception($context, 'local/adele:canmanage', 'nopermissions', '');
+    }
+
+    /**
+     * Require that the current user OWNS (created) the given learning path.
+     *
+     * Managers and site admins keep full access; everyone else must be the creator.
+     * Being merely an editor (lp_editors membership) is NOT enough - actions like
+     * duplicating are reserved for the path's owner (#471).
+     *
+     * @param int $learningpathid
+     * @param \context $context
+     * @return void
+     * @throws required_capability_exception when the user does not own the path
+     */
+    public static function require_lp_owner_access($learningpathid, $context) {
+        global $USER, $DB;
+
+        if (has_capability('local/adele:canmanage', $context) || is_siteadmin()) {
+            return;
+        }
+        $createdby = $DB->get_field('local_adele_learning_paths', 'createdby', ['id' => $learningpathid]);
+        if ($createdby !== false && (int) $createdby === (int) $USER->id) {
+            return;
+        }
+        throw new required_capability_exception($context, 'local/adele:canmanage', 'nopermissions', '');
+    }
+
+    /**
+     * Scope the full set of learning paths to what the requesting user may see.
+     *
+     * - Managers/admins ($privileged) see everything, all marked as owner.
+     * - Assistants see every VISIBLE path plus their own (even if hidden); paths they
+     *   may edit (lp_editors membership) land in 'edit', the rest in 'view' (#472).
+     * - Everyone else sees only the paths they may edit.
+     *
+     * @param array $allpaths ['edit' => [...], 'view' => [...]] as built by get_learning_paths().
+     * @param array $editablekeys Learning-path ids the user may edit (lp_editors membership).
+     * @param array $ownedkeys Learning-path ids the user created.
+     * @param bool $isassistant Whether the user holds local/adele:assist (Adele Assistant).
+     * @param bool $privileged Whether the user is a manager or site admin (sees all).
+     * @return array ['edit' => [...], 'view' => [...]] with each path's 'isowner' set.
+     */
+    public static function scope_paths_for_user(
+        array $allpaths,
+        array $editablekeys,
+        array $ownedkeys,
+        bool $isassistant,
+        bool $privileged
+    ): array {
+        if ($privileged) {
+            foreach ($allpaths as &$typepaths) {
+                foreach ($typepaths as &$path) {
+                    if (is_array($path)) {
+                        $path['isowner'] = "true";
+                    }
+                }
+                unset($path);
+            }
+            unset($typepaths);
+            return $allpaths;
+        }
+
+        $scoped = ['edit' => [], 'view' => []];
+        // The get_learning_paths(true, ...) master set places every path in 'edit'; iterate it.
+        foreach ($allpaths['edit'] as $lp) {
+            if (!is_array($lp)) {
+                continue;
+            }
+            $id = (int) $lp['id'];
+            $iseditor = in_array($id, $editablekeys);
+            $isowner = in_array($id, $ownedkeys);
+            if ($isassistant) {
+                $visible = ((int) ($lp['visibility'] ?? 0)) === 1;
+                // Hidden paths a non-owner did not create stay hidden (#472).
+                if (!$visible && !$isowner) {
+                    continue;
+                }
+            } else if (!$iseditor) {
+                continue;
+            }
+            $lp['isowner'] = $isowner ? "true" : "false";
+            if ($iseditor) {
+                $scoped['edit'][] = $lp;
+            } else {
+                $scoped['view'][] = $lp;
+            }
+        }
+        return $scoped;
+    }
+
+    /**
+     * Annotate each learning path with its owner (creator) and editors, so the overview
+     * tiles can show who is responsible - e.g. so an assistant knows whom to ask for
+     * edit rights (#487). Adds 'owner' => ['name', 'email'] and 'editors' => [['name'], ...],
+     * and drops the internal 'createdby'.
+     *
+     * @param array $paths ['edit' => [...], 'view' => [...]] path structure to decorate in place.
+     * @return void
+     */
+    public static function add_path_people(array &$paths): void {
+        global $DB;
+        $usercache = [];
+        foreach ($paths as &$typepaths) {
+            foreach ($typepaths as &$path) {
+                if (!is_array($path)) {
+                    continue;
+                }
+                $createdby = (int) ($path['createdby'] ?? 0);
+                unset($path['createdby']);
+                $owner = ['name' => '', 'email' => ''];
+                if ($createdby) {
+                    if (!isset($usercache[$createdby])) {
+                        // Select all name fields so fullname() has everything it may format.
+                        $fields = 'id, email, ' . implode(', ', \core_user\fields::get_name_fields());
+                        $usercache[$createdby] = $DB->get_record('user', ['id' => $createdby], $fields);
+                    }
+                    if ($usercache[$createdby]) {
+                        $owner = [
+                            'name' => fullname($usercache[$createdby]),
+                            'email' => $usercache[$createdby]->email,
+                        ];
+                    }
+                }
+                $path['owner'] = $owner;
+                $editors = [];
+                foreach (learning_path_editors::get_editors((int) $path['id']) as $editor) {
+                    $editors[] = ['name' => trim(($editor['firstname'] ?? '') . ' ' . ($editor['lastname'] ?? ''))];
+                }
+                $path['editors'] = $editors;
+            }
+            unset($path);
+        }
+        unset($typepaths);
     }
 }

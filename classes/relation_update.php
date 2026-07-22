@@ -159,9 +159,16 @@ class relation_update {
                                 // the per-feedback-node hint by, so skip it instead of fataling.
                                 if (isset($feedback['id'])) {
                                     $fbdata = $feedback['data'] ?? [];
+                                    if (empty($fbdata['visibility'])) {
+                                        // Hidden ("Verbergen"): a hidden feedback node contributes no student-facing
+                                        // text - neither the custom message nor the default description -
+                                        // so the speech bubble stays empty, consistent with
+                                        // restriction.before/information in getfeedback(). Display-only:
+                                        // the lock verdict (status_restriction) is unaffected. See #474.
+                                        continue;
+                                    }
                                     if (
                                         empty($fbdata['feedback_before_checkmark'])
-                                        && !empty($fbdata['visibility'])
                                         && !empty($fbdata['feedback_before'])
                                     ) {
                                         $node['data']['completion']['feedback']['restriction']['before_active'][$feedback['id']] =
@@ -235,6 +242,9 @@ class relation_update {
 
                     $node['data']['completion'] = $userpath->json['user_path_relation'][$node['id']];
                 }
+                // Record which language the feedback was rendered in, so the fetch-time re-render
+                // can skip when the viewer's language already matches it (#493 performance).
+                $userpath->json['feedback_lang'] = current_language();
                 $userpathid = user_path_relation::revision_user_path_relation($userpath);
                 if ($creation) {
                     global $DB;
@@ -600,13 +610,21 @@ class relation_update {
                     }
                 }
                 if ($isvalid) {
-                    // The childCondition can be empty when the feedback node is not wired
-                    // (auto-created restriction left unedited); skip rather than fatal.
-                    $childconditionid = $restnode['childCondition'][0] ?? null;
-                    if ($childconditionid !== null && isset($feedback['restriction']['before'][$childconditionid])) {
-                        $feedback['restriction']['before_valid'][$childconditionid] =
-                        $feedback['restriction']['before'][$childconditionid];
-                    }
+                    // The childCondition can be empty when the feedback node is not wired via it
+                    // (auto-created restriction left unedited); the sibling feedback node
+                    // ({condition}_feedback) still carries the text, so fall back to that id.
+                    // Previously this branch skipped population entirely, which wrongly flipped a
+                    // merely locked (satisfiable) node to 'after' - "kann nicht mehr freigeschaltet
+                    // werden" - instead of showing its requirement (#483 follow-up).
+                    $childconditionid = $restnode['childCondition'][0] ?? ($restnode['id'] . '_feedback');
+                    // The status_restriction must mirror the ACTUAL restriction state at all
+                    // times: $isvalid means this column is still blocking, so the node is
+                    // 'before' (requirements not fulfilled). Key before_valid off $isvalid,
+                    // NOT off whether the feedback text is present - hiding a feedback node
+                    // ("Verbergen") empties the display string but must never flip a locked
+                    // node to 'after'. The stored value is the (possibly empty) display text.
+                    $feedback['restriction']['before_valid'][$childconditionid] =
+                        $feedback['restriction']['before'][$childconditionid] ?? '';
                 }
             }
         }
@@ -626,7 +644,12 @@ class relation_update {
      * @return string
      */
     public static function getnodestatus($feedback, $restrictionnodepaths, $node) {
-        if ($feedback['completion']['after']) {
+        // Derive 'completed' from the completion verdict (status_completion, computed
+        // from the condition evaluation just above), NOT from the presence of the
+        // after-feedback text. The two are equivalent for a completed node, but reading
+        // the verdict means hiding a completed node's feedback ("Verbergen") empties the
+        // text without dropping the completed status/colour. Display-only. See #474.
+        if (($feedback['status_completion'] ?? '') === 'after') {
             return 'completed';
         }
         if (
@@ -769,14 +792,92 @@ class relation_update {
     }
 
     /**
-     * Observer for course completed
+     * Resolve a condition's DEFAULT template string for a feedback node, from the condition
+     * class ({label}::get_description()[$field]), via the sibling condition node
+     * ({condition}_feedback -> {condition}). Used both to fill an unseeded info field (#483)
+     * and, under $forcelangdefaults, to render the info-symbol AND speech-bubble text from the
+     * current-language lang defaults so they follow a language switch (#493). Returns '' when
+     * it cannot be resolved so the caller can fall back.
+     *
+     * @param string $feedbackid The feedback node id (e.g. condition_1_feedback).
+     * @param array $nodes The completion or restriction nodes array.
+     * @param string $conditiontype 'completion' or 'restriction'.
+     * @param string $field The get_description() key to read (e.g. 'information',
+     *   'description_before', 'description_inbetween', 'description_after').
+     * @return string
+     */
+    public static function get_default_condition_string($feedbackid, $nodes, $conditiontype, $field = 'information') {
+        $conditionid = str_replace('_feedback', '', $feedbackid);
+        $label = '';
+        foreach ($nodes as $conditionnode) {
+            if (($conditionnode['id'] ?? '') === $conditionid) {
+                $label = $conditionnode['data']['label'] ?? '';
+                break;
+            }
+        }
+        if ($label === '') {
+            return '';
+        }
+        $class = '\\local_adele\\course_' . $conditiontype . '\\conditions\\' . $label;
+        if (!class_exists($class)) {
+            return '';
+        }
+        $description = (new $class())->get_description();
+        return $description[$field] ?? '';
+    }
+
+    /**
+     * Pick the template to render for a feedback field.
+     *  - $forcelangdefaults (fetch-time re-render, #493): the condition's current-language lang
+     *    default wins, so the text follows a language switch.
+     *  - otherwise (recompute): the per-node stored template wins; when it is empty the lang
+     *    default is used only if $fallbackwhenempty is set (the info-symbol #483 behaviour) -
+     *    the speech-bubble fields keep their original "stored or blank" behaviour.
+     *
+     * @param bool $forcelangdefaults
+     * @param string|null $stored The per-node stored template (feedback_before / information / ...).
+     * @param string $feedbackid
+     * @param array $nodes
+     * @param string $conditiontype 'completion' or 'restriction'.
+     * @param string $field The get_description() key for the lang default.
+     * @param bool $fallbackwhenempty Fall back to the lang default when the stored template is empty.
+     * @return string
+     */
+    public static function pick_feedback_template(
+        $forcelangdefaults,
+        $stored,
+        $feedbackid,
+        $nodes,
+        $conditiontype,
+        $field,
+        $fallbackwhenempty = false
+    ) {
+        $stored = ($stored === null) ? '' : $stored;
+        if (!$forcelangdefaults && $stored !== '') {
+            return $stored;
+        }
+        if ($forcelangdefaults || $fallbackwhenempty) {
+            $default = self::get_default_condition_string($feedbackid, $nodes, $conditiontype, $field);
+            if ($default !== '') {
+                return $default;
+            }
+        }
+        return $stored;
+    }
+
+    /**
+     * Build the student-facing feedback (info-symbol + speech-bubble text) for a node.
      *
      * @param array $node
      * @param array $completioncriteria
      * @param array $restrictioncriteria
+     * @param bool $forcelangdefaults When true the info-symbol text is always taken from the
+     *   condition's lang default (ignoring the per-node stored template), so it renders in the
+     *   current language. Used by the fetch-time re-render so the info-symbol follows a language
+     *   switch instead of being frozen in the recompute language (#493).
      * @return array
      */
-    public static function getfeedback($node, $completioncriteria, $restrictioncriteria) {
+    public static function getfeedback($node, $completioncriteria, $restrictioncriteria, $forcelangdefaults = false) {
         $feedbacks = [
           'completion' => [
             'information' => null,
@@ -801,77 +902,123 @@ class relation_update {
                 strpos($conditionnode['id'], '_feedback') !== false &&
                 isset($conditionnode['data']['visibility'])
             ) {
+                // The "Verbergen" toggle is display-only: it empties the criterion text
+                // the info symbol and speech bubble render, but never changes a status
+                // verdict. All four display fields (information, before, inbetween and the
+                // completed message after_all) honour visibility. after_all can be gated
+                // safely because getnodestatus() now derives 'completed' from
+                // status_completion (the condition verdict), not from this text. See #474.
+                $visible = $conditionnode['data']['visibility'] ?? false;
+                $completionnodes = $node['completion']['nodes'];
+                // Under $forcelangdefaults (fetch-time re-render) every field is taken from the
+                // condition's current-language lang default, so both the info-symbol AND the
+                // speech-bubble text follow a language switch (#493). Otherwise the stored per-node
+                // template is used (the info-symbol additionally falls back to the default when
+                // unseeded - the #483 behaviour, via $fallbackwhenempty).
+                $beforetemplate = self::pick_feedback_template(
+                    $forcelangdefaults,
+                    $conditionnode['data']['feedback_before'] ?? '',
+                    $conditionnode['id'],
+                    $completionnodes,
+                    'completion',
+                    'description_before'
+                );
                 $feedbacks['completion']['before'][] =
-                    isset($conditionnode['data']['feedback_before']) ?
-                    self::render_placeholders(
-                        $conditionnode['data']['feedback_before'],
-                        $completioncriteria,
-                        $conditionnode['id'],
-                        $node['completion']['nodes']
-                    ) :
+                    ($visible && $beforetemplate !== '') ?
+                    self::render_placeholders($beforetemplate, $completioncriteria, $conditionnode['id'], $completionnodes) :
                     '';
+                $informationtemplate = self::pick_feedback_template(
+                    $forcelangdefaults,
+                    $conditionnode['data']['information'] ?? '',
+                    $conditionnode['id'],
+                    $completionnodes,
+                    'completion',
+                    'information',
+                    true
+                );
                 $feedbacks['completion']['information'][] =
-                isset($conditionnode['data']['information']) ?
+                ($visible && $informationtemplate !== '') ?
                 self::render_placeholders(
-                    $conditionnode['data']['information'],
+                    // The info-symbol shows the ABSOLUTE criterion (min of total), while the
+                    // feedback messages show live progress. Both templates share the {item}
+                    // token, so for the info-symbol only, render it against {item_total} - the
+                    // absolute placeholder built alongside {item} in course_completed (#483).
+                    str_replace('{item}', '{item_total}', $informationtemplate),
                     $completioncriteria,
                     $conditionnode['id'],
-                    $node['completion']['nodes']
+                    $completionnodes
                 ) :
                 '';
                 $conditionnodename = str_replace('_feedback', '', $conditionnode['id']);
+                $aftertemplate = self::pick_feedback_template(
+                    $forcelangdefaults,
+                    $conditionnode['data']['feedback_after'] ?? '',
+                    $conditionnode['id'],
+                    $completionnodes,
+                    'completion',
+                    'description_after'
+                );
                 $feedbacks['completion']['after_all'][$conditionnodename] =
-                    isset($conditionnode['data']['feedback_after']) ?
-                        self::render_placeholders(
-                            $conditionnode['data']['feedback_after'],
-                            $completioncriteria,
-                            $conditionnode['id'],
-                            $node['completion']['nodes']
-                        ) :
+                    ($visible && $aftertemplate !== '') ?
+                        self::render_placeholders($aftertemplate, $completioncriteria, $conditionnode['id'], $completionnodes) :
                         '';
 
-                if ($conditionnode['data']['feedback_inbetween_checkmark']) {
-                    $feedbacks['completion']['inbetween'][] = isset($conditionnode['data']['feedback_inbetween']) ?
-                        self::render_placeholders(
-                            $conditionnode['data']['feedback_inbetween'],
-                            $completioncriteria,
-                            $conditionnode['id'],
-                            $node['completion']['nodes']
-                        ) :
+                $inbetweentemplate = self::pick_feedback_template(
+                    $forcelangdefaults,
+                    $conditionnode['data']['feedback_inbetween'] ?? '',
+                    $conditionnode['id'],
+                    $completionnodes,
+                    'completion',
+                    'description_inbetween'
+                );
+                $feedbacks['completion']['inbetween'][] =
+                    ($visible && $inbetweentemplate !== '') ?
+                        self::render_placeholders($inbetweentemplate, $completioncriteria, $conditionnode['id'], $completionnodes) :
                         '';
-                } else {
-                    $feedbacks['completion']['inbetween'][] =
-                        isset($conditionnode['data']['feedback_inbetween']) ?
-                            self::render_placeholders(
-                                $conditionnode['data']['feedback_inbetween'],
-                                $completioncriteria,
-                                $conditionnode['id'],
-                                $node['completion']['nodes']
-                            ) :
-                        '';
-                }
             }
         }
 
         if (isset($node['restriction'])) {
             foreach (($node['restriction']['nodes'] ?? []) as $restrictionnode) {
                 if (strpos($restrictionnode['id'], '_feedback') !== false && ($restrictionnode['data']['visibility'] ?? false)) {
+                    $restrictionnodes = $node['restriction']['nodes'];
+                    // Under $forcelangdefaults the restriction requirement text (speech bubble) and
+                    // info-symbol are taken from the condition lang default so they follow a language
+                    // switch (#493); otherwise the stored template is used (info-symbol falls back to
+                    // the default when unseeded, the #483 behaviour).
+                    $restbeforetemplate = self::pick_feedback_template(
+                        $forcelangdefaults,
+                        $restrictionnode['data']['feedback_before'] ?? '',
+                        $restrictionnode['id'],
+                        $restrictionnodes,
+                        'restriction',
+                        'description_before'
+                    );
                     $feedbacks['restriction']['before'][$restrictionnode['id']] =
-                      isset($restrictionnode['data']['feedback_before']) ?
+                      ($restbeforetemplate !== '') ?
                         self::render_placeholders(
-                            $restrictionnode['data']['feedback_before'],
+                            $restbeforetemplate,
                             $restrictioncriteria,
                             $restrictionnode['id'],
-                            $node['restriction']['nodes']
+                            $restrictionnodes
                         ) :
                         '';
+                        $restinformationtemplate = self::pick_feedback_template(
+                            $forcelangdefaults,
+                            $restrictionnode['data']['information'] ?? '',
+                            $restrictionnode['id'],
+                            $restrictionnodes,
+                            'restriction',
+                            'information',
+                            true
+                        );
                         $feedbacks['restriction']['information'][$restrictionnode['id']] =
-                        isset($restrictionnode['data']['information']) ?
+                        ($restinformationtemplate !== '') ?
                           self::render_placeholders(
-                              $restrictionnode['data']['information'],
+                              $restinformationtemplate,
                               $restrictioncriteria,
                               $restrictionnode['id'],
-                              $node['restriction']['nodes']
+                              $restrictionnodes
                           ) :
                           '';
                 }
@@ -888,6 +1035,85 @@ class relation_update {
             $feedbacks['status'] = 'completed';
         }
         return $feedbacks;
+    }
+
+    /**
+     * Re-render the stored feedback DISPLAY strings (info-symbol + speech bubble) of a user
+     * path in the CURRENT language, so info + feedback follow a language switch instead of
+     * staying frozen in the language the recompute ran in (#493).
+     *
+     * The recompute (updated_single) renders and stores the feedback text; this runs at FETCH
+     * time (get_learning_user_relation), as the viewing user, and overwrites only the
+     * language-dependent DISPLAY fields - the stored status verdicts and column structure are
+     * kept. The condition status classes are pure reads (no side effects), so re-running them on
+     * every fetch is safe. The info-symbol is forced to the condition lang default so it always
+     * follows the language; the speech-bubble text is re-rendered from the node's templates.
+     *
+     * @param string $json The stored user-path json (string).
+     * @param int $userid The path owner's id.
+     * @return string The json with feedback display strings re-rendered in the current language.
+     */
+    public static function rerender_feedback_language($json, $userid) {
+        $data = json_decode($json, true);
+        if (empty($data['tree']['nodes']) || empty($data['user_path_relation'])) {
+            return $json;
+        }
+        // The feedback was already rendered in the viewer's language (the common case on a
+        // single-language site) - nothing to re-render, so avoid the per-node status reads (#493).
+        if (isset($data['feedback_lang']) && $data['feedback_lang'] === current_language()) {
+            return $json;
+        }
+        $completionclass = new course_completion_status();
+        $restrictionclass = new course_restriction_status();
+        $userpath = (object) ['user_id' => $userid, 'json' => $data];
+        foreach ($data['tree']['nodes'] as $node) {
+            $nodeid = $node['id'] ?? null;
+            if ($nodeid === null || !isset($data['user_path_relation'][$nodeid]['feedback'])) {
+                continue;
+            }
+            $completioncriteria = $completionclass->get_condition_status($node, $userid);
+            $restrictioncriteria = $restrictionclass->get_restriction_status($node, $userpath);
+            $fresh = self::getfeedback($node, $completioncriteria, $restrictioncriteria, true);
+            $feedback = &$data['user_path_relation'][$nodeid]['feedback'];
+            // Info-symbol + completion speech-bubble text (before/inbetween shown in the before/
+            // inbetween states).
+            foreach (['information', 'before', 'inbetween'] as $field) {
+                if (isset($fresh['completion'][$field])) {
+                    $feedback['completion'][$field] = $fresh['completion'][$field];
+                }
+            }
+            // The after_all map (all conditions' completed message) comes from getfeedback(); the
+            // recompute splits the completed ones into `after`. Re-derive both from the fresh
+            // (translated) after_all using the stored completion verdict, so the "completed" bubble
+            // follows the language too.
+            $freshafterall = array_values((array) ($fresh['completion']['after_all'] ?? []));
+            if (($feedback['status_completion'] ?? '') === 'after') {
+                $feedback['completion']['after'] = $freshafterall;
+                $feedback['completion']['after_all'] = [];
+            } else {
+                $feedback['completion']['after_all'] = $fresh['completion']['after_all'] ?? [];
+            }
+            // Restriction info-symbol + requirement text.
+            foreach (['information', 'before'] as $field) {
+                if (isset($fresh['restriction'][$field])) {
+                    $feedback['restriction'][$field] = $fresh['restriction'][$field];
+                }
+            }
+            // The before_valid / before_active maps are keyed per blocking column; refresh their
+            // VALUES from the freshly-rendered `before` (same keys) so the locked-requirement list
+            // follows the language too, keeping the stored keys (which columns block).
+            foreach (['before_valid', 'before_active'] as $field) {
+                if (isset($feedback['restriction'][$field]) && is_array($feedback['restriction'][$field])) {
+                    foreach (array_keys($feedback['restriction'][$field]) as $key) {
+                        if (isset($fresh['restriction']['before'][$key])) {
+                            $feedback['restriction'][$field][$key] = $fresh['restriction']['before'][$key];
+                        }
+                    }
+                }
+            }
+            unset($feedback);
+        }
+        return json_encode($data);
     }
 
 

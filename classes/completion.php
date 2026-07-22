@@ -31,10 +31,6 @@ use core\event\course_completed;
 use local_adele\helper\user_path_relation;
 use local_adele\learning_path_update;
 
-defined('MOODLE_INTERNAL') || die();
-
-require_once($CFG->libdir . '/externallib.php');
-
 /**
  * External Service for local adele.
  *
@@ -62,7 +58,7 @@ class completion {
      * @return void
      */
     public static function completed(course_completed $event): void {
-        // The student whose course was completed - NOT the acting user.
+        // The student whose course was completed is represented by relateduser, not userid.
         $userid = (int) $event->relateduserid;
         $courseid = (int) $event->courseid;
 

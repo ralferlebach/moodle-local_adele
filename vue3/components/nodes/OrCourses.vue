@@ -230,7 +230,7 @@ const deleteCondition = () => {
       >
       <div class="card-header text-center">
         <NodeInformation
-          v-if="!editorview"
+          v-if="!editorview && store.state.feedbacksettings.show_info"
           :data
           :parentnode
         />
@@ -428,7 +428,7 @@ const deleteCondition = () => {
           :courses="props.data"
         />
         <UserInformation
-          v-if="!editorview"
+          v-if="!editorview && store.state.feedbacksettings.show_feedback"
           :data="data"
         />
       </div>

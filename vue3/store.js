@@ -57,6 +57,72 @@ function hasIncompleteCondition(json) {
     );
 }
 
+/**
+ * Timed access criteria must carry their required inputs before they can be saved,
+ * otherwise they are unsatisfiable and render "missing date"-style hints (#494):
+ * - 'timed' (start/end time): at least one of start or end must be set;
+ * - 'timed_duration' (editing period): a positive duration value AND a time unit.
+ *
+ * @param {object} json The learning-path tree json.
+ * @returns {(string|null)} The label of the first invalid timed criterion, or null.
+ */
+export function invalidTimedConditionLabel(json) {
+    const nodes = json && json.tree && json.tree.nodes ? json.tree.nodes : [];
+    // "not provided" = null / undefined / empty string; a numeric 0 is a real value
+    // (e.g. the "days" time unit), so it must not count as empty.
+    const isEmpty = v => v === null || v === undefined || v === '';
+    for (const node of nodes) {
+        const conditions = node && node.restriction && node.restriction.nodes ? node.restriction.nodes : [];
+        for (const c of conditions) {
+            const data = c && c.data ? c.data : {};
+            const value = data.value || {};
+            if (data.label === 'timed' && isEmpty(value.start) && isEmpty(value.end)) {
+                return 'timed';
+            }
+            if (data.label === 'timed_duration') {
+                if (isEmpty(value.durationValue) || Number(value.durationValue) <= 0 || isEmpty(value.selectedDuration)) {
+                    return 'timed_duration';
+                }
+            }
+        }
+    }
+    return null;
+}
+
+/**
+ * A "starting" node has no predecessor, so a parent_courses ("according to predecessor
+ * nodes") restriction on it can never be satisfied and would lock it forever (#476).
+ *
+ * @param {object} json The learning-path tree json.
+ * @returns {boolean} True if any first node carries a parent_courses restriction.
+ */
+export function hasParentRestrictionOnFirstNode(json) {
+    const nodes = json && json.tree && json.tree.nodes ? json.tree.nodes : [];
+    return nodes.some(node => {
+        const isfirst = node && Array.isArray(node.parentCourse) && node.parentCourse.includes('starting_node');
+        if (!isfirst) {
+            return false;
+        }
+        const conditions = node.restriction && node.restriction.nodes ? node.restriction.nodes : [];
+        return conditions.some(c => c && c.data && c.data.label === 'parent_courses');
+    });
+}
+
+/**
+ * Read the learning-path-wide feedback/info toggles from a path json, defaulting to shown when
+ * the settings are absent (existing paths) or the value is not explicitly false (#474).
+ *
+ * @param {Object} json The (parsed) learning-path json.
+ * @returns {{show_feedback: boolean, show_info: boolean}}
+ */
+function readFeedbackSettings(json) {
+    const settings = (json && json.settings) ? json.settings : {};
+    return {
+        show_feedback: settings.show_feedback !== false,
+        show_info: settings.show_info !== false,
+    };
+}
+
 // Defining store for application
 export function createAppStore() {
     return createStore({
@@ -81,6 +147,15 @@ export function createAppStore() {
                 startnode: null,
                 lpuserpathrelations: [],
                 lpuserpathrelation: null,
+                // The learning-path-user list row a teacher last opened, so the list can
+                // scroll back to it when returning from a participant's edit view (#481).
+                focususer: null,
+                // Whether the user-list panel is collapsed, so the graph canvas can grow
+                // into the freed space (#480).
+                userlistcollapsed: false,
+                // Learning-path-wide toggles: whether the feedback bubble and the info-symbol are
+                // shown to students. Default true (existing paths carry no settings) (#474).
+                feedbacksettings: { show_feedback: true, show_info: true },
                 feedback: null,
                 modules: null,
                 version: 0,
@@ -101,6 +176,12 @@ export function createAppStore() {
             setlearningPathID(state, id) {
                 state.learningPathID = id;
             },
+            setFocusUser(state, id) {
+                state.focususer = id;
+            },
+            setUserlistCollapsed(state, collapsed) {
+                state.userlistcollapsed = collapsed;
+            },
             setStrings(state, strings) {
                 state.strings = strings;
             },
@@ -113,6 +194,17 @@ export function createAppStore() {
                   ajaxdata.json = JSON.parse(ajaxdata.json);
               }
               state.learningpath = ajaxdata;
+              state.feedbacksettings = readFeedbackSettings(ajaxdata.json);
+            },
+            setFeedbackSettings(state, json) {
+              state.feedbacksettings = readFeedbackSettings(json);
+            },
+            setLpFeedbackSetting(state, payload) {
+              if (!state.learningpath.json.settings) {
+                state.learningpath.json.settings = { show_feedback: true, show_info: true };
+              }
+              state.learningpath.json.settings[payload.key] = payload.value;
+              state.feedbacksettings = readFeedbackSettings(state.learningpath.json);
             },
             setAvailablecourses(state, ajaxdata) {
                 state.availablecourses = ajaxdata;
@@ -275,6 +367,7 @@ export function createAppStore() {
                 context.commit('setLastSeen', lpUserPathRelation.last_seen_by_owner);
                 if (lpUserPathRelation.json != '') {
                   lpUserPathRelation.json = await JSON.parse(lpUserPathRelation.json);
+                  context.commit('setFeedbackSettings', lpUserPathRelation.json);
                 }
                 return lpUserPathRelation
             },
@@ -325,6 +418,27 @@ export function createAppStore() {
                     );
                     throw new Error('local_adele/incomplete-criterion');
                 }
+                // Frontend guard (#476): a first node has no predecessor, so a
+                // parent_courses restriction on it can never unlock. Refuse the save.
+                if (hasParentRestrictionOnFirstNode(payload.json)) {
+                    Notification.alert(
+                        context.state.strings.restriction_incomplete_title,
+                        context.state.strings.first_node_parent_restriction_modal
+                    );
+                    throw new Error('local_adele/first-node-parent-restriction');
+                }
+                // Frontend guard (#494): a timed access criterion saved without its
+                // required inputs is unsatisfiable ("missing date" hints). Refuse the save.
+                const invalidtimed = invalidTimedConditionLabel(payload.json);
+                if (invalidtimed) {
+                    Notification.alert(
+                        context.state.strings.restriction_incomplete_title,
+                        invalidtimed === 'timed'
+                            ? context.state.strings.timed_incomplete_modal
+                            : context.state.strings.timed_duration_incomplete_modal
+                    );
+                    throw new Error('local_adele/incomplete-timed-criterion');
+                }
                 let result;
                 try {
                     result = await ajax('local_adele_save_learningpath',
@@ -335,12 +449,12 @@ export function createAppStore() {
                       image: payload.image,
                       json: JSON.stringify(payload.json),
                       contextid: context.state.contextid,
-                    });
+                    }, true);
                 } catch (error) {
                     // Silent backend backstop: if the server guard ever rejects (e.g. a
-                    // bypassed frontend), show its message in the same clean modal -
-                    // never the raw exception dialog with stack trace.
-                    Notification.alert(context.state.strings.restriction_incomplete_title, error.message);
+                    // bypassed frontend, or a duplicate name #492), show its message in
+                    // the same clean modal - never the raw exception dialog with a stack.
+                    Notification.alert(context.state.strings.error_save_title, error.message);
                     throw error;
                 }
                 context.dispatch('fetchLearningpaths');
@@ -493,7 +607,7 @@ export function createAppStore() {
 /**
  * Single ajax call to Moodle.
  */
-export async function ajax(method, args) {
+export async function ajax(method, args, silent = false) {
     const request = {
         methodname: method,
         args: Object.assign( args ),
@@ -502,7 +616,12 @@ export async function ajax(method, args) {
     try {
         return await moodleAjax.call([request])[0];
     } catch (e) {
-        Notification.exception(e);
+        // Callers that render their own clean message (e.g. saveLearningpath's
+        // duplicate-name guard #492) pass silent=true to suppress the raw Moodle
+        // exception/stack-trace dialog and avoid a double popup.
+        if (!silent) {
+            Notification.exception(e);
+        }
         throw e;
     }
 }

@@ -105,6 +105,17 @@
   const restriction = computed(() => props.data.completion.feedback.restriction.before || null )
   const completion = computed(() => props.data.completion.feedback.completion.before || null )
 
+  // The info list is rendered only when it has at least one non-empty entry. Guarding on the
+  // raw collection was wrong: an object/array of empty strings ({id:''} / ['']) is truthy, so
+  // it suppressed the "nichts definiert" fallback AND rendered nothing - a mysterious blank
+  // section. This makes the fallback appear when there is genuinely nothing to show (#483 follow-up).
+  const hasValues = (collection) =>
+    !!collection && Object.values(collection).some((text) => text !== '' && text != null)
+  const hasRestrictionInformation = computed(() =>
+    hasValues(props.data.completion.feedback.restriction.information))
+  const hasCompletionInformation = computed(() =>
+    hasValues(props.data.completion.feedback.completion.information))
+
   const ending_date = computed(() => {
     let return_date = {
       start_date: null,
@@ -344,7 +355,7 @@
               {{ store.state.strings.completion_restriction_feedback }}
             </b>
             <div class="list-group-text" style="user-select: text;" @mousedown.stop @mousemove.stop @mouseup.stop>
-              <div v-if="props.data.completion.feedback.restriction.information">
+              <div v-if="hasRestrictionInformation">
                 <div
                   v-for="completion_string in props.data.completion.feedback.restriction.information"
                   :key="completion_string"
@@ -377,7 +388,7 @@
               {{ store.state.strings.completion_completion_feedback }}
             </b>
             <div class="list-group-text" style="user-select: text;" @mousedown.stop @mousemove.stop @mouseup.stop>
-              <div v-if="props.data.completion.feedback.completion.information">
+              <div v-if="hasCompletionInformation">
                 <div
                   v-for="(completion_string, index) in props.data.completion.feedback.completion.information"
                   :key="completion_string"

@@ -186,7 +186,7 @@ const zoomOnParent = () => {
       <div class="card-header text-center">
         <NodeInformation
          @focusChanged="zoomOnParent"
-          v-if="!editorview"
+          v-if="!editorview && store.state.feedbacksettings.show_info"
           :data
           :parentnode
         />
@@ -342,6 +342,7 @@ const zoomOnParent = () => {
         class="card-footer"
       >
         <UserInformation
+          v-if="store.state.feedbacksettings.show_feedback"
           :data="data"
         />
       </div>

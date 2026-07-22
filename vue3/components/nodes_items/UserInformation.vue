@@ -25,6 +25,24 @@ const props = defineProps({
   },
 });
 
+// The locked ("before") feedback list normally comes from before_active (the active/failing
+// restriction column). Auto-created restrictions whose feedback node is not wired via
+// childCondition leave before_active empty even though the requirement exists; fall back to
+// before_valid (the blocking conditions' requirement text) so a locked-but-satisfiable node
+// shows what to do instead of just the bare "unlock when:" header (#483 follow-up).
+const restrictionBeforeItems = computed(() => {
+  const fb = props.data && props.data.completion && props.data.completion.feedback
+    ? props.data.completion.feedback.restriction : null;
+  if (!fb) {
+    return [];
+  }
+  const active = Object.values(fb.before_active || {}).filter((text) => text !== '');
+  if (active.length) {
+    return active;
+  }
+  return Object.values(fb.before_valid || {}).filter((text) => text !== '');
+});
+
 // Icon color based on status
 const iconColor = computed(() => {
   let color;
@@ -149,7 +167,7 @@ const handleBlur = () => {
         <!-- Render before restriction feedback. -->
         <div v-if="data.completion &&
           data.completion.feedback.status_restriction == 'before'">
-          <UserFeedbackBlock :data="Object.values(data.completion.feedback.restriction.before_active)"
+          <UserFeedbackBlock :data="restrictionBeforeItems"
             title="restriction_before" />
         </div>
         <div v-if="data.completion &&

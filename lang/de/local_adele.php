@@ -474,6 +474,7 @@ $string['tagsexclude_desc'] = 'Definieren Sie, welche Kurse basierend auf ihren 
 $string['tagsinclude'] = 'Eingeschlossene Tags definieren';
 $string['tagsinclude_desc'] = 'Definieren Sie, welche Kurse basierend auf ihren Tags gefiltert werden sollen. Kurse mit einem dieser Tags sind auffindbar.';
 $string['task_check_timed_restrictions'] = 'Zeitgesteuerte Lernpfad-Voraussetzungen neu auswerten';
+$string['task_reconcile_user_paths'] = 'Aktive Lernpfade abgleichen (Node-Abschluss neu berechnen)';
 $string['title_change_visibility'] = 'Sichtbarkeit geändert';
 $string['title_delete'] = 'Lernpfad gelöscht';
 $string['title_duplicate'] = 'Lernpfad dupliziert';

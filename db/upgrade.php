@@ -209,5 +209,16 @@ function xmldb_local_adele_upgrade($oldversion) {
         // Adele savepoint reached.
         upgrade_plugin_savepoint(true, 2026061800, 'local', 'adele');
     }
+    if ($oldversion < 2026072200) {
+        // The course_completed observer now resolves the affected student via
+        // relateduserid instead of the acting user (userid). Courses that were
+        // already completed before this fix do not re-fire course_completed, so
+        // their learning paths can still carry a stale node status. Queue a
+        // one-off reconciliation that recomputes every active learning path.
+        $reconcile = new \local_adele\task\reconcile_user_paths();
+        \core\task\manager::queue_adhoc_task($reconcile, true);
+
+        upgrade_plugin_savepoint(true, 2026072200, 'local', 'adele');
+    }
     return true;
 }

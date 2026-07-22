@@ -34,12 +34,12 @@ use local_adele\relation_update;
  */
 class local_adele_observer {
     /**
-     * Observer for the update_catscale event
+     * Observer for the core course_completed event.
      *
-     * @param base $event
+     * @param \core\event\course_completed $event
      */
-    public static function course_completed(base $event) {
-        $observer = completion::completed($event);
+    public static function course_completed(\core\event\course_completed $event) {
+        completion::completed($event);
     }
 
     /**

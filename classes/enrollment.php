@@ -70,7 +70,7 @@ class enrollment {
             }
             $userpath = self::buildsqlqueryuserpath($learningpath->id, $params->relateduserid, $courseid);
             if (!$userpath) {
-                $id = $DB->insert_record('local_adele_path_user', [
+                $newrecord = [
                     'user_id' => $params->relateduserid,
                     'course_id' => $courseid,
                     'learning_path_id' => $learningpath->id,
@@ -86,8 +86,22 @@ class enrollment {
                         'tree' => $learningpath->json['tree'] ?? ['nodes' => [], 'edges' => []],
                         'modules' => $learningpath->json['modules'] ?? null,
                     ]),
-                ]);
-                $userpath = $DB->get_record('local_adele_path_user', ['id' => $id]);
+                ];
+                try {
+                    $id = $DB->insert_record('local_adele_path_user', $newrecord);
+                    $userpath = $DB->get_record('local_adele_path_user', ['id' => $id]);
+                } catch (\dml_exception $e) {
+                    // Ticket #501: a concurrent request won the race and inserted
+                    // the row first; the unique index (user_id, course_id,
+                    // learning_path_id) rejected this insert. Reuse the row that
+                    // now exists instead of failing or creating a duplicate. If no
+                    // such row is found the exception was not a duplicate conflict
+                    // and must propagate.
+                    $userpath = self::buildsqlqueryuserpath($learningpath->id, $params->relateduserid, $courseid);
+                    if (!$userpath) {
+                        throw $e;
+                    }
+                }
             }
             $userpath->json = json_decode($userpath->json, true);
             $eventsingle = user_path_updated::create([

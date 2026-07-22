@@ -163,16 +163,27 @@ class course_completed implements course_completion {
             if ($course->enablecompletion) {
                 // Get the course completion instance.
                 $completion = new completion_info($course);
-                $progress = progress::get_course_progress_percentage($course, $userid) ?? 0;
-                if ($progress !== null) {
+                $progress = progress::get_course_progress_percentage($course, $userid);
+                // Ticket #502: "in progress" starts at the first course access
+                // (erster Kursaufruf), not at mere enrolment. A learner who is
+                // only enrolled but has never opened the course is NOT started.
+                // The timed processing-duration restriction is unaffected; it
+                // still keys off the node's first unlock.
+                if ($this->has_accessed_course((int) $course->id, (int) $userid)) {
                     $isinbetween = true;
                 }
+                $progress ??= 0;
                 // Check if the user has completed the course.
                 $coursecompleted = $completion->is_course_complete($userid);
                 if ($coursecompleted) {
                     $progress = 100;
                     $completed = true;
                     $finished++;
+                    // A completed course cannot have stayed untouched, so it also
+                    // counts as started. This keeps partially completed
+                    // multi-course nodes (some done, not enough yet) in the
+                    // inbetween state.
+                    $isinbetween = true;
                 }
                 $progresses[] = $progress;
                 // Ticket #464 H4: this list is rendered via v-html in the node feedback, so the
@@ -246,6 +257,23 @@ class course_completed implements course_completion {
 
         $coursecompletion['inbetween_info'] = $this->get_node_progress($progresses, $minvalue);
         return $coursecompletion;
+    }
+
+    /**
+     * Whether the user has ever accessed the given course (first course view).
+     *
+     * Ticket #502: this is the "started" (Bearbeitungsbeginn) criterion for the
+     * progress display. Moodle records a row in user_lastaccess the first time a
+     * user accesses a course, so the presence of that row means the course has
+     * been opened at least once.
+     *
+     * @param int $courseid
+     * @param int $userid
+     * @return bool
+     */
+    private function has_accessed_course(int $courseid, int $userid) {
+        global $DB;
+        return $DB->record_exists('user_lastaccess', ['courseid' => $courseid, 'userid' => $userid]);
     }
 
     /**

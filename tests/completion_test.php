@@ -25,12 +25,8 @@
 
 namespace local_adele;
 
-use local_adele\helper\user_path_relation;
-use local_adele\event\user_path_updated;
 use local_adele\completion;
-use local_adele\relation_update;
 use advanced_testcase;
-use context_system;
 use PHPUnit\Framework\Attributes\CoversMethod;
 use PHPUnit\Framework\Attributes\RunInSeparateProcess;
 
@@ -45,7 +41,7 @@ use PHPUnit\Framework\Attributes\RunInSeparateProcess;
  *
  * @runTestsInSeparateProcesses
  */
-#[CoversMethod(relation_update::class, 'searchnestedarray')]
+#[CoversMethod(completion::class, 'searchnestedarray')]
 #[\PHPUnit\Framework\Attributes\PreserveGlobalState(false)]
 final class completion_test extends advanced_testcase {
     /**

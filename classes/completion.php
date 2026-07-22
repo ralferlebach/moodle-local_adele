@@ -26,9 +26,10 @@
 declare(strict_types=1);
 
 namespace local_adele;
+
+use core\event\course_completed;
 use local_adele\helper\user_path_relation;
-use context_system;
-use local_adele\event\user_path_updated;
+use local_adele\learning_path_update;
 
 /**
  * External Service for local adele.
@@ -40,35 +41,77 @@ use local_adele\event\user_path_updated;
  */
 class completion {
     /**
-     * Observer for course completed
+     * Observer for the core course_completed event.
      *
-     * @param object $event
+     * When a Moodle course is completed, every active learning path of the
+     * affected student that references this course in one of its nodes has to be
+     * re-evaluated so that the corresponding node-completion criterion can turn
+     * the node into "completed".
+     *
+     * Important: on \core\event\course_completed the affected student is carried
+     * in $event->relateduserid. $event->userid is the ACTOR that caused the
+     * completion (a grading teacher, an administrator or - most commonly - the
+     * cron/system process aggregating the completion criteria) and must NOT be
+     * used to look up the learning path owner.
+     *
+     * @param course_completed $event The Moodle course_completed event.
+     * @return void
      */
-    public static function completed($event) {
-        // The course_completed event carries the actor in userid and the affected student
-        // in relateduserid. Route by the student, otherwise a teacher- or cron-triggered
-        // completion recomputes the wrong user's paths (or none) and the node never
-        // completes (#495).
-        $userpathrelation = new user_path_relation();
-        $learningpaths = $userpathrelation->get_learning_paths($event->relateduserid);
-        if (!$learningpaths) {
+    public static function completed(course_completed $event): void {
+        // The student whose course was completed is represented by relateduser, not userid.
+        $userid = (int) $event->relateduserid;
+        $courseid = (int) $event->courseid;
+
+        // Nothing sensible to do without both a student and a course.
+        if ($userid <= 0 || $courseid <= 0) {
             return;
         }
+
+        $userpathrelation = new user_path_relation();
+        $learningpaths = $userpathrelation->get_learning_paths($userid);
+
+        if (empty($learningpaths)) {
+            return;
+        }
+
         foreach ($learningpaths as $learningpath) {
-            $learningpath->json = json_decode($learningpath->json, true);
-            foreach ($learningpath->json['tree']['nodes'] as $node) {
-                if (is_array($node['data']['course_node_id']) && in_array($event->courseid, $node['data']['course_node_id'])) {
-                    // Recompute the path once per event, even if the course maps to several nodes.
-                    $eventsingle = user_path_updated::create([
-                        'objectid' => $learningpath->id,
-                        'context' => context_system::instance(),
-                        'other' => [
-                            'userpath' => $learningpath,
-                        ],
-                    ]);
-                    $eventsingle->trigger();
-                    break;
+            $pathjson = json_decode($learningpath->json, true);
+
+            // A single malformed or incomplete snapshot must not abort the
+            // processing of the remaining (valid) learning paths.
+            if (
+                !is_array($pathjson) ||
+                empty($pathjson['tree']['nodes']) ||
+                !is_array($pathjson['tree']['nodes'])
+            ) {
+                continue;
+            }
+
+            foreach ($pathjson['tree']['nodes'] as $node) {
+                $courseids = $node['data']['course_node_id'] ?? [];
+
+                if (!is_array($courseids)) {
+                    $courseids = [$courseids];
                 }
+
+                // The stored course_node_id values may be strings or integers
+                // depending on the JSON origin - normalise both sides for a
+                // type-safe match.
+                $courseids = array_map('intval', $courseids);
+
+                if (!in_array($courseid, $courseids, true)) {
+                    continue;
+                }
+
+                // Hand the decoded snapshot to the central update service, which
+                // re-evaluates every node of the path against the current state.
+                $learningpath->json = $pathjson;
+                learning_path_update::trigger_user_path_update($learningpath);
+
+                // The recompute already covers all nodes of this path, so a
+                // single trigger per learning path is sufficient even if the
+                // course is referenced by more than one node.
+                break;
             }
         }
     }

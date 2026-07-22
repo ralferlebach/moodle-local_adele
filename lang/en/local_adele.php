@@ -483,6 +483,7 @@ $string['tagsexclude_desc'] = 'Define which courses should not be filtered based
 $string['tagsinclude'] = 'Define included tags';
 $string['tagsinclude_desc'] = 'Define which courses should be filtered based on their tags. Courses with one of these tags will be found.';
 $string['task_check_timed_restrictions'] = 'Re-evaluate timed learning-path restrictions';
+$string['task_reconcile_user_paths'] = 'Reconcile active learning paths (recompute node completion)';
 $string['timed_duration_incomplete_modal'] = 'Please define a valid duration and time unit for the "Editing period" access criterion before saving.';
 $string['timed_incomplete_modal'] = 'Please enter at least a start or end time for the "Start and end time" access criterion before saving.';
 $string['title_change_visibility'] = 'Visibility changed';

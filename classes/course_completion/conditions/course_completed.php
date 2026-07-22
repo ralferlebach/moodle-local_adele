@@ -165,10 +165,10 @@ class course_completed implements course_completion {
                 $completion = new completion_info($course);
                 $progress = progress::get_course_progress_percentage($course, $userid);
                 // Ticket #502: "in progress" starts at the first course access
-                // (erster Kursaufruf), not at the first completed criterion. A
-                // learner who is only enrolled but has never opened the course is
-                // NOT started. The timed processing-duration restriction is
-                // unaffected; it still keys off the node's first unlock.
+                // (erster Kursaufruf), not at mere enrolment. A learner who is
+                // only enrolled but has never opened the course is NOT started.
+                // The timed processing-duration restriction is unaffected; it
+                // still keys off the node's first unlock.
                 if ($this->has_accessed_course((int) $course->id, (int) $userid)) {
                     $isinbetween = true;
                 }
@@ -179,6 +179,11 @@ class course_completed implements course_completion {
                     $progress = 100;
                     $completed = true;
                     $finished++;
+                    // A completed course cannot have stayed untouched, so it also
+                    // counts as started. This keeps partially completed
+                    // multi-course nodes (some done, not enough yet) in the
+                    // inbetween state.
+                    $isinbetween = true;
                 }
                 $progresses[] = $progress;
                 // Ticket #464 H4: this list is rendered via v-html in the node feedback, so the

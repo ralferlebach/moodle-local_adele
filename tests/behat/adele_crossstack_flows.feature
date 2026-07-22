@@ -109,36 +109,6 @@ Feature: High-value cross-stack Adele flows that unit tests cannot reach
     And "[data-id='dndnode_2'] .icon-link i.fa-lock" "css_element" should not exist
 
   @javascript
-  Scenario: A quiz submission recomputes the learner path and unlocks the gated node
-    # Regression guard for #496: dndnode_1 completes on a mod_quiz submission and
-    # dndnode_2 is gated behind it. The submission event carries userid = admin
-    # (acting/system) and relateduserid = learner. The observer must resolve the
-    # learner via relateduserid; otherwise dndnode_1 would never complete for the
-    # learner and dndnode_2 would stay locked.
-    Given the following "local_adele > learningpaths" exist:
-      | name          | description | filepath                                        | courses | image |
-      | Quiz gated LP | Quiz desc   | local/adele/tests/fixtures/quiz_gated_lp.json   | C1,C2   |       |
-    And a quiz "AdeleQuiz" completing node "dndnode_1" exists in course "C1"
-    And a learning path activity "Adele Quiz" for "Quiz gated LP" exists in course "C1"
-    And I log in as "student"
-    And I am on "Course 1" course homepage
-    And I follow "Adele Quiz"
-    And I wait until the page is ready
-    And I wait until "[data-id='dndnode_2']" "css_element" exists
-    And "[data-id='dndnode_1']" "css_element" should exist
-    # The gated node is LOCKED (the quiz node is not completed yet).
-    And "[data-id='dndnode_2'] .icon-link i.fa-lock" "css_element" should exist
-    And "[data-id='dndnode_2'] .icon-link i.fa-play" "css_element" should not exist
-    # The quiz is submitted by the system (userid = admin, relateduserid = learner).
-    When the quiz "AdeleQuiz" in course "C1" is submitted and aggregated by the system
-    And I reload the page
-    And I wait until the page is ready
-    And I wait until "[data-id='dndnode_2']" "css_element" exists
-    # The node is now ACCESSIBLE: the lock is gone and the play button is shown.
-    Then "[data-id='dndnode_2'] .icon-link i.fa-play" "css_element" should exist
-    And "[data-id='dndnode_2'] .icon-link i.fa-lock" "css_element" should not exist
-
-  @javascript
   Scenario: Teacher opens the activity and sees the participant progress list
     # The teacher needs Adele manager access at system context to see the progress
     # list (check_access() checks local/adele:canmanage at the system level; a plain

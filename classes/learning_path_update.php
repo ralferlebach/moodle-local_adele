@@ -143,18 +143,71 @@ class learning_path_update {
      * @param int $quizid The quiz instance id.
      */
     public static function recompute_quiz_paths(int $userid, int $quizid) {
-        if ($userid <= 0 || $quizid <= 0) {
+        self::recompute_activity_paths($userid, 'modquiz', 'quizid', $quizid);
+    }
+
+    /**
+     * Recompute every active learning path of a user that references a CAT quiz.
+     *
+     * @param int $userid The affected student.
+     * @param int $componentid The adaptivequiz instance id.
+     */
+    public static function recompute_catquiz_paths(int $userid, int $componentid) {
+        self::recompute_activity_paths($userid, 'catquiz', 'componentid', $componentid);
+    }
+
+    /**
+     * Finished CAT quiz.
+     *
+     * @param object $event
+     */
+    public static function catquiz_finished($event) {
+        $cm = get_coursemodule_from_id(null, $event->contextinstanceid);
+        if (!$cm) {
             return;
         }
-        // Get the user path relations.
+        self::recompute_catquiz_paths((int) $event->userid, (int) $cm->instance);
+    }
+
+    /**
+     * Recompute the active learning paths of a user that reference a given
+     * activity instance in a completion condition.
+     *
+     * Ticket #497: the affected paths are found by structurally decoding the
+     * stored snapshot and comparing ids type-safely, instead of a fragile LIKE
+     * on the serialized JSON (which only matched the quoted-string form and
+     * missed integer-serialised ids). Each matching path is recomputed at most
+     * once; a single malformed snapshot never aborts the remaining paths.
+     *
+     * @param int $userid The affected student.
+     * @param string $conditionlabel The completion condition label ('modquiz'|'catquiz').
+     * @param string $valuekey The id key inside data.value ('quizid'|'componentid').
+     * @param int $instanceid The activity instance id to match.
+     */
+    private static function recompute_activity_paths(
+        int $userid,
+        string $conditionlabel,
+        string $valuekey,
+        int $instanceid
+    ) {
+        if ($userid <= 0 || $instanceid <= 0) {
+            return;
+        }
         $userpathrelation = new user_path_relation();
-        $records = $userpathrelation->get_learning_paths(
-            $userid,
-            null,
-            '"quizid":"' . $quizid . '"'
-        );
+        $records = $userpathrelation->get_learning_paths($userid);
         foreach ($records as $userpath) {
-            $userpath->json = json_decode($userpath->json, true);
+            $decoded = json_decode($userpath->json, true);
+            if (
+                !is_array($decoded) ||
+                empty($decoded['tree']['nodes']) ||
+                !is_array($decoded['tree']['nodes'])
+            ) {
+                continue;
+            }
+            if (!self::path_references_activity($decoded['tree']['nodes'], $conditionlabel, $valuekey, $instanceid)) {
+                continue;
+            }
+            $userpath->json = $decoded;
             $eventsingle = user_path_updated::create([
                 'objectid' => $userpath->id,
                 'context' => context_system::instance(),
@@ -167,29 +220,36 @@ class learning_path_update {
     }
 
     /**
-     * Finished quiz.
+     * Whether any node of a path references the given activity instance in a
+     * completion condition, comparing ids type-safely (#497).
      *
-     * @param object $event
+     * @param array $nodes The tree nodes of the snapshot.
+     * @param string $conditionlabel The completion condition label to match.
+     * @param string $valuekey The id key inside data.value.
+     * @param int $instanceid The activity instance id to match.
+     * @return bool
      */
-    public static function catquiz_finished($event) {
-        // Get the user path relations.
-        $cm = get_coursemodule_from_id(null, $event->contextinstanceid);
-        $userpathrelation = new user_path_relation();
-        $records = $userpathrelation->get_learning_paths(
-            $event->userid,
-            '"componentid":"' . $cm->instance . '"'
-        );
-        foreach ($records as $userpath) {
-            $userpath->json = json_decode($userpath->json, true);
-            $eventsingle = user_path_updated::create([
-                'objectid' => $userpath->id,
-                'context' => context_system::instance(),
-                'other' => [
-                    'userpath' => $userpath,
-                ],
-            ]);
-            $eventsingle->trigger();
+    private static function path_references_activity(
+        array $nodes,
+        string $conditionlabel,
+        string $valuekey,
+        int $instanceid
+    ) {
+        foreach ($nodes as $node) {
+            if (empty($node['completion']['nodes']) || !is_array($node['completion']['nodes'])) {
+                continue;
+            }
+            foreach ($node['completion']['nodes'] as $condition) {
+                if (($condition['data']['label'] ?? null) !== $conditionlabel) {
+                    continue;
+                }
+                $value = $condition['data']['value'][$valuekey] ?? null;
+                if ($value !== null && (int) $value === $instanceid) {
+                    return true;
+                }
+            }
         }
+        return false;
     }
 
     /**

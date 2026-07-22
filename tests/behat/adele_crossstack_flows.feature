@@ -130,3 +130,31 @@ Feature: High-value cross-stack Adele flows that unit tests cannot reach
     Then I should see "PWN" in the ".dndnode_2_user_info_listener" "css_element"
     # ...but no live <img onerror> element ever executes.
     And no live "img" element with an "onerror" attribute should exist
+
+  @javascript
+  Scenario: A teacher-triggered course completion unlocks the student's gated node (#495)
+    # Same completion-gated LP, but completion is triggered by the TEACHER (as if grading),
+    # so the real course_completed event carries the teacher in userid and the student in
+    # relateduserid. The observer must route the recompute by relateduserid; otherwise the
+    # student's node never recomputes and stays locked (#495).
+    Given the following "local_adele > learningpaths" exist:
+      | name                | description      | filepath                                            | courses | image |
+      | Completion gated LP | Relateduser desc | local/adele/tests/fixtures/completion_gated_lp.json | C1,C2   |       |
+    And a learning path activity "Adele Relateduser" for "Completion gated LP" exists in course "C1"
+    And I log in as "student"
+    And I am on "Course 1" course homepage
+    And I follow "Adele Relateduser"
+    And I wait until the page is ready
+    And I wait until "[data-id='dndnode_2']" "css_element" exists
+    And "[data-id='dndnode_1']" "css_element" should exist
+    # The gated node is LOCKED before completion.
+    And "[data-id='dndnode_2'] .icon-link i.fa-lock" "css_element" should exist
+    And "[data-id='dndnode_2'] .icon-link i.fa-play" "css_element" should not exist
+    # The TEACHER completes the parent course for the student (actor != student).
+    When "teacher" completes the course "C1" for "student"
+    And I reload the page
+    And I wait until the page is ready
+    And I wait until "[data-id='dndnode_2']" "css_element" exists
+    # The student's node is now ACCESSIBLE - proving completion routed to the student.
+    Then "[data-id='dndnode_2'] .icon-link i.fa-play" "css_element" should exist
+    And "[data-id='dndnode_2'] .icon-link i.fa-lock" "css_element" should not exist

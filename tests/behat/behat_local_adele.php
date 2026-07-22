@@ -373,6 +373,41 @@ class behat_local_adele extends behat_base {
     }
 
     /**
+     * Click a Vue Flow node reliably. A native Mink click on a node flakes with
+     * "element not interactable" while the node is mid-transform right after a drag/drop;
+     * this dispatches a full pointer+click gesture in the browser (same JS approach as the
+     * pan/connect steps), which cannot hit that state.
+     *
+     * @When /^I click vue flow node "(?P<selector>[^"]+)"$/
+     *
+     * @param string $selector CSS selector of the node (e.g. [data-id='starting_node']).
+     */
+    public function i_click_vue_flow_node(string $selector): void {
+        $sel = json_encode($selector, JSON_UNESCAPED_SLASHES);
+        $script = <<<JS
+            (function() {
+              const el = document.querySelector($sel);
+              if (!el) {
+                throw new Error('Vue Flow node not found: ' + $sel);
+              }
+              el.scrollIntoView({block: 'center', inline: 'center'});
+              const rect = el.getBoundingClientRect();
+              const opts = {
+                bubbles: true, cancelable: true, view: window,
+                clientX: rect.left + rect.width / 2,
+                clientY: rect.top + rect.height / 2,
+              };
+              el.dispatchEvent(new PointerEvent('pointerdown', opts));
+              el.dispatchEvent(new MouseEvent('mousedown', opts));
+              el.dispatchEvent(new PointerEvent('pointerup', opts));
+              el.dispatchEvent(new MouseEvent('mouseup', opts));
+              el.dispatchEvent(new MouseEvent('click', opts));
+            })();
+            JS;
+        $this->getSession()->executeScript($script);
+    }
+
+    /**
      * Connect two Vue Flow nodes by dragging from source handle to target handle.
      *
      * @When /^I connect vue flow node "(?P<source>[^"]+)" to "(?P<target>[^"]+)"$/
@@ -537,6 +572,53 @@ class behat_local_adele extends behat_base {
                     ob_end_clean();
                 }
             }
+        }
+    }
+
+    /**
+     * Complete a course for a single learner and fire the REAL \core\event\course_completed
+     * as a DIFFERENT actor (e.g. a teacher who graded them). The event then carries the
+     * actor in userid and the learner in relateduserid - the exact #495 condition. Unlike
+     * "the course ... is completed for every subscribed learner", this drives the genuine
+     * event -> observer chain (db/events.php -> completion::completed), so it exercises the
+     * routing that must use relateduserid rather than the actor.
+     *
+     * @Given /^"(?P<actor>[^"]+)" completes the course "(?P<shortname>[^"]+)" for "(?P<learner>[^"]+)"$/
+     *
+     * @param string $actor username of the user triggering completion (the event actor).
+     * @param string $shortname course shortname to complete.
+     * @param string $learner username of the learner whose course is completed.
+     */
+    public function actor_completes_course_for_learner(string $actor, string $shortname, string $learner): void {
+        global $DB;
+        $courseid = (int) $DB->get_field('course', 'id', ['shortname' => $shortname], MUST_EXIST);
+        $actoruser = $DB->get_record('user', ['username' => $actor], '*', MUST_EXIST);
+        $learnerid = (int) $DB->get_field('user', 'id', ['username' => $learner], MUST_EXIST);
+
+        // Record the course completion for the learner (idempotent).
+        $key = ['course' => $courseid, 'userid' => $learnerid];
+        if (!$DB->record_exists('course_completions', $key)) {
+            $DB->insert_record('course_completions', (object) [
+                'course'        => $courseid,
+                'userid'        => $learnerid,
+                'timeenrolled'  => time(),
+                'timestarted'   => time(),
+                'timecompleted' => time(),
+                'reaggregate'   => 0,
+            ]);
+        } else {
+            $DB->set_field('course_completions', 'timecompleted', time(), $key);
+        }
+        \cache::make('core', 'coursecompletion')->delete($learnerid . '_' . $courseid);
+        $completion = $DB->get_record('course_completions', $key, '*', MUST_EXIST);
+
+        // Fire the real event AS THE ACTOR: create_from_completion sets relateduserid to the
+        // learner and lets userid auto-fill from the current user, so we become the actor first.
+        \core\session\manager::set_user($actoruser);
+        try {
+            \core\event\course_completed::create_from_completion($completion)->trigger();
+        } finally {
+            \core\session\manager::set_user(get_admin());
         }
     }
 

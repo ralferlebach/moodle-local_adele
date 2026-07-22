@@ -204,6 +204,9 @@ class course_completed implements course_completion {
                         if ($finished <= $minvalue) {
                             $counttodo -= $finished;
                         }
+                        // The {item} placeholder feeds the feedback messages and reflects the
+                        // CURRENT state: how many courses are done once the minimum is met,
+                        // otherwise how many are still needed.
                         if ($finished >= $minvalue) {
                             $string = $finished . ' ' . get_string('course_restricition_before_condition_from', 'local_adele') .
                             $numbcourses . ' '
@@ -219,9 +222,23 @@ class course_completed implements course_completion {
                             $numbcourses . get_string('course_description_before_condition_course_completed_kursen', 'local_adele');
                         }
                         $coursecompletion[$complitionnode['id']]['placeholders']['item'] = $string;
+                        // The {item_total} placeholder feeds the info-symbol and shows the
+                        // ABSOLUTE criterion: the configured minimum of the total, independent
+                        // of how many courses the participant has finished, so the info-symbol
+                        // always matches the editor setting and the progress percentage (#483).
+                        $coursecompletion[$complitionnode['id']]['placeholders']['item_total'] =
+                            $minvalue . ' ' . get_string('course_restricition_before_condition_from', 'local_adele') .
+                            $numbcourses . ' '
+                            . get_string('course_description_before_condition_course_completed_kursen', 'local_adele');
                     } else {
-                        $coursecompletion[$complitionnode['id']]['placeholders']['item'] =
-                        get_string('course_description_before_condition_course_completed_item', 'local_adele');
+                        // Single course: there is no "min of total" distinction, so the
+                        // absolute {item_total} (info-symbol) equals the state {item}. Without
+                        // setting item_total here the info template's {item}->{item_total} swap
+                        // in getfeedback() would resolve to empty and drop the requirement word
+                        // (e.g. " bearbeiten." instead of "diesen Kurs bearbeiten.") (#483).
+                        $itemstring = get_string('course_description_before_condition_course_completed_item', 'local_adele');
+                        $coursecompletion[$complitionnode['id']]['placeholders']['item'] = $itemstring;
+                        $coursecompletion[$complitionnode['id']]['placeholders']['item_total'] = $itemstring;
                     }
                 }
             }

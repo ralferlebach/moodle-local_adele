@@ -35,14 +35,14 @@ Feature: As an admin I perform basic adele actions - create, update, duplicate, 
     ## Create learning part in visual way.
     And I drag and drop HTML5 from ".learning-path-nodes-container .nodes > :first-child" to "[data-id='starting_node']"
     And I pan vue flow to "[data-id='starting_node']"
-    And I click on "[data-id='starting_node']" "css_element"
+    And I click vue flow node "[data-id='starting_node']"
     And I wait "1" seconds
     And I drag and drop HTML5 from ".learning-path-nodes-container .nodes > :nth-child(2)" to "[data-id='starting_node']"
     And I pan vue flow to "[data-id='dndnode_1']"
     And I zoom vue flow to "40" percent
     And I connect vue flow node "[data-id='dndnode_1']" to "[data-id='dndnode_2']"
     And I pan vue flow to "[data-id='starting_node']"
-    And I click on "[data-id='starting_node']" "css_element"
+    And I click vue flow node "[data-id='starting_node']"
     And I wait "1" seconds
     And I drag and drop HTML5 from ".learning-path-nodes-container .nodes > :nth-child(3)" to "[data-id='starting_node']"
     And I pan vue flow to "[data-id='dndnode_1']"

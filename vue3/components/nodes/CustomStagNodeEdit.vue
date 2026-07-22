@@ -163,6 +163,7 @@ const expandCourses = () => {
       />
       <div class="card-header text-center">
         <NodeInformation
+          v-if="store.state.feedbacksettings.show_info"
           :data
           :parentnode
         />
@@ -252,6 +253,7 @@ const expandCourses = () => {
       >
         <CourseCarousel :courses="props.data" />
         <UserInformation
+          v-if="store.state.feedbacksettings.show_feedback"
           :data="data"
         />
       </div>

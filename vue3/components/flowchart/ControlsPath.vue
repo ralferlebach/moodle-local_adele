@@ -224,6 +224,17 @@ const onCancel = () => {
 
 const undoNodesLength = computed(() => store.state.undoNodes.length);
 
+// Learning-path-wide toggles for whether students see the feedback bubble and the info-symbol.
+// The value is stored in the path json (settings) and saved with the rest of the path (#474).
+const showFeedbackBubble = computed({
+  get: () => store.state.feedbacksettings.show_feedback,
+  set: (value) => store.commit('setLpFeedbackSetting', { key: 'show_feedback', value }),
+});
+const showInfoSymbol = computed({
+  get: () => store.state.feedbacksettings.show_info,
+  set: (value) => store.commit('setLpFeedbackSetting', { key: 'show_info', value }),
+});
+
 function undoDeletion() {
   store.commit('unsetUndoNodes');
 }
@@ -298,6 +309,24 @@ const onCancelConfirmation = (toggle) => {
     >
       {{ current_user_view ? store.state.strings.btnstudenttoggle : store.state.strings.btneditortoggle }}
     </button>
+    <label class="m-2 d-inline-flex align-items-center feedback-toggle">
+      <input
+        type="checkbox"
+        class="me-1"
+        :checked="showFeedbackBubble"
+        @change="showFeedbackBubble = $event.target.checked"
+      >
+      {{ store.state.strings.settings_show_feedback }}
+    </label>
+    <label class="m-2 d-inline-flex align-items-center feedback-toggle">
+      <input
+        type="checkbox"
+        class="me-1"
+        :checked="showInfoSymbol"
+        @change="showInfoSymbol = $event.target.checked"
+      >
+      {{ store.state.strings.settings_show_info }}
+    </label>
     <button
       v-if="undoNodesLength"
       class="btn btn-warning m-2"
@@ -334,6 +363,10 @@ const onCancelConfirmation = (toggle) => {
 </template>
 
 <style scoped>
+.feedback-toggle{
+  cursor: pointer;
+  font-size: 0.9rem;
+}
 .cancelConfi{
   z-index: 1;
   position: absolute;

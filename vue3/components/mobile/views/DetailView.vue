@@ -42,12 +42,14 @@
         </a>
       </p>
       <NodeInformation
+        v-if="store.state.feedbacksettings.show_info"
         class="mb-4"
         :data = node.data
         :parentnode = {}
         :mobile = true
       />
       <UserInformation
+        v-if="store.state.feedbacksettings.show_feedback"
         :data="node.data"
         :mobile = true
       />

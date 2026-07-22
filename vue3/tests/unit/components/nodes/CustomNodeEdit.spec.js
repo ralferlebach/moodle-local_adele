@@ -23,7 +23,7 @@ const learningpathWith = (restrictionNodes) => ({
   },
 });
 
-const buildStore = (view = 'student') =>
+const buildStore = (view = 'student', feedbacksettings = { show_feedback: true, show_info: true }) =>
   createStore({
     state: {
       strings,
@@ -31,6 +31,7 @@ const buildStore = (view = 'student') =>
       wwwroot: 'https://example.test',
       availablecourses: [],
       lpuserpathrelation: { image: '' },
+      feedbacksettings,
     },
   });
 
@@ -58,10 +59,10 @@ const nodeData = (overrides = {}) => ({
   ...overrides,
 });
 
-const factory = (restrictionNodes, dataOverrides, view) =>
+const factory = (restrictionNodes, dataOverrides, view, feedbacksettings) =>
   mount(CustomNodeEdit, {
     global: {
-      plugins: [buildStore(view)],
+      plugins: [buildStore(view, feedbacksettings)],
       stubs: {
         Handle: true,
         NodeInformation: true,
@@ -174,5 +175,17 @@ describe('CustomNodeEdit.vue', () => {
     const wrapper = factory([]);
     wrapper.vm.zoomOnParent({ open: true });
     expect(wrapper.emitted('zoomOnParent')).toBeTruthy();
+  });
+
+  it('renders the info-symbol and feedback bubble when the LP settings enable them (#474)', () => {
+    const wrapper = factory([], {}, 'student', { show_feedback: true, show_info: true });
+    expect(wrapper.find('node-information-stub').exists()).toBe(true);
+    expect(wrapper.find('user-information-stub').exists()).toBe(true);
+  });
+
+  it('hides the info-symbol and feedback bubble when the LP settings disable them (#474)', () => {
+    const wrapper = factory([], {}, 'student', { show_feedback: false, show_info: false });
+    expect(wrapper.find('node-information-stub').exists()).toBe(false);
+    expect(wrapper.find('user-information-stub').exists()).toBe(false);
   });
 });

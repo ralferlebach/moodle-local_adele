@@ -641,7 +641,8 @@ class learning_paths {
             // student view shows the same "not found" notice the editor shows, instead of
             // rendering a path that no longer exists (GitHub #446). json is emptied so the
             // frontend does not try to JSON.parse a stale snapshot.
-            if (!$DB->record_exists('local_adele_learning_paths', ['id' => $params['learning_path_id']])) {
+            $masterlp = $DB->get_record('local_adele_learning_paths', ['id' => $params['learning_path_id']], 'json');
+            if (!$masterlp) {
                 return [
                     'id' => (int)$record->id,
                     'user_id' => (int)$record->user_id,
@@ -654,6 +655,16 @@ class learning_paths {
                     'image' => '',
                     'lp_deleted' => true,
                 ];
+            }
+            // Reflect the CURRENT learning-path-wide settings (feedback/info toggles) rather than the
+            // frozen per-user snapshot, so toggling them takes effect for already-subscribed students (#474).
+            $mastersettings = json_decode($masterlp->json, true)['settings'] ?? null;
+            if ($mastersettings !== null) {
+                $decoded = json_decode($record->json, true);
+                if (is_array($decoded)) {
+                    $decoded['settings'] = $mastersettings;
+                    $record->json = json_encode($decoded);
+                }
             }
             // Re-render the feedback/info strings in the CURRENT (viewer's) language so they follow
             // a language switch instead of the language the recompute happened to run in (#493).

@@ -108,6 +108,21 @@ export function hasParentRestrictionOnFirstNode(json) {
     });
 }
 
+/**
+ * Read the learning-path-wide feedback/info toggles from a path json, defaulting to shown when
+ * the settings are absent (existing paths) or the value is not explicitly false (#474).
+ *
+ * @param {Object} json The (parsed) learning-path json.
+ * @returns {{show_feedback: boolean, show_info: boolean}}
+ */
+function readFeedbackSettings(json) {
+    const settings = (json && json.settings) ? json.settings : {};
+    return {
+        show_feedback: settings.show_feedback !== false,
+        show_info: settings.show_info !== false,
+    };
+}
+
 // Defining store for application
 export function createAppStore() {
     return createStore({
@@ -138,6 +153,9 @@ export function createAppStore() {
                 // Whether the user-list panel is collapsed, so the graph canvas can grow
                 // into the freed space (#480).
                 userlistcollapsed: false,
+                // Learning-path-wide toggles: whether the feedback bubble and the info-symbol are
+                // shown to students. Default true (existing paths carry no settings) (#474).
+                feedbacksettings: { show_feedback: true, show_info: true },
                 feedback: null,
                 modules: null,
                 version: 0,
@@ -176,6 +194,17 @@ export function createAppStore() {
                   ajaxdata.json = JSON.parse(ajaxdata.json);
               }
               state.learningpath = ajaxdata;
+              state.feedbacksettings = readFeedbackSettings(ajaxdata.json);
+            },
+            setFeedbackSettings(state, json) {
+              state.feedbacksettings = readFeedbackSettings(json);
+            },
+            setLpFeedbackSetting(state, payload) {
+              if (!state.learningpath.json.settings) {
+                state.learningpath.json.settings = { show_feedback: true, show_info: true };
+              }
+              state.learningpath.json.settings[payload.key] = payload.value;
+              state.feedbacksettings = readFeedbackSettings(state.learningpath.json);
             },
             setAvailablecourses(state, ajaxdata) {
                 state.availablecourses = ajaxdata;
@@ -338,6 +367,7 @@ export function createAppStore() {
                 context.commit('setLastSeen', lpUserPathRelation.last_seen_by_owner);
                 if (lpUserPathRelation.json != '') {
                   lpUserPathRelation.json = await JSON.parse(lpUserPathRelation.json);
+                  context.commit('setFeedbackSettings', lpUserPathRelation.json);
                 }
                 return lpUserPathRelation
             },

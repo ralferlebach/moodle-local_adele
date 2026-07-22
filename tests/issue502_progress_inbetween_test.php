@@ -27,9 +27,10 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-namespace local_adele\course_completion\conditions;
+namespace local_adele;
 
 use advanced_testcase;
+use local_adele\course_completion\conditions\course_completed;
 
 /**
  * Regression tests for the first-access "in progress" criterion (#502).

@@ -1314,8 +1314,13 @@ class relation_update {
     public static function subscribe_user_starting_node(&$userpath) {
         if (!empty($userpath->json['tree']['nodes'])) {
             foreach ($userpath->json['tree']['nodes'] as &$node) {
+                // Fixed (enrol_adele project, Session 002 Teil 8): missing '??'
+                // fallback crashed with "Undefined array key 'type'" on any node
+                // without an explicit type, surfaced by a real CI run. The sibling
+                // check in set_scheduled_adhoc_tasks() a few lines above already
+                // uses '??' for the identical comparison — this one had drifted.
                 if (
-                    $node['type'] != 'dropzone' && isset($node['parentCourse']) &&
+                    ($node['type'] ?? '') != 'dropzone' && isset($node['parentCourse']) &&
                     in_array('starting_node', $node['parentCourse'])
                 ) {
                     self::enrol_user_into_node($node, $userpath);

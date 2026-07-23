@@ -255,6 +255,24 @@ function xmldb_local_adele_upgrade($oldversion) {
         // (same-table self-joins are always fine there) followed by a plain
         // DELETE by an explicit id list, which every supported RDBMS accepts
         // unconditionally.
+        //
+        // Fixed (Session 002, Teil 18): a real production upgrade hit a
+        // dml_read_exception exactly on the query below. course_id is added
+        // by step 2024052300 above, well before this one, so in a normal
+        // sequential upgrade from an old version it is guaranteed to exist by
+        // the time we get here — the most plausible explanation is a prior
+        // interrupted/partial upgrade on that installation left its
+        // savepoint recorded without the corresponding DDL having actually
+        // stuck. Rather than assume that can't happen again, guarantee the
+        // column exists immediately before relying on it, exactly like step
+        // 2024052300 already does for the same field — cheap, idempotent,
+        // and self-healing regardless of how the site got here.
+        $table = new xmldb_table('local_adele_path_user');
+        $coursefield = new xmldb_field('course_id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0', 'user_id');
+        if (!$dbman->field_exists($table, $coursefield)) {
+            $dbman->add_field($table, $coursefield);
+        }
+
         $duplicateids = $DB->get_fieldset_sql("
             SELECT t1.id
             FROM {local_adele_path_user} t1

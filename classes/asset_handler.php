@@ -60,7 +60,9 @@ class asset_handler {
             $path = $CFG->dirroot . '/local/adele/public/' . $pathorigin . '/*';
             $filelist = glob($path);
             foreach ($filelist as $file) {
-                $filepath[$pathorigin][] = [ 'path' => str_replace($CFG->dirroot, '', $file)];
+                // Absolute URL (like the uploaded pluginfile URLs below): a root-relative
+                // path 404s on sub-directory installs, e.g. localhost/moodle03 (#459).
+                $filepath[$pathorigin][] = [ 'path' => $CFG->wwwroot . str_replace($CFG->dirroot, '', $file)];
             }
         }
         // Get uploaded images from mdl_files.

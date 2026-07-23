@@ -25,6 +25,7 @@
 <script setup>
 // Import needed libraries
 import { computed, onMounted } from 'vue';
+import absUrl from '../../composables/absUrl';
 import { useStore } from 'vuex';
 import ExpandNodeInformation from '../nodes_items/ExpandNodeInformation.vue';
 import * as nodeColors from '../../config/nodeColors';
@@ -48,7 +49,7 @@ const goToCourse = () => {
   window.open(course_link, '_blank');
 }
 
-const cover_image = computed(() => get_cover_image(props.data));
+const cover_image = computed(() => absUrl(get_cover_image(props.data), store.state.wwwroot));
 
 const get_cover_image = (data) => {
   if (data.imagepaths && data.imagepaths[props.data.course_id]) {

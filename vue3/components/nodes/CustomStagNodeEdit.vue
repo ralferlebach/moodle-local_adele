@@ -1,6 +1,7 @@
 <script setup>
 // Import needed libraries
 import { Handle, Position } from '@vue-flow/core'
+import absUrl from '../../composables/absUrl';
 import { computed, ref, onMounted } from 'vue'
 import { useStore } from 'vuex'
 import CompletionOutPutItem from '../completion/CompletionOutPutItem.vue'
@@ -20,7 +21,7 @@ const store = useStore();
 const date = ref({})
 const progress = ref(0);
 
-const cover_image = computed(() => get_cover_image(props.data));
+const cover_image = computed(() => absUrl(get_cover_image(props.data), store.state.wwwroot));
 
 const get_cover_image = (data) => {
   if (data.selected_course_image) {

@@ -1,5 +1,6 @@
 <script setup>
 import { ref, watch, onMounted } from 'vue';
+import absUrl from '../../composables/absUrl';
 import { notify } from "@kyvg/vue3-notification";
 import { useStore } from 'vuex'
 import userSearch from './userSearch.vue';
@@ -190,7 +191,7 @@ const editLearningpath = async (singlelearningpathid) => {
                 class="image-preview-container"
               >
                 <img
-                  :src="selectedCourseImagePath"
+                  :src="absUrl(selectedCourseImagePath, store.state.wwwroot)"
                   alt="Selected Image"
                   class="image-preview"
                 >

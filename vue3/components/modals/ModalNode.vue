@@ -139,7 +139,7 @@
                   class="image-preview-container"
                 >
                   <img
-                    :src="selectedCourseImagePath"
+                    :src="absUrl(selectedCourseImagePath, store.state.wwwroot)"
                     alt="Selected Image"
                     class="image-preview"
                   >
@@ -180,7 +180,7 @@
                 class="image-preview-container"
               >
                 <img
-                  :src="previewImage"
+                  :src="absUrl(previewImage, store.state.wwwroot)"
                   alt="Selected Image"
                   class="image-preview"
                 >
@@ -219,6 +219,7 @@
 <script setup>
 // import dependancies
 import { useStore } from 'vuex'
+import absUrl from '../../composables/absUrl';
 import { onMounted, ref, watch, computed } from 'vue';
 
 // define constants

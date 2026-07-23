@@ -25,6 +25,7 @@
 <script setup>
 // Import needed libraries
 import { Handle, Position } from '@vue-flow/core'
+import absUrl from '../../composables/absUrl';
 import { computed, onMounted, ref  } from 'vue';
 import { useStore } from 'vuex';
 import NodeInformation from '../nodes_items/NodeInformation.vue';
@@ -74,7 +75,7 @@ const learningmodule = computed(() => {
   }
   return {};
 });
-const cover_image = computed(() => get_cover_image(props.data));
+const cover_image = computed(() => absUrl(get_cover_image(props.data), store.state.wwwroot));
 
 onMounted(() => {
   dataValue.value = props.data

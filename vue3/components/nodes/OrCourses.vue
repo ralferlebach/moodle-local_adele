@@ -25,6 +25,7 @@
  <script setup>
  // Import needed libraries
 import { Handle, Position } from '@vue-flow/core'
+import absUrl from '../../composables/absUrl';
 import { useStore } from 'vuex';
 import { computed, onMounted, ref } from 'vue';
 import ProgressBar from '../nodes_items/ProgressBar.vue';
@@ -78,7 +79,7 @@ const learningmodule = computed(() => {
     ? parsedLearningModule.modules
     : {};
 });
-const cover_image = computed(() => get_cover_image(props.data));
+const cover_image = computed(() => absUrl(get_cover_image(props.data), store.state.wwwroot));
 
 const props = defineProps({
   data: {

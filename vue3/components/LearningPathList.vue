@@ -88,7 +88,7 @@
                 class="mb-2"
                 :style="{
                   height: '10rem',
-                  backgroundImage: singlelearningpath.image ? `url(${singlelearningpath.image})` : '',
+                  backgroundImage: singlelearningpath.image ? `url(${absUrl(singlelearningpath.image, store.state.wwwroot)})` : '',
                   backgroundSize: 'cover',
                   backgroundPosition: 'center',
                   backgroundColor: '#cccccc',
@@ -213,7 +213,7 @@
                 class="mb-2"
                 :style="{
                   height: '10rem',
-                  backgroundImage: viewablelearningpath.image ? `url(${viewablelearningpath.image})` : '',
+                  backgroundImage: viewablelearningpath.image ? `url(${absUrl(viewablelearningpath.image, store.state.wwwroot)})` : '',
                   backgroundSize: 'cover',
                   backgroundPosition: 'center',
                   backgroundColor: '#cccccc',
@@ -260,6 +260,7 @@
 <script setup>
 // Import needed libraries
 import { computed, ref, watch, onMounted, } from 'vue'
+import absUrl from '../composables/absUrl';
 import { useStore } from 'vuex'
 import { useRouter } from 'vue-router';
 import { notify } from "@kyvg/vue3-notification"

@@ -69,6 +69,26 @@ class node_completion {
         foreach ($userpath->tree->nodes as &$node) {
             if (in_array($node->id, $uniquechildcourses)) {
                 foreach ($node->data->course_node_id as $subscribecourse) {
+                    // When enrol_adele is active it owns all target course
+                    // enrolments; the reconcile call after this loop enrols the
+                    // user, and only first_enrolled stamping, boundary
+                    // scheduling and the group assignment below still run here.
+                    if (enrol_state::adele_enrol_active()) {
+                        if (!isset($node->data->first_enrolled)) {
+                            $node->data->first_enrolled = time();
+                            $firstenrollededit = true;
+                        }
+                        adhoc_task_helper::set_scheduled_adhoc_tasks(
+                            json_decode(json_encode($node), true),
+                            $event->other['userpath']
+                        );
+                        self::enrol_user_group(
+                            $userpath->tree->nodes,
+                            $subscribecourse,
+                            $event->other['userpath']->user_id
+                        );
+                        continue;
+                    }
                     if (isset($instances[$subscribecourse])) {
                         $instance = $instances[$subscribecourse];
                     } else {
@@ -120,6 +140,12 @@ class node_completion {
         if ($firstenrollededit) {
             self::trigger_user_path_update_new_enrollments($event, $userpath);
         }
+        // Hand over to enrol_adele (no-op when absent, L-Q-08): enrols the user
+        // into the newly reachable child courses through the ADELE instances.
+        enrol_state::request_reconcile(
+            (int) $event->other['userpath']->learning_path_id,
+            (int) $event->other['userpath']->user_id
+        );
         self::is_user_path_completed($userpath->tree, $event->other['userpath']);
     }
 

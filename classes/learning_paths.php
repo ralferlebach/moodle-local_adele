@@ -401,11 +401,23 @@ class learning_paths {
     public static function delete_learning_path($params) {
         global $DB, $USER;
 
+        // Requirement A-3: remove every enrolment this learning path ever created,
+        // BEFORE the path record disappears (no-op when enrol_adele is absent).
+        enrol_state::request_purge((int) $params['learningpathid']);
+
         $result = $DB->delete_records('local_adele_learning_paths', ['id' => $params['learningpathid']]);
         if ($result) {
             // Clean up editor membership for the deleted path (the per-user path_user
             // snapshots are deliberately kept - see #446 - so students still get the
-            // "not found" notice instead of silently losing progress).
+            // "not found" notice instead of silently losing progress). They are
+            // archived so no later event or task treats them as an active
+            // enrolment source; enrol_state also guards against missing paths.
+            $DB->set_field(
+                'local_adele_path_user',
+                'status',
+                'archived',
+                ['learning_path_id' => $params['learningpathid'], 'status' => 'active']
+            );
             $DB->delete_records('local_adele_lp_editors', ['learningpathid' => $params['learningpathid']]);
             // Trigger catscale created event.
             $event = learnpath_deleted::create([

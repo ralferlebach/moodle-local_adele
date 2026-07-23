@@ -209,6 +209,7 @@ function xmldb_local_adele_upgrade($oldversion) {
         // Adele savepoint reached.
         upgrade_plugin_savepoint(true, 2026061800, 'local', 'adele');
     }
+
     if ($oldversion < 2026071500) {
         // Ticket #482: the local/adele:teacheredit capability gained the manager
         // archetype so a course Manager operates a learning path like an editing
@@ -223,5 +224,48 @@ function xmldb_local_adele_upgrade($oldversion) {
         // Adele savepoint reached.
         upgrade_plugin_savepoint(true, 2026071500, 'local', 'adele');
     }
+    if ($oldversion < 2026072200) {
+        // The course_completed observer now resolves the affected student via
+        // relateduserid instead of the acting user (userid). Courses that were
+        // already completed before this fix do not re-fire course_completed, so
+        // their learning paths can still carry a stale node status. Queue a
+        // one-off reconciliation that recomputes every active learning path.
+        $reconcile = new \local_adele\task\reconcile_user_paths();
+        \core\task\manager::queue_adhoc_task($reconcile, true);
+
+        // Ticket #501: guarantee at most one active user-path relation per
+        // (user_id, course_id, learning_path_id). First remove pre-existing
+        // duplicates created by the historical check-then-insert race, keeping
+        // the most recently created row (highest id). buildsqlqueryuserpath()
+        // reads with ORDER BY id DESC, so the highest-id row is the one every
+        // read/update path already targets and therefore carries the up-to-date
+        // progress; the orphaned lower-id copies were never updated after
+        // creation, so nothing is lost. The nested derived table keeps the
+        // statement portable across PostgreSQL and MariaDB/MySQL.
+        $DB->execute("
+            DELETE FROM {local_adele_path_user}
+            WHERE id NOT IN (
+                SELECT keepid FROM (
+                    SELECT MAX(id) AS keepid
+                    FROM {local_adele_path_user}
+                    GROUP BY user_id, course_id, learning_path_id
+                ) keptrows
+            )
+        ");
+
+        // With the duplicates removed, the unique index can be created.
+        $table = new xmldb_table('local_adele_path_user');
+        $index = new xmldb_index(
+            'useridcourseidlpid',
+            XMLDB_INDEX_UNIQUE,
+            ['user_id', 'course_id', 'learning_path_id']
+        );
+        if (!$dbman->index_exists($table, $index)) {
+            $dbman->add_index($table, $index);
+        }
+
+        upgrade_plugin_savepoint(true, 2026072200, 'local', 'adele');
+    }
+
     return true;
 }

@@ -105,6 +105,15 @@ module.exports = (env, options) => {
             minimizer: [
                 new TerserPlugin({
                     parallel: true,
+                    // Keep third-party @license notices inline instead of extracting
+                    // them to app-lazy.js.LICENSE.txt - the bundle is copied to
+                    // amd/build where a sidecar file would not be served alongside it.
+                    extractComments: false,
+                    terserOptions: {
+                        format: {
+                            comments: /@license|@preserve|^!/i,
+                        },
+                    },
                 }),
             ]
         };

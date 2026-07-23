@@ -80,6 +80,35 @@ Feature: High-value cross-stack Adele flows that unit tests cannot reach
     And "[data-id='dndnode_2'] .icon-link i.fa-lock" "css_element" should not exist
 
   @javascript
+  Scenario: A course_completed event aggregated by the system unlocks the gated node
+    # Regression guard: when the course completion is aggregated by the system
+    # (cron/admin) rather than the learner, \core\event\course_completed carries
+    # userid = admin and relateduserid = learner. The observer must resolve the
+    # learner via relateduserid; otherwise the gated node would never unlock.
+    Given the following "local_adele > learningpaths" exist:
+      | name                | description     | filepath                                            | courses | image |
+      | Completion gated LP | Completion desc | local/adele/tests/fixtures/completion_gated_lp.json | C1,C2   |       |
+    And a learning path activity "Adele Completion" for "Completion gated LP" exists in course "C1"
+    And I log in as "student"
+    And I am on "Course 1" course homepage
+    And I follow "Adele Completion"
+    And I wait until the page is ready
+    And I wait until "[data-id='dndnode_2']" "css_element" exists
+    And "[data-id='dndnode_1']" "css_element" should exist
+    # The gated node is LOCKED (parent not yet complete).
+    And "[data-id='dndnode_2'] .icon-link i.fa-lock" "css_element" should exist
+    And "[data-id='dndnode_2'] .icon-link i.fa-play" "css_element" should not exist
+    # The system aggregates the course completion; the REAL course_completed
+    # observer chain (userid = admin, relateduserid = learner) recomputes the path.
+    When the course "C1" is completed and aggregated by the system
+    And I reload the page
+    And I wait until the page is ready
+    And I wait until "[data-id='dndnode_2']" "css_element" exists
+    # The node is now ACCESSIBLE: the lock is gone and the play button is shown.
+    Then "[data-id='dndnode_2'] .icon-link i.fa-play" "css_element" should exist
+    And "[data-id='dndnode_2'] .icon-link i.fa-lock" "css_element" should not exist
+
+  @javascript
   Scenario: Teacher opens the activity and sees the participant progress list
     # The teacher needs Adele manager access at system context to see the progress
     # list (check_access() checks local/adele:canmanage at the system level; a plain

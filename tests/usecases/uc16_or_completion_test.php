@@ -183,6 +183,14 @@ final class uc16_or_completion_test extends adele_learningpath_testcase {
             }
         }
 
+        // Ticket #502: inbetween now requires a first course access. dndnode_2's
+        // course becomes accessible once dndnode_1 is complete; simulate the
+        // learner opening it so the pending-completion state is inbetween, not
+        // before. (For the completed/manual cases the node resolves to 'after'.)
+        foreach ($DB->get_records('local_adele_path_user') as $accessrecord) {
+            $this->mark_course_accessed_in_db((int)$this->courseids[2], (int)$accessrecord->user_id);
+        }
+
         // Pass 2: fire fresh evaluation events from the (possibly updated) records.
         $freshrecords = $DB->get_records('local_adele_path_user');
         foreach ($freshrecords as $freshrecord) {
@@ -209,8 +217,8 @@ final class uc16_or_completion_test extends adele_learningpath_testcase {
      * $completionnodepaths empty → getnodestatusforcompletion does not return 'after'.
      *
      * However, course_completed::get_completion_status() sets inbetween=true for the
-     * condition_1 node because progress::get_course_progress_percentage() receives the
-     * null-coalescing default (0%), and 0 !== null → $isinbetween=true.  Therefore
+     * condition_1 node because dndnode_2's course has been accessed (user_lastaccess),
+     * which is the #502 "started" criterion.  Therefore
      * $completioncriteria['course_completed']['inbetween']['condition_1'] = true →
      * getnodestatusforcompletion returns 'inbetween' (not 'before').
      *

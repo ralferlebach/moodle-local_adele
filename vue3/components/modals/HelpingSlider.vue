@@ -226,7 +226,10 @@ import { useStore } from 'vuex';
 const store = useStore();
 const s = computed(() => store.state.strings);
 
-const imageBase = '/local/adele/public/tutorial/';
+// Prefix with the Moodle root URL so the images resolve on sub-directory installs
+// (e.g. localhost/moodle03/...); a root-relative path 404s there and the flex
+// containers collapse to zero height (GitHub #460 tester feedback).
+const imageBase = store.state.wwwroot + '/local/adele/public/tutorial/';
 
 // Each step: which part it belongs to, the screenshot, caption string keys and
 // the markers (position in % of the image plus a label string key).

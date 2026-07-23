@@ -34,12 +34,12 @@ use local_adele\relation_update;
  */
 class local_adele_observer {
     /**
-     * Observer for the update_catscale event
+     * Observer for the core course_completed event.
      *
-     * @param base $event
+     * @param \core\event\course_completed $event
      */
-    public static function course_completed(base $event) {
-        $observer = completion::completed($event);
+    public static function course_completed(\core\event\course_completed $event) {
+        completion::completed($event);
     }
 
     /**
@@ -98,12 +98,36 @@ class local_adele_observer {
     }
 
     /**
-     * Observer for the update_catscale event
+     * Observer for the mod_quiz attempt_submitted event.
      *
-     * @param base $event
+     * @param \mod_quiz\event\attempt_submitted $event
      */
-    public static function quiz_attempt_finished(base $event) {
-        $observer = learning_path_update::quiz_finished($event);
+    public static function quiz_attempt_finished(\mod_quiz\event\attempt_submitted $event) {
+        learning_path_update::quiz_finished($event);
+    }
+
+    /**
+     * Observer for quiz attempt change events that can alter a completion result
+     * after submission: manual grading, regrading, deletion and reopening (#498).
+     *
+     * The affected student is carried in relateduserid (the acting user is a
+     * teacher/cron and must not be used). The quiz id is read from other['quizid']
+     * and, if the event does not carry it, derived from the module context. The
+     * recompute re-evaluates the full current state, so a completion can also be
+     * revoked (e.g. after a deletion or a regrade below the threshold).
+     *
+     * @param \core\event\base $event
+     */
+    public static function quiz_attempt_changed(base $event) {
+        $other = $event->other ?? [];
+        $quizid = isset($other['quizid']) ? (int) $other['quizid'] : 0;
+        if ($quizid <= 0 && (int) $event->contextlevel === CONTEXT_MODULE) {
+            $cm = get_coursemodule_from_id('quiz', (int) $event->contextinstanceid, 0, false, IGNORE_MISSING);
+            if ($cm) {
+                $quizid = (int) $cm->instance;
+            }
+        }
+        learning_path_update::recompute_quiz_paths((int) $event->relateduserid, $quizid);
     }
 
     /**

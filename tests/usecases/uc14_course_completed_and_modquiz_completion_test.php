@@ -223,6 +223,10 @@ final class uc14_course_completed_and_modquiz_completion_test extends adele_lear
         global $DB;
 
         $this->subscribe_users_to_lp();
+        // Ticket #502: inbetween now requires a first course access on dndnode_1's course.
+        foreach ($DB->get_records('local_adele_path_user') as $accessrecord) {
+            $this->mark_course_accessed_in_db((int)$this->courseids[0], (int)$accessrecord->user_id);
+        }
         $updateevents = $this->get_update_events();
         relation_update::updated_single($updateevents[0]);
         relation_update::updated_single($updateevents[1]);
@@ -238,7 +242,7 @@ final class uc14_course_completed_and_modquiz_completion_test extends adele_lear
             $this->assertEquals(
                 'inbetween',
                 $fb['status_completion'],
-                "User {$record->user_id}: expected 'inbetween' — enrollment inbetween fires."
+                "User {$record->user_id}: expected 'inbetween' — course accessed, not yet completed."
             );
             $this->assertEquals(
                 'accessible',

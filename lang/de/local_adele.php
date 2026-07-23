@@ -486,6 +486,7 @@ $string['tagsexclude_desc'] = 'Definieren Sie, welche Kurse basierend auf ihren 
 $string['tagsinclude'] = 'Eingeschlossene Tags definieren';
 $string['tagsinclude_desc'] = 'Definieren Sie, welche Kurse basierend auf ihren Tags gefiltert werden sollen. Kurse mit einem dieser Tags sind auffindbar.';
 $string['task_check_timed_restrictions'] = 'Zeitgesteuerte Lernpfad-Voraussetzungen neu auswerten';
+$string['task_reconcile_user_paths'] = 'Aktive Lernpfade abgleichen (Node-Abschluss neu berechnen)';
 $string['timed_duration_incomplete_modal'] = 'Bitte definieren Sie eine gültige Dauer und Zeiteinheit für das Zugangskriterium „Bearbeitungszeitraum“, bevor Sie speichern.';
 $string['timed_incomplete_modal'] = 'Bitte geben Sie mindestens einen Start- oder Endzeitpunkt für das Zugangskriterium „Start- und Endzeitpunkt“ an, bevor Sie speichern.';
 $string['title_change_visibility'] = 'Sichtbarkeit geändert';

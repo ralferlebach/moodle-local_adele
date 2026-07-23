@@ -25,6 +25,7 @@
 <script setup>
 // Import needed libraries
 import { Handle, Position } from '@vue-flow/core'
+import absUrl from '../../composables/absUrl';
 import { computed, ref, onMounted } from 'vue';
 import { useStore } from 'vuex';
 import CompletionOutPutItem from '../completion/CompletionOutPutItem.vue'
@@ -185,7 +186,7 @@ const zoomOnParent = (payload = {}) => {
   }
   emit('zoomOnParent', {});
 }
-const cover_image = computed(() => get_cover_image(props.data));
+const cover_image = computed(() => absUrl(get_cover_image(props.data), store.state.wwwroot));
 
 const get_cover_image = (data) => {
   if (data.selected_course_image) {
@@ -297,7 +298,7 @@ const courseLinkTitle = computed(() =>
               <button class="icon-link" :title="courseLinkTitle" @click="goToCourse">
                 <div
                   :class="{ 'icon-with-ring': hasTimedCondition }"
-                  :style="hasTimedCondition ? { backgroundImage: 'url(/local/adele/public/ring.png)' } : {}"
+                  :style="hasTimedCondition ? { backgroundImage: 'url(' + store.state.wwwroot + '/local/adele/public/ring.png)' } : {}"
                 >
                   <i :class="['fa', iconClass,
                       {

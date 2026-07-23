@@ -240,18 +240,36 @@ function xmldb_local_adele_upgrade($oldversion) {
         // reads with ORDER BY id DESC, so the highest-id row is the one every
         // read/update path already targets and therefore carries the up-to-date
         // progress; the orphaned lower-id copies were never updated after
-        // creation, so nothing is lost. The nested derived table keeps the
-        // statement portable across PostgreSQL and MariaDB/MySQL.
-        $DB->execute("
-            DELETE FROM {local_adele_path_user}
-            WHERE id NOT IN (
-                SELECT keepid FROM (
-                    SELECT MAX(id) AS keepid
-                    FROM {local_adele_path_user}
-                    GROUP BY user_id, course_id, learning_path_id
-                ) keptrows
+        // creation, so nothing is lost.
+        //
+        // Fixed (enrol_adele project, Session 001 Teil 5): the original version
+        // of this step deleted via a single statement that referenced
+        // {local_adele_path_user} both as the DELETE target and, nested two
+        // levels deep, inside its own WHERE clause. That is the textbook trigger
+        // for MySQL/MariaDB error 1093 ("You can't specify target table ... for
+        // update in FROM clause") — derived-table wrapping is a common
+        // workaround but not a guarantee, because the optimiser is free to
+        // merge the derived table back into the outer query. It failed as a
+        // dml_write_exception on at least one real installation during
+        // upgrade. Rewritten as two separate statements: a read-only SELECT
+        // (same-table self-joins are always fine there) followed by a plain
+        // DELETE by an explicit id list, which every supported RDBMS accepts
+        // unconditionally.
+        $duplicateids = $DB->get_fieldset_sql("
+            SELECT t1.id
+            FROM {local_adele_path_user} t1
+            WHERE EXISTS (
+                SELECT 1
+                FROM {local_adele_path_user} t2
+                WHERE t2.user_id = t1.user_id
+                  AND t2.course_id = t1.course_id
+                  AND t2.learning_path_id = t1.learning_path_id
+                  AND t2.id > t1.id
             )
         ");
+        if ($duplicateids) {
+            $DB->delete_records_list('local_adele_path_user', 'id', $duplicateids);
+        }
 
         // With the duplicates removed, the unique index can be created.
         $table = new xmldb_table('local_adele_path_user');
@@ -265,6 +283,58 @@ function xmldb_local_adele_upgrade($oldversion) {
         }
 
         upgrade_plugin_savepoint(true, 2026072200, 'local', 'adele');
+    }
+
+    if ($oldversion < 2026072301) {
+        // Ticket #486 (enrol_adele project), Session 001 Teil 3/5: a user path's
+        // identity is learning path + user, full stop — course_id is provenance
+        // only. The 2026072200 step above (ticket #501) still enforced the OLD,
+        // course-bound identity; without this step a learning path embedded in
+        // two different host courses would keep creating a second, competing
+        // user path the moment both are active, exactly the duplication ticket
+        // #433 (referenced in classes/enrollment.php) originally complained
+        // about — the two fixes were solving adjacent but different problems
+        // and the schema has to converge on one of them.
+        //
+        // Collapse remaining course_id-differentiated duplicates per
+        // (user_id, learning_path_id), keeping the highest id, mirroring the
+        // 2026072200 approach and the same self-join-then-delete-by-id shape
+        // (never a same-table subquery inside the DELETE itself).
+        $table = new xmldb_table('local_adele_path_user');
+        $oldindex = new xmldb_index(
+            'useridcourseidlpid',
+            XMLDB_INDEX_UNIQUE,
+            ['user_id', 'course_id', 'learning_path_id']
+        );
+        if ($dbman->index_exists($table, $oldindex)) {
+            $dbman->drop_index($table, $oldindex);
+        }
+
+        $duplicateids = $DB->get_fieldset_sql("
+            SELECT t1.id
+            FROM {local_adele_path_user} t1
+            WHERE EXISTS (
+                SELECT 1
+                FROM {local_adele_path_user} t2
+                WHERE t2.user_id = t1.user_id
+                  AND t2.learning_path_id = t1.learning_path_id
+                  AND t2.id > t1.id
+            )
+        ");
+        if ($duplicateids) {
+            $DB->delete_records_list('local_adele_path_user', 'id', $duplicateids);
+        }
+
+        $newindex = new xmldb_index(
+            'useridlpid',
+            XMLDB_INDEX_UNIQUE,
+            ['user_id', 'learning_path_id']
+        );
+        if (!$dbman->index_exists($table, $newindex)) {
+            $dbman->add_index($table, $newindex);
+        }
+
+        upgrade_plugin_savepoint(true, 2026072301, 'local', 'adele');
     }
 
     return true;

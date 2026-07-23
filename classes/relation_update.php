@@ -246,6 +246,14 @@ class relation_update {
                 // can skip when the viewer's language already matches it (#493 performance).
                 $userpath->json['feedback_lang'] = current_language();
                 $userpathid = user_path_relation::revision_user_path_relation($userpath);
+                // Hand the persisted state to enrol_adele, which reconciles the
+                // target course enrolments against it (enrol where accessible,
+                // reactivate where suspended, suspend where no node grants the
+                // course any more). No-op when enrol_adele is absent (L-Q-08).
+                enrol_state::request_reconcile(
+                    (int) $userpath->learning_path_id,
+                    (int) $userpath->user_id
+                );
                 if ($creation) {
                     global $DB;
                     $createduserpath = $DB->get_record('local_adele_path_user', ['id' => $userpathid]);
@@ -1343,6 +1351,15 @@ class relation_update {
             // both initial enrolment and later restriction-date edits; the dedup key
             // keeps it idempotent.
             adhoc_task_helper::set_scheduled_adhoc_tasks($node, $userpath);
+            // When enrol_adele is active it owns all target course enrolments;
+            // the reconciler (triggered after every recompute) enrols this user.
+            // first_enrolled stamping and boundary scheduling above still ran,
+            // because timed restrictions need them either way. The legacy
+            // enrol_manual path below only serves installations without
+            // enrol_adele (L-Q-08).
+            if (enrol_state::adele_enrol_active()) {
+                continue;
+            }
             if (isset($instances[$courseid])) {
                 $instance = $instances[$courseid];
             } else {

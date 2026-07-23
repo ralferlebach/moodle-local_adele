@@ -41,7 +41,7 @@
         <KEY NAME="createdby" TYPE="foreign" FIELDS="createdby" REFTABLE="user" REFFIELDS="id"/>
       </KEYS>
       <INDEXES>
-        <INDEX NAME="useridcourseidlpid" UNIQUE="true" FIELDS="user_id, course_id, learning_path_id"/>
+        <INDEX NAME="useridlpid" UNIQUE="true" FIELDS="user_id, learning_path_id" COMMENT="A user has at most one active path per learning path, independent of the host course (enrol_adele project specification 2.1)."/>
       </INDEXES>
     </TABLE>
     <TABLE NAME="local_adele_lp_editors" COMMENT="Users that are allowed to edit certain learningpaths">

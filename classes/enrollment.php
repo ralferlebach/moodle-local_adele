@@ -55,24 +55,29 @@ class enrollment {
     }
 
     /**
-     * Build sql query with config filters.
+     * Subscribe a user to a learning path (idempotent, race-safe).
+     *
+     * The identity of a user path is learning path + user (specification 2.1
+     * of the enrol_adele project); the host course is NOT part of it. $courseid
+     * is kept as an optional provenance hint only: it records which course
+     * triggered the first subscription and carries no further meaning. Callers
+     * should omit it.
      *
      * @param object $learningpath
      * @param object $params
-     * @param int $courseid
-     * @return array
+     * @param int|null $courseid Optional provenance only, no identity.
      */
-    public static function subscribe_user_to_learning_path($learningpath, $params, $courseid) {
+    public static function subscribe_user_to_learning_path($learningpath, $params, $courseid = null) {
         global $DB;
         if ($learningpath) {
             if (is_string($learningpath->json)) {
                 $learningpath->json = json_decode($learningpath->json, true);
             }
-            $userpath = self::buildsqlqueryuserpath($learningpath->id, $params->relateduserid, $courseid);
+            $userpath = self::buildsqlqueryuserpath($learningpath->id, $params->relateduserid);
             if (!$userpath) {
                 $newrecord = [
                     'user_id' => $params->relateduserid,
-                    'course_id' => $courseid,
+                    'course_id' => (int) ($courseid ?? 0),
                     'learning_path_id' => $learningpath->id,
                     'status' => 'active',
                     'timecreated' => time(),
@@ -92,12 +97,11 @@ class enrollment {
                     $userpath = $DB->get_record('local_adele_path_user', ['id' => $id]);
                 } catch (\dml_exception $e) {
                     // Ticket #501: a concurrent request won the race and inserted
-                    // the row first; the unique index (user_id, course_id,
-                    // learning_path_id) rejected this insert. Reuse the row that
-                    // now exists instead of failing or creating a duplicate. If no
-                    // such row is found the exception was not a duplicate conflict
-                    // and must propagate.
-                    $userpath = self::buildsqlqueryuserpath($learningpath->id, $params->relateduserid, $courseid);
+                    // the row first; the unique index (user_id, learning_path_id)
+                    // rejected this insert. Reuse the row that now exists instead
+                    // of failing or creating a duplicate. If no such row is found
+                    // the exception was not a duplicate conflict and must propagate.
+                    $userpath = self::buildsqlqueryuserpath($learningpath->id, $params->relateduserid);
                     if (!$userpath) {
                         throw $e;
                     }
@@ -143,33 +147,36 @@ class enrollment {
     }
 
     /**
-     * Build sql query with config filters.
+     * Find the active user path for a learning path + user pair.
+     *
+     * course_id is deliberately NOT part of the lookup any more: a learning
+     * path is a system-wide entity, and binding the user path to a host course
+     * produced duplicate paths when the same learning path was embedded in
+     * several courses (enrol_adele project specification 2.1). The third
+     * parameter is accepted and ignored for callers that still pass it.
      *
      * @param int $learningpathid
      * @param int $userid
-     * @param int $courseid
-     * @return array
+     * @param int|null $courseid Ignored, kept for backwards compatibility.
+     * @return object|false
      */
-    public static function buildsqlqueryuserpath($learningpathid, $userid, $courseid) {
+    public static function buildsqlqueryuserpath($learningpathid, $userid, $courseid = null) {
         global $DB;
-        // Using named parameter :courseid in the SQL query.
         $sql = "SELECT *
         FROM {local_adele_path_user} lpu
         WHERE lpu.learning_path_id = :learningpathid
         AND lpu.status = 'active'
         AND lpu.user_id = :userid
-        AND lpu.course_id = :courseid
         ORDER BY lpu.id DESC";
 
         // Providing the named parameter in the $params array.
         $params = [
             'learningpathid' => (int)$learningpathid,
             'userid' => (int)$userid,
-            'courseid' => (int)$courseid,
         ];
 
         // Using get_records_sql function to execute the query with parameters.
-        $record = $DB->get_record_sql($sql, $params);
+        $record = $DB->get_record_sql($sql, $params, IGNORE_MULTIPLE);
 
         return $record;
     }

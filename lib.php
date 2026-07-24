@@ -113,7 +113,7 @@ function local_adele_pluginfile($course, $cm, $context, $filearea, $args, $force
         $filepath = '/' . implode('/', $args) . '/';
     }
 
-    // lp_images is scoped to one specific learning path (itemid); the
+    // Filearea lp_images is scoped to one specific learning path (itemid); the
     // static assets (helpingslider/node_background_image) are shared UI
     // chrome, not tied to a single learning path, so require_login() above
     // is the only check that applies to them.

@@ -96,7 +96,7 @@ class update_lp_animations extends external_api {
         self::validate_context($context);
         require_capability('local/adele:view', $context);
 
-        // local/adele:view is granted to the `user` archetype, so every authenticated
+        // Capability local/adele:view is granted to the `user` archetype, so every authenticated
         // user holds it - it is NOT a boundary. This is a purely personal UI
         // preference (how animations render for one user on one path); without an
         // ownership check, any user could overwrite any other user's setting by

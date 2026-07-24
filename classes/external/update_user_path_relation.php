@@ -81,7 +81,7 @@ class update_user_path_relation extends external_api {
         self::validate_context($context);
         require_capability('local/adele:view', $context);
 
-        // local/adele:view is granted to the `user` archetype, so every authenticated
+        // Capability local/adele:view is granted to the `user` archetype, so every authenticated
         // user holds it - it is NOT a boundary. Without an ownership check, any user
         // could mark an arbitrary other user's path snapshot as "seen" by supplying a
         // foreign lpuserpathid (IDOR). Only the owner, a teacher of the path, or an

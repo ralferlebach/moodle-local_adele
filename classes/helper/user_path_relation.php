@@ -106,18 +106,28 @@ class user_path_relation {
     public function get_user_path_relation($learningpathid, $userid, $courseid) {
         global $DB;
 
+        // Fix (Session 003, Teil 22): course_id removed from the WHERE clause.
+        // The unique index (user_id, learning_path_id) "independent of the host
+        // course" guarantees a single active snapshot per (user, path), while the
+        // stored course_id is an arbitrary first-trigger value. Filtering by it
+        // made this lookup fail whenever the caller passed a different course id -
+        // notably the update_user_path adhoc task's fallback path (the very task
+        // that unlocks a timed-gated node once its window opens), which passed the
+        // task's stored course_id and could miss the snapshot entirely. $courseid
+        // is kept in the signature for backwards compatibility with callers but is
+        // no longer used to locate the row.
+        unset($courseid);
+
         $sql = "SELECT *
             FROM {local_adele_path_user} lpu
             WHERE lpu.learning_path_id = :learningpathid
             AND lpu.status = 'active'
-            AND lpu.course_id = :courseid
             AND lpu.user_id = :userid";
 
         // Providing the named parameter in the $params array.
         $params = [
             'learningpathid' => (int)$learningpathid,
             'userid' => (int)$userid,
-            'courseid' => (int)$courseid,
         ];
         // Using get_records_sql function to execute the query with parameters.
         $record = $DB->get_record_sql($sql, $params);

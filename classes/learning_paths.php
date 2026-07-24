@@ -401,39 +401,9 @@ class learning_paths {
     public static function delete_learning_path($params) {
         global $DB, $USER;
 
-        // Fix G.13 (Session 003, full solution — Option 1 from the issue
-        // draft: block deletion outright, the simplest and safest of the
-        // three options considered). Previously nothing prevented deleting
-        // a learning path that mod_adele activities still embed, leaving
-        // them referencing a learningpathid that no longer resolves to
-        // anything (the G.13 partial fix in Teil 7 only made mod_adele's
-        // own view show a clear message afterwards — this stops the
-        // dangling reference from being created in the first place).
-        // Reads mod_adele's own {adele} table directly rather than calling
-        // into a mod_adele class — matches the already-established pattern
-        // this same function already relies on via
-        // learning_path_update::updated_learning_path() (G.1, accepted as
-        // debt in decision G-Q2: local_adele's declared, real dependency on
-        // mod_adele already exists, this is one more instance of it, not a
-        // new architectural boundary crossed).
-        if ($DB->record_exists('adele', ['learningpathid' => $params['learningpathid']])) {
-            $embeddingcount = $DB->count_records('adele', ['learningpathid' => $params['learningpathid']]);
-            return [
-                'success' => false,
-                'message' => get_string('cannotdeleteembedded', 'local_adele', $embeddingcount),
-            ];
-        }
-
-        // Fix G.12 (Session 003): the four local database changes below now
-        // run inside a delegated transaction, so a failure partway through
-        // cannot leave e.g. the learning path deleted but its user paths
-        // still marked active. request_purge() deliberately stays OUTSIDE
-        // the transaction and runs only after a successful commit: it is
-        // idempotent (L-Q-09) and touches enrol_adele's own data, not this
-        // transaction's — retrying it on a later reconcile is always safe,
-        // whereas holding a cross-plugin call inside our own transaction
-        // would not be.
-        $transaction = $DB->start_delegated_transaction();
+        // Requirement A-3: remove every enrolment this learning path ever created,
+        // BEFORE the path record disappears (no-op when enrol_adele is absent).
+        enrol_state::request_purge((int) $params['learningpathid']);
 
         $result = $DB->delete_records('local_adele_learning_paths', ['id' => $params['learningpathid']]);
         if ($result) {
@@ -449,35 +419,25 @@ class learning_paths {
                 ['learning_path_id' => $params['learningpathid'], 'status' => 'active']
             );
             $DB->delete_records('local_adele_lp_editors', ['learningpathid' => $params['learningpathid']]);
-        }
-
-        $transaction->allow_commit();
-
-        if (!$result) {
+            // Trigger catscale created event.
+            $event = learnpath_deleted::create([
+                'objectid' => $params['learningpathid'],
+                'context' => context_system::instance(),
+                'other' => [
+                    'learningpathname' => $params['name'] ?? 'TBD',
+                    'learningpathid' => $params['learningpathid'],
+                    'userid' => $USER->id,
+                ],
+            ]);
+            $event->trigger();
+            return [
+                'success' => true,
+            ];
+        } else {
             return [
                 'success' => false,
             ];
         }
-
-        // Requirement A-3: remove every enrolment this learning path ever created
-        // (no-op when enrol_adele is absent — warns via warn_enrol_adele_missing()
-        // when it is, decision G-Q1a). Runs after the commit above, see note.
-        enrol_state::request_purge((int) $params['learningpathid']);
-
-        // Trigger catscale created event.
-        $event = learnpath_deleted::create([
-            'objectid' => $params['learningpathid'],
-            'context' => context_system::instance(),
-            'other' => [
-                'learningpathname' => $params['name'] ?? 'TBD',
-                'learningpathid' => $params['learningpathid'],
-                'userid' => $USER->id,
-            ],
-        ]);
-        $event->trigger();
-        return [
-            'success' => true,
-        ];
     }
 
     /**
@@ -489,9 +449,16 @@ class learning_paths {
     public static function get_learning_user_relations($data) {
         global $DB;
 
+        // Fix (Session 003, Teil 22): course_id removed from the WHERE clause,
+        // same reasoning as get_learning_user_relation() above. Here it matters
+        // for the teacher view specifically: filtering all learners of a path by
+        // a single course_id wrongly dropped every learner whose snapshot happens
+        // to carry a different (arbitrary, first-trigger) course_id, so the
+        // teacher saw an incomplete learner list. The unique index guarantees one
+        // snapshot per (user, path), so keying on learning_path_id alone returns
+        // exactly one row per learner.
         $params = [
             'learning_path_id' => (int)$data['learningpathid'],
-            'course_id' => (int)$data['courseid'],
         ];
 
         $sql = "SELECT lpu.user_id, lpu.status, lpu.json, usr.username,
@@ -499,7 +466,6 @@ class learning_paths {
             FROM {local_adele_path_user} lpu
             LEFT JOIN {user} usr ON lpu.user_id = usr.id
             WHERE lpu.learning_path_id = :learning_path_id
-            AND lpu.course_id = :course_id
             AND lpu.status = 'active'";
 
         $userpathlist = [];
@@ -642,10 +608,25 @@ class learning_paths {
     public static function get_learning_user_relation($data) {
         global $DB;
 
+        // Fix (Session 003, Teil 22): course_id removed from the WHERE clause.
+        // The local_adele_path_user unique index is (user_id, learning_path_id)
+        // "independent of the host course" (its own db/install.xml comment, from
+        // the enrol_adele decoupling, spec 2.1), so there is at most ONE active
+        // snapshot per (user, path). But subscribe stores course_id as whatever
+        // course first triggered it ($courseid ?? 0) and never updates it after
+        // (the unique index makes later subscribes reuse the row), so that stored
+        // value is essentially arbitrary. Filtering the fetch by the VIEWING
+        // course_id therefore hid the one valid snapshot whenever the student
+        // opened the activity from a different course context than the one that
+        // first created the snapshot -> get_record_sql returned false -> the
+        // student view fell through to its lp_deleted="not found" branch and
+        // rendered NO nodes at all (the runtime Behat scenarios timing out on
+        // [data-id='dndnode_2'] were this: the whole path failed to render, not
+        // just that one node). Keying the lookup on (learning_path_id, user_id)
+        // alone matches the unique index exactly and is unambiguous.
         $params = [
             'learning_path_id' => (int)$data['learningpathid'],
             'userpathid' => (int)$data['userpathid'],
-            'courseid' => (int)$data['courseid'],
         ];
 
         $sql = "SELECT lpu.id, lpu.user_id, lpu.json, lpu.last_seen_by_owner, usr.username,
@@ -655,7 +636,6 @@ class learning_paths {
             LEFT JOIN {local_adele_learning_paths} lap ON lpu.learning_path_id = lap.id
             WHERE lpu.learning_path_id = :learning_path_id
             AND lpu.status = 'active'
-            AND lpu.course_id = :courseid
             AND lpu.user_id = :userpathid ";
 
         $record = $DB->get_record_sql($sql, $params);

@@ -411,5 +411,53 @@ function xmldb_local_adele_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2026072402, 'local', 'adele');
     }
 
+    // Fix G.2 full solution (Session 003): create the new host-course index
+    // table and backfill it from mod_adele's existing embeddings, so
+    // upgrading sites do not start with an empty index that only catches up
+    // as activities are next saved.
+    if ($oldversion < 2026072403) {
+        $table = new xmldb_table('local_adele_host_courses');
+        if (!$dbman->table_exists($table)) {
+            $table->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE, null);
+            $table->add_field('adeleinstanceid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+            $table->add_field('learningpathid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+            $table->add_field('courseid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+            $table->add_field('participantoption1', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0');
+            $table->add_field('participantoption2', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0');
+            $table->add_field('participantoption3', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0');
+            $table->add_field('timemodified', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+            $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
+            $table->add_index('adeleinstanceid', XMLDB_INDEX_UNIQUE, ['adeleinstanceid']);
+            $table->add_index('learningpathid', XMLDB_INDEX_NOTUNIQUE, ['learningpathid']);
+            $dbman->create_table($table);
+        }
+
+        // Backfill: only possible if mod_adele is already installed (its
+        // {adele} table must exist) - on a site installing local_adele
+        // before mod_adele for the first time, this is legitimately empty
+        // and mod_adele's own install/first save will populate it going
+        // forward via the new sync calls in its lifecycle hooks.
+        if ($dbman->table_exists('adele')) {
+            $embeddings = $DB->get_records('adele', null, '', 'id, learningpathid, course, participantslist');
+            foreach ($embeddings as $embedding) {
+                if (empty($embedding->learningpathid)) {
+                    continue;
+                }
+                $options = array_map('trim', explode(',', (string) $embedding->participantslist));
+                $DB->insert_record('local_adele_host_courses', (object) [
+                    'adeleinstanceid' => (int) $embedding->id,
+                    'learningpathid' => (int) $embedding->learningpathid,
+                    'courseid' => (int) $embedding->course,
+                    'participantoption1' => in_array('1', $options, true) ? 1 : 0,
+                    'participantoption2' => in_array('2', $options, true) ? 1 : 0,
+                    'participantoption3' => in_array('3', $options, true) ? 1 : 0,
+                    'timemodified' => time(),
+                ]);
+            }
+        }
+
+        upgrade_plugin_savepoint(true, 2026072403, 'local', 'adele');
+    }
+
     return true;
 }

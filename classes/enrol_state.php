@@ -167,4 +167,118 @@ class enrol_state {
         }
         self::warn_enrol_adele_missing();
     }
+
+    /**
+     * Keep the host-course index in sync with one mod_adele activity.
+     *
+     * Fix G.2 full solution (Session 003): called from mod_adele's own
+     * adele_add_instance()/adele_update_instance() lifecycle hooks. This is
+     * the write side of the index that replaces enrol_adele's former direct
+     * read of mod_adele's own {adele} table and participantslist format —
+     * enrol_adele now calls get_host_embeddings() below instead, which
+     * knows nothing about either. mod_adele calling into local_adele here
+     * is not a new dependency direction: mod_adele already has a real,
+     * declared dependency on local_adele.
+     *
+     * @param int $adeleinstanceid mod_adele's own adele.id for this activity.
+     * @param int $learningpathid The learning path this activity embeds.
+     * @param int $courseid The host course this activity lives in.
+     * @param string|null $participantslist mod_adele's raw comma-separated
+     *     options string (e.g. '2,3'), or null/empty for "no host access".
+     * @return void
+     */
+    public static function sync_host_course_index(
+        int $adeleinstanceid,
+        int $learningpathid,
+        int $courseid,
+        ?string $participantslist
+    ): void {
+        global $DB;
+
+        $options = array_map('trim', explode(',', (string) $participantslist));
+        $record = (object) [
+            'adeleinstanceid' => $adeleinstanceid,
+            'learningpathid' => $learningpathid,
+            'courseid' => $courseid,
+            'participantoption1' => in_array('1', $options, true) ? 1 : 0,
+            'participantoption2' => in_array('2', $options, true) ? 1 : 0,
+            'participantoption3' => in_array('3', $options, true) ? 1 : 0,
+            'timemodified' => time(),
+        ];
+
+        $existing = $DB->get_record('local_adele_host_courses', ['adeleinstanceid' => $adeleinstanceid]);
+        if ($existing) {
+            $record->id = $existing->id;
+            $DB->update_record('local_adele_host_courses', $record);
+        } else {
+            $DB->insert_record('local_adele_host_courses', $record);
+        }
+    }
+
+    /**
+     * Remove one mod_adele activity's row from the host-course index.
+     *
+     * Fix G.2 full solution (Session 003): called from mod_adele's own
+     * adele_delete_instance() lifecycle hook.
+     *
+     * @param int $adeleinstanceid mod_adele's own adele.id for the deleted activity.
+     * @return void
+     */
+    public static function remove_host_course_index(int $adeleinstanceid): void {
+        global $DB;
+        $DB->delete_records('local_adele_host_courses', ['adeleinstanceid' => $adeleinstanceid]);
+    }
+
+    /**
+     * Which host courses embed a learning path, and via which options.
+     *
+     * Fix G.2 full solution (Session 003): the read side enrol_adele now
+     * uses instead of querying mod_adele's own {adele} table directly.
+     * Returns already-normalised booleans, not mod_adele's raw
+     * participantslist string — enrol_adele no longer needs to know that
+     * format exists.
+     *
+     * @param int $learningpathid The learning path id.
+     * @return array Rows keyed by id: courseid, option1/2/3 (bool each).
+     */
+    public static function get_host_embeddings(int $learningpathid): array {
+        global $DB;
+        $rows = $DB->get_records(
+            'local_adele_host_courses',
+            ['learningpathid' => $learningpathid],
+            '',
+            'id, courseid, participantoption1, participantoption2, participantoption3'
+        );
+        $result = [];
+        foreach ($rows as $row) {
+            $result[] = [
+                'courseid' => (int) $row->courseid,
+                'option1' => (bool) $row->participantoption1,
+                'option2' => (bool) $row->participantoption2,
+                'option3' => (bool) $row->participantoption3,
+            ];
+        }
+        return $result;
+    }
+
+    /**
+     * Which learning paths have a host-course embedding in the given course.
+     *
+     * Fix G.2 full solution (Session 003): lets enrol_adele's
+     * user_enrolment_deleted observer find affected learning paths without
+     * reading mod_adele's {adele} table directly.
+     *
+     * @param int $courseid The host course id.
+     * @return int[] Distinct learning path ids.
+     */
+    public static function get_learningpaths_embedded_in_course(int $courseid): array {
+        global $DB;
+        $ids = $DB->get_fieldset_select(
+            'local_adele_host_courses',
+            'DISTINCT learningpathid',
+            'courseid = :courseid',
+            ['courseid' => $courseid]
+        );
+        return array_map('intval', $ids);
+    }
 }

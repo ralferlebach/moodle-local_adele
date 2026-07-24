@@ -401,6 +401,29 @@ class learning_paths {
     public static function delete_learning_path($params) {
         global $DB, $USER;
 
+        // Fix G.13 (Session 003, full solution — Option 1 from the issue
+        // draft: block deletion outright, the simplest and safest of the
+        // three options considered). Previously nothing prevented deleting
+        // a learning path that mod_adele activities still embed, leaving
+        // them referencing a learningpathid that no longer resolves to
+        // anything (the G.13 partial fix in Teil 7 only made mod_adele's
+        // own view show a clear message afterwards — this stops the
+        // dangling reference from being created in the first place).
+        // Reads mod_adele's own {adele} table directly rather than calling
+        // into a mod_adele class — matches the already-established pattern
+        // this same function already relies on via
+        // learning_path_update::updated_learning_path() (G.1, accepted as
+        // debt in decision G-Q2: local_adele's declared, real dependency on
+        // mod_adele already exists, this is one more instance of it, not a
+        // new architectural boundary crossed).
+        if ($DB->record_exists('adele', ['learningpathid' => $params['learningpathid']])) {
+            $embeddingcount = $DB->count_records('adele', ['learningpathid' => $params['learningpathid']]);
+            return [
+                'success' => false,
+                'message' => get_string('cannotdeleteembedded', 'local_adele', $embeddingcount),
+            ];
+        }
+
         // Fix G.12 (Session 003): the four local database changes below now
         // run inside a delegated transaction, so a failure partway through
         // cannot leave e.g. the learning path deleted but its user paths

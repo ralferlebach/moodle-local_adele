@@ -57,5 +57,24 @@
         <INDEX NAME="useridlearningpathid" UNIQUE="true" FIELDS="userid, learningpathid" COMMENT="Fix G.18 (Session 003): a person is an editor of a given learning path at most once."/>
       </INDEXES>
     </TABLE>
+    <TABLE NAME="local_adele_host_courses" COMMENT="Fix G.2 full solution (Session 003): index of mod_adele host-course embeddings, kept in sync by mod_adele's own lifecycle hooks (adele_add_instance()/adele_update_instance()/adele_delete_instance()). Lets enrol_adele read this instead of mod_adele's own {adele} table and participantslist format directly.">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="adeleinstanceid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="mod_adele's own adele.id for this activity - the natural key mirrored here."/>
+        <FIELD NAME="learningpathid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="courseid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="The host course id (the course the mod_adele activity embedding it lives in)."/>
+        <FIELD NAME="participantoption1" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Host-course membership itself carries learning path membership (mod_adele option 1)."/>
+        <FIELD NAME="participantoption2" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Starting-node subscribers get host-course access (mod_adele option 2)."/>
+        <FIELD NAME="participantoption3" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Any-node subscribers get host-course access (mod_adele option 3)."/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="adeleinstanceid" UNIQUE="true" FIELDS="adeleinstanceid"/>
+        <INDEX NAME="learningpathid" UNIQUE="false" FIELDS="learningpathid"/>
+      </INDEXES>
+    </TABLE>
   </TABLES>
 </XMLDB>

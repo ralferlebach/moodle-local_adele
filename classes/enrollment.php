@@ -136,7 +136,18 @@ class enrollment {
         // LP JSON (GitHub issue #444; aligns with the origin/dev_chris fix for the
         // related #433 "duplicate user learningpathes"). local_adele declares a
         // dependency on mod_adele, so joining {adele} is safe.
-        $sql = "SELECT lp.id, lp.json
+        // Fix (Session 003, Teil 14): DISTINCT added. Without it, a learning
+        // path embedded via more than one mod_adele activity in the SAME
+        // host course (exactly what mod_adele's host_enrolment_priority_test
+        // exercises, "most generous embedding wins") made this JOIN return
+        // the same lp.id more than once. get_records_sql() uses the first
+        // selected column as the array key, so a duplicate lp.id triggered
+        // "Duplicate value found in column 'id'" - and the caller
+        // (enrolled(), below) would have called subscribe_user_to_learning_path()
+        // twice for the same path, redundant even though harmless
+        // (idempotent per that method's own docblock). Pre-existing bug,
+        // not introduced this session — surfaced by that test.
+        $sql = "SELECT DISTINCT lp.id, lp.json
         FROM {local_adele_learning_paths} lp
         JOIN {adele} a ON a.learningpathid = lp.id
         WHERE a.course = :courseid";

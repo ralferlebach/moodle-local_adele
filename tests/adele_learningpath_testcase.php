@@ -88,12 +88,27 @@ abstract class adele_learningpath_testcase extends advanced_testcase {
         $this->resetAfterTest(true);
 
         // Create 5 courses (all with completion tracking enabled).
+        //
+        // Fix (Session 003, Teil 14): explicit, guaranteed-unique shortname
+        // per course. Without one, Moodle's generator auto-assigns "tc_N"
+        // from an internal counter that is NOT shared across PHP processes -
+        // under process-isolated PHPUnit runs (one process per test method),
+        // several processes independently start that counter at 1 and can
+        // collide writing "tc_1" to the same shared test database ("Short
+        // name is already used for another course"). Pre-existing bug in
+        // this shared base class, not introduced this session - affects
+        // every subclass that uses it (uc20_enrollment_test,
+        // course_completed_relateduserid_test, etc.), which is presumably
+        // why it showed up across several, seemingly unrelated test names.
+        $uniqueprefix = uniqid('adele_tc_', true);
         $generator = self::getDataGenerator();
         $this->courseids = [];
         for ($i = 1; $i <= 5; $i++) {
-            $course = $generator->create_course(
-                ['fullname' => 'Test Course ' . $i, 'enablecompletion' => 1]
-            );
+            $course = $generator->create_course([
+                'fullname' => 'Test Course ' . $i,
+                'shortname' => $uniqueprefix . '_' . $i,
+                'enablecompletion' => 1,
+            ]);
             $this->courseids[] = $course->id;
         }
 

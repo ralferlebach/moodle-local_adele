@@ -401,9 +401,16 @@ class learning_paths {
     public static function delete_learning_path($params) {
         global $DB, $USER;
 
-        // Requirement A-3: remove every enrolment this learning path ever created,
-        // BEFORE the path record disappears (no-op when enrol_adele is absent).
-        enrol_state::request_purge((int) $params['learningpathid']);
+        // Fix G.12 (Session 003): the four local database changes below now
+        // run inside a delegated transaction, so a failure partway through
+        // cannot leave e.g. the learning path deleted but its user paths
+        // still marked active. request_purge() deliberately stays OUTSIDE
+        // the transaction and runs only after a successful commit: it is
+        // idempotent (L-Q-09) and touches enrol_adele's own data, not this
+        // transaction's — retrying it on a later reconcile is always safe,
+        // whereas holding a cross-plugin call inside our own transaction
+        // would not be.
+        $transaction = $DB->start_delegated_transaction();
 
         $result = $DB->delete_records('local_adele_learning_paths', ['id' => $params['learningpathid']]);
         if ($result) {
@@ -419,25 +426,35 @@ class learning_paths {
                 ['learning_path_id' => $params['learningpathid'], 'status' => 'active']
             );
             $DB->delete_records('local_adele_lp_editors', ['learningpathid' => $params['learningpathid']]);
-            // Trigger catscale created event.
-            $event = learnpath_deleted::create([
-                'objectid' => $params['learningpathid'],
-                'context' => context_system::instance(),
-                'other' => [
-                    'learningpathname' => $params['name'] ?? 'TBD',
-                    'learningpathid' => $params['learningpathid'],
-                    'userid' => $USER->id,
-                ],
-            ]);
-            $event->trigger();
-            return [
-                'success' => true,
-            ];
-        } else {
+        }
+
+        $transaction->allow_commit();
+
+        if (!$result) {
             return [
                 'success' => false,
             ];
         }
+
+        // Requirement A-3: remove every enrolment this learning path ever created
+        // (no-op when enrol_adele is absent — warns via warn_enrol_adele_missing()
+        // when it is, decision G-Q1a). Runs after the commit above, see note.
+        enrol_state::request_purge((int) $params['learningpathid']);
+
+        // Trigger catscale created event.
+        $event = learnpath_deleted::create([
+            'objectid' => $params['learningpathid'],
+            'context' => context_system::instance(),
+            'other' => [
+                'learningpathname' => $params['name'] ?? 'TBD',
+                'learningpathid' => $params['learningpathid'],
+                'userid' => $USER->id,
+            ],
+        ]);
+        $event->trigger();
+        return [
+            'success' => true,
+        ];
     }
 
     /**

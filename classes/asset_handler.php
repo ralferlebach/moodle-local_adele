@@ -89,6 +89,15 @@ class asset_handler {
 
     /**
      * Start a new attempt for a user.
+     *
+     * Fix G.16 (Session 003): previously accepted any base64 payload
+     * unchecked (no size/MIME/image validation), and the "delete the old
+     * file first" check could never succeed — it looked for a filename
+     * without the timestamp suffix that the actual stored file always has,
+     * so old files accumulated indefinitely. Now uses get_area_files() to
+     * find and remove ALL previous files for this learning path,
+     * independent of the exact filename.
+     *
      * @param int $contextid
      * @param int $learningpathid
      * @param mixed $image
@@ -97,43 +106,58 @@ class asset_handler {
     public static function set_new_image($contextid, $learningpathid, $image) {
         global $USER;
 
-        // Decode the file data from Base64.
-        $decodedfile = base64_decode($image);
+        // Strict mode: reject malformed base64 instead of silently decoding
+        // a partial/garbled result.
+        $decodedfile = base64_decode($image, true);
         if ($decodedfile === false) {
             throw new \invalid_parameter_exception('Invalid file data');
+        }
+
+        $maxbytes = 5 * 1024 * 1024;
+        if (strlen($decodedfile) > $maxbytes) {
+            throw new \invalid_parameter_exception('Image exceeds the maximum allowed size');
+        }
+
+        $imageinfo = @getimagesizefromstring($decodedfile);
+        $allowedmimes = ['image/jpeg', 'image/png', 'image/webp'];
+        if ($imageinfo === false || empty($imageinfo['mime']) || !in_array($imageinfo['mime'], $allowedmimes, true)) {
+            throw new \invalid_parameter_exception('The uploaded data is not a supported image');
         }
 
         $fs = get_file_storage();
 
         // Generate a temporary file path.
         $tempfile = tempnam(sys_get_temp_dir(), 'upload_');
-        file_put_contents($tempfile, $decodedfile);
 
-        // Prepare the file record.
-        $filename = 'uploaded_file_lp_' . $learningpathid . '.jpg';
-        $filepath = '/';
+        try {
+            file_put_contents($tempfile, $decodedfile);
 
-        // Check if a file already exists and delete it.
-        if ($existingfile = $fs->get_file($contextid, 'local_adele', 'lp_images', $learningpathid, $filepath, $filename)) {
-            $existingfile->delete();
+            // Remove every previous file for this learning path, regardless
+            // of the exact (timestamped) filename it was stored under.
+            $oldfiles = $fs->get_area_files($contextid, 'local_adele', 'lp_images', $learningpathid, 'filename', false);
+            foreach ($oldfiles as $oldfile) {
+                $oldfile->delete();
+            }
+
+            $filename = 'uploaded_file_lp_' . $learningpathid . '.jpg';
+            $filerecord = [
+                'contextid' => $contextid,
+                'component' => 'local_adele',
+                'filearea'  => 'lp_images',
+                'itemid'    => $learningpathid,
+                'filepath'  => '/',
+                'filename'  => $filename . (string) time(),
+                'userid'    => $USER->id,
+                'license'   => 'allrightsreserved',
+                'author'    => $USER->firstname . ' ' . $USER->lastname,
+            ];
+
+            // Save the file to Moodle file storage.
+            $storedfile = $fs->create_file_from_pathname($filerecord, $tempfile);
+        } finally {
+            @unlink($tempfile);
         }
 
-        $filerecord = [
-            'contextid' => $contextid,
-            'component' => 'local_adele',
-            'filearea'  => 'lp_images',
-            'itemid'    => $learningpathid,
-            'filepath'  => '/',
-            'filename'  => $filename . (string)time(),
-            'userid'    => $USER->id,
-            'license'   => 'allrightsreserved',
-            'author'    => $USER->firstname . ' ' . $USER->lastname,
-        ];
-
-        // Save the file to Moodle file storage.
-        $storedfile = $fs->create_file_from_pathname($filerecord, $tempfile);
-        // Clean up the temporary file.
-        unlink($tempfile);
         if ($storedfile) {
             $url = moodle_url::make_pluginfile_url(
                 $storedfile->get_contextid(),

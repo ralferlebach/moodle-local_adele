@@ -17,6 +17,16 @@
 /**
  * Code to be executed after the plugin's database scheme has been installed is defined here.
  *
+ * Fix G.19 (Session 003): previously wrote directly into the {role},
+ * {role_context_levels} and {role_capabilities} core tables (including a
+ * hardcoded modifierid = 2), instead of using the Moodle role APIs that
+ * exist precisely for this. Now uses create_role(), set_role_contextlevels()
+ * and assign_capability(), which handle sortorder, modifierid (the actual
+ * installing user) and cache invalidation correctly. Also fixes
+ * $descriptionstr being computed but never used — both roles previously got
+ * the same literal "Adele assistant" description regardless of which one
+ * was being created.
+ *
  * @package     local_adele
  * @category    upgrade
  * @copyright   2023 Georg Maißer Wunderbyte GmbH<info@wunderbyte.at>
@@ -27,8 +37,6 @@
  * Custom code to be run on installing the plugin.
  */
 function xmldb_local_adele_install() {
-    global $DB;
-
     // Create or update the Adele Manager role.
     create_role_for_adele('Adele Manager', 'adelemanager', 'adeleroledescription', ['local/adele:canmanage']);
 
@@ -49,45 +57,35 @@ function xmldb_local_adele_install() {
 function create_role_for_adele($name, $shortname, $descriptionstr, $capabilities) {
     global $DB;
 
+    $description = get_string($descriptionstr, 'local_adele');
+
     $role = $DB->get_record('role', ['shortname' => $shortname]);
     if (empty($role->id)) {
-        $sql = "SELECT MAX(sortorder)+1 AS id FROM {role}";
-        $max = $DB->get_record_sql($sql, []);
-
-        $role = (object) [
-            'name' => $name,
-            'shortname' => $shortname,
-            'description' => 'Adele assistant',
-            'sortorder' => $max->id,
-            'archetype' => '',
-        ];
-        $role->id = $DB->insert_record('role', $role);
+        $roleid = create_role($name, $shortname, $description, '');
+    } else {
+        $roleid = $role->id;
+        // The description may have been wrong on a previous install of this
+        // plugin (both roles used to share the literal string "Adele
+        // assistant") — correct it going forward without touching a name
+        // an administrator may have customised since.
+        if ($role->description !== $description) {
+            $DB->set_field('role', 'description', $description, ['id' => $roleid]);
+        }
     }
 
-    // Ensure this role is assigned at the required context level.
-    $chk = $DB->get_record('role_context_levels', ['roleid' => $role->id, 'contextlevel' => CONTEXT_SYSTEM]);
-    if (empty($chk->id)) {
-        $DB->insert_record('role_context_levels', ['roleid' => $role->id, 'contextlevel' => CONTEXT_SYSTEM]);
+    // Ensure this role is assigned at the required context level. Additive
+    // with respect to any OTHER context level an administrator may already
+    // have configured for this role, since set_role_contextlevels() replaces
+    // the full set — read the current set first and merge.
+    $current = get_role_contextlevels($roleid);
+    if (!in_array(CONTEXT_SYSTEM, $current, true)) {
+        $current[] = CONTEXT_SYSTEM;
+        set_role_contextlevels($roleid, $current);
     }
 
     // Ensure this role has the required capabilities.
     $ctx = \context_system::instance();
     foreach ($capabilities as $cap) {
-        $chk = $DB->get_record('role_capabilities', [
-                'contextid' => $ctx->id,
-                'roleid' => $role->id,
-                'capability' => $cap,
-                'permission' => 1,
-            ]);
-        if (empty($chk->id)) {
-            $DB->insert_record('role_capabilities', [
-                'contextid' => $ctx->id,
-                'roleid' => $role->id,
-                'capability' => $cap,
-                'permission' => 1,
-                'timemodified' => time(),
-                'modifierid' => 2,
-            ]);
-        }
+        assign_capability($cap, CAP_ALLOW, $roleid, $ctx->id);
     }
 }

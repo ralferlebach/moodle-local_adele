@@ -355,5 +355,61 @@ function xmldb_local_adele_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2026072301, 'local', 'adele');
     }
 
+    // Fix G.18 (Session 003): local_adele_lp_editors had no unique index and
+    // both columns were nullable, so duplicate (userid, learningpathid)
+    // rows were possible — the surrounding code already contained
+    // workarounds for exactly this. No other column on this table carries
+    // meaningful data (id, userid, learningpathid only), so keeping the
+    // lowest id per pair and discarding the rest loses nothing, unlike the
+    // similar cleanup above for local_adele_path_user.
+    if ($oldversion < 2026072402) {
+        $table = new xmldb_table('local_adele_lp_editors');
+
+        $duplicateids = $DB->get_fieldset_sql("
+            SELECT t1.id
+            FROM {local_adele_lp_editors} t1
+            WHERE EXISTS (
+                SELECT 1
+                FROM {local_adele_lp_editors} t2
+                WHERE t2.userid = t1.userid
+                  AND t2.learningpathid = t1.learningpathid
+                  AND t2.id > t1.id
+            )
+        ");
+        if ($duplicateids) {
+            $DB->delete_records_list('local_adele_lp_editors', 'id', $duplicateids);
+        }
+
+        // A row with a NULL userid or learningpathid cannot mean anything
+        // (can't identify who edits what) and would make change_field_
+        // notnull() below fail on any installation that has one — remove
+        // them first rather than risk repeating the real production
+        // upgrade failure from Session 002, Teil 18.
+        $DB->delete_records_select(
+            'local_adele_lp_editors',
+            'userid IS NULL OR learningpathid IS NULL'
+        );
+
+        $userid = new xmldb_field('userid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        if ($dbman->field_exists($table, $userid)) {
+            $dbman->change_field_notnull($table, $userid);
+        }
+        $learningpathid = new xmldb_field('learningpathid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        if ($dbman->field_exists($table, $learningpathid)) {
+            $dbman->change_field_notnull($table, $learningpathid);
+        }
+
+        $newindex = new xmldb_index(
+            'useridlearningpathid',
+            XMLDB_INDEX_UNIQUE,
+            ['userid', 'learningpathid']
+        );
+        if (!$dbman->index_exists($table, $newindex)) {
+            $dbman->add_index($table, $newindex);
+        }
+
+        upgrade_plugin_savepoint(true, 2026072402, 'local', 'adele');
+    }
+
     return true;
 }

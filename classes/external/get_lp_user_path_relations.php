@@ -81,7 +81,8 @@ class get_lp_user_path_relations extends external_api {
         require_login();
 
         $context = context::instance_by_id($contextid);
-        self::validate_context($context);
+        // Fix (Session 003, Teil 16): see the identical comment in
+        // get_lp_user_path_relation.php (singular) — same reasoning.
         require_capability('local/adele:view', $context);
 
         if ($context->contextlevel == CONTEXT_COURSE) {

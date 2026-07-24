@@ -21,11 +21,27 @@
  * {role_context_levels} and {role_capabilities} core tables (including a
  * hardcoded modifierid = 2), instead of using the Moodle role APIs that
  * exist precisely for this. Now uses create_role(), set_role_contextlevels()
- * and assign_capability(), which handle sortorder, modifierid (the actual
- * installing user) and cache invalidation correctly. Also fixes
- * $descriptionstr being computed but never used — both roles previously got
- * the same literal "Adele assistant" description regardless of which one
- * was being created.
+ * and — where possible — assign_capability(), which handle sortorder,
+ * modifierid (the actual installing user) and cache invalidation correctly.
+ * Also fixes $descriptionstr being computed but never used — both roles
+ * previously got the same literal "Adele assistant" description regardless
+ * of which one was being created.
+ *
+ * Regression fix (confirmed against a real Moodle 4.5.12 instance, same
+ * session): xmldb_local_adele_install() runs BEFORE Moodle applies this
+ * plugin's own db/access.php into {capabilities} — assign_capability()
+ * validates the capability exists there first and throws a coding_exception
+ * if it does not, which a fresh install always hits for this plugin's own
+ * capabilities. The original raw {role_capabilities} insert this code used
+ * to have deliberately worked around exactly this ordering gotcha by
+ * skipping that validation. create_role()/set_role_contextlevels() have no
+ * such dependency and stay on the proper API; capability assignment now
+ * checks whether the capability is registered yet and only uses
+ * assign_capability() when it is (its validation, cache invalidation and
+ * event trigger are still preferable in that case, e.g. a later upgrade
+ * where the capability already exists) — otherwise it falls back to the
+ * same direct insert as before, which does not require the capability
+ * definition to exist first.
  *
  * @package     local_adele
  * @category    upgrade
@@ -83,9 +99,33 @@ function create_role_for_adele($name, $shortname, $descriptionstr, $capabilities
         set_role_contextlevels($roleid, $current);
     }
 
-    // Ensure this role has the required capabilities.
+    // Ensure this role has the required capabilities. On a fresh install,
+    // {capabilities} does not contain THIS plugin's own capabilities yet
+    // (Moodle applies db/access.php after xmldb_local_adele_install() runs)
+    // — assign_capability() would throw. Fall back to the direct insert in
+    // that case; once Moodle registers the capability right after this
+    // function returns, the row already correctly reflects the permission.
     $ctx = \context_system::instance();
     foreach ($capabilities as $cap) {
-        assign_capability($cap, CAP_ALLOW, $roleid, $ctx->id);
+        if ($DB->record_exists('capabilities', ['name' => $cap])) {
+            assign_capability($cap, CAP_ALLOW, $roleid, $ctx->id);
+            continue;
+        }
+        $exists = $DB->record_exists('role_capabilities', [
+            'contextid' => $ctx->id,
+            'roleid' => $roleid,
+            'capability' => $cap,
+            'permission' => CAP_ALLOW,
+        ]);
+        if (!$exists) {
+            $DB->insert_record('role_capabilities', [
+                'contextid' => $ctx->id,
+                'roleid' => $roleid,
+                'capability' => $cap,
+                'permission' => CAP_ALLOW,
+                'timemodified' => time(),
+                'modifierid' => 0,
+            ]);
+        }
     }
 }

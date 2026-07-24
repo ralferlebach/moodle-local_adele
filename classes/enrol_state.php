@@ -99,10 +99,6 @@ class enrol_state {
     /**
      * Whether the ADELE enrolment plugin handles target course enrolments.
      *
-     * When true, the legacy enrol_manual paths in this plugin must stand down;
-     * when false (enrol_adele absent or disabled), local_adele behaves exactly
-     * as before (L-Q-08).
-     *
      * @return bool
      */
     public static function adele_enrol_active(): bool {
@@ -111,7 +107,37 @@ class enrol_state {
     }
 
     /**
+     * Emit a clear, admin-visible signal that enrol_adele is required but
+     * missing or inactive.
+     *
+     * Decision G-Q1a (Session 003) revokes L-Q-08: local_adele and mod_adele
+     * no longer silently fall back to enrol_manual for ADELE-caused target-
+     * or host-course enrolments when enrol_adele is absent. Instead, no
+     * enrolment happens at all, and this method surfaces that fact clearly
+     * rather than leaving it silent. The end user's request is deliberately
+     * not interrupted with a fatal error — a missing companion plugin is an
+     * admin misconfiguration, not a reason to break a student's page — so
+     * this only logs via debugging() (visible from DEBUG_NORMAL upward).
+     * Admins additionally see a standing warning on the local_adele settings
+     * page whenever this condition holds (settings.php).
+     *
+     * @return void
+     */
+    public static function warn_enrol_adele_missing(): void {
+        debugging(
+            'local_adele: enrol_adele is not installed or not active. ' .
+            'ADELE target/host course enrolments are NOT being created or ' .
+            'maintained until this is fixed. Install and enable enrol_adele ' .
+            '(decision G-Q1a, revokes L-Q-08).',
+            DEBUG_NORMAL
+        );
+    }
+
+    /**
      * Ask enrol_adele to reconcile one user path, if the plugin is available.
+     *
+     * Warns via {@see warn_enrol_adele_missing()} instead of silently doing
+     * nothing when enrol_adele is absent (decision G-Q1a, revokes L-Q-08).
      *
      * @param int $learningpathid The learning path id.
      * @param int $userid The user id.
@@ -120,11 +146,16 @@ class enrol_state {
     public static function request_reconcile(int $learningpathid, int $userid): void {
         if (self::adele_enrol_active()) {
             \enrol_adele\local\reconciler::reconcile_user($learningpathid, $userid);
+            return;
         }
+        self::warn_enrol_adele_missing();
     }
 
     /**
      * Ask enrol_adele to purge everything a learning path created, if available.
+     *
+     * Warns via {@see warn_enrol_adele_missing()} instead of silently doing
+     * nothing when enrol_adele is absent (decision G-Q1a, revokes L-Q-08).
      *
      * @param int $learningpathid The learning path id.
      * @return void
@@ -132,6 +163,8 @@ class enrol_state {
     public static function request_purge(int $learningpathid): void {
         if (self::adele_enrol_active()) {
             \enrol_adele\local\reconciler::purge_learning_path($learningpathid);
+            return;
         }
+        self::warn_enrol_adele_missing();
     }
 }

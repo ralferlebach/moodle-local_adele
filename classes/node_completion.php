@@ -53,8 +53,6 @@ class node_completion {
      */
     public static function enrol_child_courses($event) {
         // Get the user path relation.
-        global $DB;
-
         $userpath = $event->other['userpath']->json;
         if (is_string($userpath)) {
             $userpath = json_decode($userpath);
@@ -65,70 +63,28 @@ class node_completion {
         }
         $uniquechildcourses = array_unique($uniquechildcourses);
         $firstenrollededit = false;
-        $instances = [];
         foreach ($userpath->tree->nodes as &$node) {
             if (in_array($node->id, $uniquechildcourses)) {
                 foreach ($node->data->course_node_id as $subscribecourse) {
-                    // When enrol_adele is active it owns all target course
-                    // enrolments; the reconcile call after this loop enrols the
-                    // user, and only first_enrolled stamping, boundary
-                    // scheduling and the group assignment below still run here.
-                    if (enrol_state::adele_enrol_active()) {
-                        if (!isset($node->data->first_enrolled)) {
-                            $node->data->first_enrolled = time();
-                            $firstenrollededit = true;
-                        }
-                        adhoc_task_helper::set_scheduled_adhoc_tasks(
-                            json_decode(json_encode($node), true),
-                            $event->other['userpath']
-                        );
-                        self::enrol_user_group(
-                            $userpath->tree->nodes,
-                            $subscribecourse,
-                            $event->other['userpath']->user_id
-                        );
-                        continue;
-                    }
-                    if (isset($instances[$subscribecourse])) {
-                        $instance = $instances[$subscribecourse];
-                    } else {
-                        if (!enrol_is_enabled('manual')) {
-                            break;
-                        }
-                        if (!$enrol = enrol_get_plugin('manual')) {
-                            break;
-                        }
-                        $instance = $DB->get_record(
-                            'enrol',
-                            [
-                                'courseid' => $subscribecourse,
-                                'enrol' => 'manual',
-                            ]
-                        );
-                        $instances[$subscribecourse] = $instance;
-                    }
-
-                    if (!$instance) {
-                        continue;
-                    }
-
+                    // Target course enrolment is owned exclusively by
+                    // enrol_adele (decision G-Q1a, Session 003, revokes
+                    // L-Q-08). The reconcile call after this loop is the
+                    // only enrolment path and warns clearly via
+                    // enrol_state::warn_enrol_adele_missing() when
+                    // enrol_adele is absent or inactive — no enrol_manual
+                    // fallback happens here any more. first_enrolled
+                    // stamping, boundary scheduling and the group assignment
+                    // below still run unconditionally, since timed
+                    // restrictions and group membership are independent of
+                    // which plugin performs the enrolment.
                     if (!isset($node->data->first_enrolled)) {
                         $node->data->first_enrolled = time();
                         $firstenrollededit = true;
                     }
-                    // Schedule tasks for any future restriction boundaries on this node.
-                    // The helper skips past boundaries, so calling it on every evaluation
-                    // covers both initial enrolment and later restriction-date edits.
                     adhoc_task_helper::set_scheduled_adhoc_tasks(
                         json_decode(json_encode($node), true),
                         $event->other['userpath']
                     );
-                    $selectedrole = get_config('local_adele', 'enroll_as_setting');
-                    $context = \context_course::instance($subscribecourse);
-                    $isenrolled = is_enrolled($context, $event->other['userpath']->user_id);
-                    if (!$isenrolled) {
-                        $enrol->enrol_user($instance, $event->other['userpath']->user_id, $selectedrole);
-                    }
                     self::enrol_user_group(
                         $userpath->tree->nodes,
                         $subscribecourse,
@@ -140,8 +96,10 @@ class node_completion {
         if ($firstenrollededit) {
             self::trigger_user_path_update_new_enrollments($event, $userpath);
         }
-        // Hand over to enrol_adele (no-op when absent, L-Q-08): enrols the user
-        // into the newly reachable child courses through the ADELE instances.
+        // Hand over to enrol_adele: enrols the user into the newly reachable
+        // child courses through the ADELE instances. Warns clearly (does not
+        // silently no-op) when enrol_adele is absent — decision G-Q1a,
+        // Session 003, revokes L-Q-08.
         enrol_state::request_reconcile(
             (int) $event->other['userpath']->learning_path_id,
             (int) $event->other['userpath']->user_id

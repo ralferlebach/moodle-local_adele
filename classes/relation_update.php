@@ -249,7 +249,9 @@ class relation_update {
                 // Hand the persisted state to enrol_adele, which reconciles the
                 // target course enrolments against it (enrol where accessible,
                 // reactivate where suspended, suspend where no node grants the
-                // course any more). No-op when enrol_adele is absent (L-Q-08).
+                // course any more). Warns clearly (does not silently no-op)
+                // when enrol_adele is absent — decision G-Q1a, Session 003,
+                // revokes L-Q-08.
                 enrol_state::request_reconcile(
                     (int) $userpath->learning_path_id,
                     (int) $userpath->user_id
@@ -1342,11 +1344,9 @@ class relation_update {
      * @return void
      */
     public static function enrol_user_into_node(&$node, $userpath) {
-        global $DB;
         if (!isset($node['data']['course_node_id']) || is_int($node['data']['course_node_id'])) {
             return;
         }
-        $instances = [];
         foreach ($node['data']['course_node_id'] as $courseid) {
             if (!isset($node['data']['first_enrolled'])) {
                 $node['data']['first_enrolled'] = time();
@@ -1356,42 +1356,14 @@ class relation_update {
             // both initial enrolment and later restriction-date edits; the dedup key
             // keeps it idempotent.
             adhoc_task_helper::set_scheduled_adhoc_tasks($node, $userpath);
-            // When enrol_adele is active it owns all target course enrolments;
-            // the reconciler (triggered after every recompute) enrols this user.
-            // first_enrolled stamping and boundary scheduling above still ran,
-            // because timed restrictions need them either way. The legacy
-            // enrol_manual path below only serves installations without
-            // enrol_adele (L-Q-08).
-            if (enrol_state::adele_enrol_active()) {
-                continue;
-            }
-            if (isset($instances[$courseid])) {
-                $instance = $instances[$courseid];
-            } else {
-                if (!enrol_is_enabled('manual')) {
-                    break;
-                }
-                if (!$enrol = enrol_get_plugin('manual')) {
-                    break;
-                }
-                $instance = $DB->get_record(
-                    'enrol',
-                    [
-                        'courseid' => $courseid,
-                        'enrol' => 'manual',
-                    ]
-                );
-                $instances[$courseid] = $instance;
-            }
-            if (!$instance) {
-                continue;
-            }
-            $context = \context_course::instance($courseid);
-            $isenrolled = is_enrolled($context, $userpath->user_id);
-            if (!$isenrolled) {
-                $selectedrole = get_config('local_adele', 'enroll_as_setting');
-                $enrol->enrol_user($instance, $userpath->user_id, $selectedrole);
-            }
+            // Target course enrolment is owned exclusively by enrol_adele
+            // (decision G-Q1a, Session 003, revokes L-Q-08). No enrol_manual
+            // fallback: the reconcile_user() call after this loop (via
+            // enrol_state::request_reconcile(), called once per user path
+            // recompute in updated_learning_path()/revision_user_path_relation()
+            // callers) is the only enrolment path and warns clearly via
+            // enrol_state::warn_enrol_adele_missing() when enrol_adele is
+            // absent or inactive.
         }
     }
 }

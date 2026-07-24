@@ -81,12 +81,21 @@ class get_learningpath extends external_api {
         require_login();
 
         $context = context::instance_by_id($contextid);
+        self::validate_context($context);
 
         $learningpaths = learning_paths::return_learningpaths();
 
+        // Bugfix (G.10 follow-up, Session 003): local/adele:edit is granted to the
+        // `user` archetype, so every authenticated user holds it - `!has_capability(
+        // 'local/adele:edit', ...)` was therefore always false and this branch never
+        // threw, regardless of whether the path belonged to the caller. Any logged-in
+        // user could read any learning path's full data (including its JSON tree) by
+        // id (IDOR). Replaced with the same teacher-or-editor gate used by the sibling
+        // getters (get_lp_user_path_relation.php etc.).
         if (
-            !isset($learningpaths[$params['learningpathid']]) &&
-            !has_capability('local/adele:edit', $context)
+            !isset($learningpaths[$params['learningpathid']])
+            && !has_capability('local/adele:teacheredit', $context)
+            && !learning_paths::check_access()
         ) {
             throw new required_capability_exception($context, 'local/adele:canmanage', 'nopermissions', 'error');
         }

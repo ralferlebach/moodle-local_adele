@@ -61,6 +61,7 @@ class search_users extends external_api {
         // who can edit learning paths (manager/assistant or an editor of some path);
         // otherwise it was an unauthenticated, site-wide user/email directory dump (#464).
         require_login();
+        self::validate_context(\context_system::instance());
         if (!learning_paths::check_access()) {
             throw new \required_capability_exception(
                 \context_system::instance(),

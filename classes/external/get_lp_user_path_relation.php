@@ -76,6 +76,7 @@ class get_lp_user_path_relation extends external_api {
         global $USER;
         require_login();
         $context = context::instance_by_id($contextid);
+        self::validate_context($context);
         require_capability('local/adele:view', $context);
         if ($context->contextlevel == CONTEXT_COURSE) {
             $params['courseid'] = $context->instanceid;

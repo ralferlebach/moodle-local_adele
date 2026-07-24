@@ -33,6 +33,7 @@ use external_function_parameters;
 use external_value;
 use external_single_structure;
 use local_adele\learning_paths;
+use required_capability_exception;
 
 defined('MOODLE_INTERNAL') || die();
 
@@ -67,6 +68,8 @@ class update_user_path_relation extends external_api {
      * @return array
      */
     public static function execute($lpuserpathid, $contextid): array {
+        global $DB, $USER;
+
         $params = self::validate_parameters(self::execute_parameters(), [
             'lpuserpathid' => $lpuserpathid,
             'contextid' => $contextid,
@@ -75,7 +78,24 @@ class update_user_path_relation extends external_api {
         require_login();
 
         $context = context::instance_by_id($contextid);
+        self::validate_context($context);
         require_capability('local/adele:view', $context);
+
+        // local/adele:view is granted to the `user` archetype, so every authenticated
+        // user holds it - it is NOT a boundary. Without an ownership check, any user
+        // could mark an arbitrary other user's path snapshot as "seen" by supplying a
+        // foreign lpuserpathid (IDOR). Only the owner, a teacher of the path, or an
+        // editor/manager/assistant may touch a record that is not their own.
+        $ownerid = $DB->get_field('local_adele_path_user', 'user_id', ['id' => $params['lpuserpathid']]);
+        if (
+            $ownerid !== false
+            && (int) $ownerid !== (int) $USER->id
+            && !has_capability('local/adele:teacheredit', $context)
+            && !learning_paths::check_access()
+        ) {
+            throw new required_capability_exception($context, 'local/adele:teacheredit', 'nopermissions', '');
+        }
+
         return learning_paths::update_learning_user_relation($params);
     }
 

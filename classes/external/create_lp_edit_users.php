@@ -72,12 +72,19 @@ class create_lp_edit_users extends external_api {
      * @return array
      */
     public static function execute($contextid, $lpid, $userid): array {
-        require_login();
-        $context = context::instance_by_id($contextid);
-        // Adding a named person to this path requires being an editor of THAT path (#458).
-        learning_paths::require_lp_editor_access($lpid, $context);
+        $params = self::validate_parameters(self::execute_parameters(), [
+            'contextid' => $contextid,
+            'lpid' => $lpid,
+            'userid' => $userid,
+        ]);
 
-        return learning_path_editors::create_editors($lpid, $userid);
+        require_login();
+        $context = context::instance_by_id($params['contextid']);
+        self::validate_context($context);
+        // Adding a named person to this path requires being an editor of THAT path (#458).
+        learning_paths::require_lp_editor_access($params['lpid'], $context);
+
+        return learning_path_editors::create_editors($params['lpid'], $params['userid']);
     }
 
     /**

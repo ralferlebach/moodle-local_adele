@@ -72,12 +72,19 @@ class update_lp_visiblity extends external_api {
      * @return array
      */
     public static function execute($contextid, $lpid, $visibility): array {
-        require_login();
-        $context = context::instance_by_id($contextid);
-        // Toggling visibility of this path requires being an editor of THAT path (#458).
-        learning_paths::require_lp_editor_access($lpid, $context);
+        $params = self::validate_parameters(self::execute_parameters(), [
+            'contextid' => $contextid,
+            'lpid' => $lpid,
+            'visibility' => $visibility,
+        ]);
 
-        return learning_path_update::update_visiblity($lpid, $visibility);
+        require_login();
+        $context = context::instance_by_id($params['contextid']);
+        self::validate_context($context);
+        // Toggling visibility of this path requires being an editor of THAT path (#458).
+        learning_paths::require_lp_editor_access($params['lpid'], $context);
+
+        return learning_path_update::update_visiblity($params['lpid'], $params['visibility']);
     }
 
     /**

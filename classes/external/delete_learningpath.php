@@ -78,6 +78,7 @@ class delete_learningpath extends external_api {
         require_login();
 
         $context = context::instance_by_id($contextid);
+        self::validate_context($context);
         // Deleting a path requires being an editor of THAT path (or a manager/admin) (#458).
         learning_paths::require_lp_editor_access($params['learningpathid'], $context);
 

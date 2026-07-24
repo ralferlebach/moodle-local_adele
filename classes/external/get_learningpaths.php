@@ -82,6 +82,7 @@ class get_learningpaths extends external_api {
 
         require_login();
         $context = context::instance_by_id($contextid);
+        self::validate_context($context);
 
         $learningpaths = learning_paths::return_learningpaths();
         $pathscreatedfornamedperson = learning_paths::return_learningpaths_owned();

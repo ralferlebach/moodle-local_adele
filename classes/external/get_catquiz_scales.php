@@ -82,6 +82,7 @@ class get_catquiz_scales extends external_api {
         require_login();
 
         $context = context::instance_by_id($contextid);
+        self::validate_context($context);
         require_capability('local/adele:canmanage', $context);
 
         return catquiz::get_catquiz_scales($params);

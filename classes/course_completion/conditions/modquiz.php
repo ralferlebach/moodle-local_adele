@@ -194,7 +194,7 @@ class modquiz implements course_completion {
                           '/mod/quiz/view.php?id=' .
                           $record->cmid .
                           '" target="_blank">' .
-                          // Ticket #464 H4: escape the quiz name inside the intended anchor (v-html sink).
+                          // Escape the quiz name inside the intended anchor (v-html sink).
                           format_string($record->name, true, ['context' => \context_system::instance(), 'filter' => false]) .
                           '</a>';
                         $modquizzes[$completion['id']]['placeholders']['minnumb'] =

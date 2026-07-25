@@ -223,7 +223,7 @@ final class uc14_course_completed_and_modquiz_completion_test extends adele_lear
         global $DB;
 
         $this->subscribe_users_to_lp();
-        // Ticket #502: inbetween now requires a first course access on dndnode_1's course.
+        // Inbetween now requires a first course access on dndnode_1's course.
         foreach ($DB->get_records('local_adele_path_user') as $accessrecord) {
             $this->mark_course_accessed_in_db((int)$this->courseids[0], (int)$accessrecord->user_id);
         }

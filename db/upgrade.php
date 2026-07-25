@@ -196,7 +196,7 @@ function xmldb_local_adele_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2025081200, 'local', 'adele');
     }
     if ($oldversion < 2026061800) {
-        // Ticket #431: the local/adele:teacheredit capability gained the editingteacher
+        // The local/adele:teacheredit capability gained the editingteacher
         // archetype so editing-teachers can operate master conditions without the
         // over-broad local/adele:canmanage. Archetype defaults only apply to fresh
         // installs, so grant it to existing editing-teacher roles here too. Do not
@@ -211,7 +211,7 @@ function xmldb_local_adele_upgrade($oldversion) {
     }
 
     if ($oldversion < 2026071500) {
-        // Ticket #482: the local/adele:teacheredit capability gained the manager
+        // The local/adele:teacheredit capability gained the manager
         // archetype so a course Manager operates a learning path like an editing
         // teacher. Archetype defaults only apply to fresh installs, so grant it to
         // existing manager roles here too. Do not overwrite any explicit admin
@@ -233,7 +233,7 @@ function xmldb_local_adele_upgrade($oldversion) {
         $reconcile = new \local_adele\task\reconcile_user_paths();
         \core\task\manager::queue_adhoc_task($reconcile, true);
 
-        // Ticket #501: guarantee at most one active user-path relation per
+        // Guarantee at most one active user-path relation per
         // (user_id, course_id, learning_path_id). First remove pre-existing
         // duplicates created by the historical check-then-insert race, keeping
         // the most recently created row (highest id). buildsqlqueryuserpath()
@@ -242,25 +242,17 @@ function xmldb_local_adele_upgrade($oldversion) {
         // progress; the orphaned lower-id copies were never updated after
         // creation, so nothing is lost.
         //
-        // Fixed (enrol_adele project, Session 001 Teil 5): the original version
-        // of this step deleted via a single statement that referenced
-        // {local_adele_path_user} both as the DELETE target and, nested two
-        // levels deep, inside its own WHERE clause. That is the textbook trigger
-        // for MySQL/MariaDB error 1093 ("You can't specify target table ... for
-        // update in FROM clause") — derived-table wrapping is a common
-        // workaround but not a guarantee, because the optimiser is free to
-        // merge the derived table back into the outer query. It failed as a
-        // dml_write_exception on at least one real installation during
-        // upgrade. Rewritten as two separate statements: a read-only SELECT
-        // (same-table self-joins are always fine there) followed by a plain
-        // DELETE by an explicit id list, which every supported RDBMS accepts
-        // unconditionally.
+        // A single DELETE that references {local_adele_path_user} both as the
+        // target and inside its own WHERE clause triggers MySQL/MariaDB error
+        // 1093 ("You can't specify target table ... for update in FROM
+        // clause"); derived-table wrapping is not a reliable workaround. This
+        // is therefore split into a read-only SELECT (same-table self-joins
+        // are fine there) followed by a plain DELETE by explicit id list,
+        // which every supported RDBMS accepts unconditionally.
         //
-        // Fixed (Session 002, Teil 18): a real production upgrade hit a
-        // dml_read_exception exactly on the query below. course_id is added
-        // by step 2024052300 above, well before this one, so in a normal
-        // sequential upgrade from an old version it is guaranteed to exist by
-        // the time we get here — the most plausible explanation is a prior
+        // course_id is added by step 2024052300 above, so in a normal
+        // sequential upgrade it is guaranteed to exist by the time we get
+        // here; the defensive check below covers a prior
         // interrupted/partial upgrade on that installation left its
         // savepoint recorded without the corresponding DDL having actually
         // stuck. Rather than assume that can't happen again, guarantee the
@@ -304,13 +296,12 @@ function xmldb_local_adele_upgrade($oldversion) {
     }
 
     if ($oldversion < 2026072301) {
-        // Ticket #486 (enrol_adele project), Session 001 Teil 3/5: a user path's
-        // identity is learning path + user, full stop — course_id is provenance
-        // only. The 2026072200 step above (ticket #501) still enforced the OLD,
-        // course-bound identity; without this step a learning path embedded in
-        // two different host courses would keep creating a second, competing
-        // user path the moment both are active, exactly the duplication ticket
-        // #433 (referenced in classes/enrollment.php) originally complained
+        // A user path's identity is learning path + user; course_id is
+        // provenance only. The 2026072200 step above still enforced the old,
+        // course-bound identity; without this step a learning path embedded
+        // in two different host courses would keep creating a second,
+        // competing user path the moment both are active - the duplication
+        // (referenced in classes/enrollment.php) originally complained
         // about — the two fixes were solving adjacent but different problems
         // and the schema has to converge on one of them.
         //
@@ -355,9 +346,9 @@ function xmldb_local_adele_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2026072301, 'local', 'adele');
     }
 
-    // Fix G.18 (Session 003): local_adele_lp_editors had no unique index and
-    // both columns were nullable, so duplicate (userid, learningpathid)
-    // rows were possible — the surrounding code already contained
+    // The local_adele_lp_editors table had no unique index and both columns were
+    // nullable, so duplicate (userid, learningpathid) rows were possible —
+    // the surrounding code already contained
     // workarounds for exactly this. No other column on this table carries
     // meaningful data (id, userid, learningpathid only), so keeping the
     // lowest id per pair and discarding the rest loses nothing, unlike the
@@ -384,7 +375,7 @@ function xmldb_local_adele_upgrade($oldversion) {
         // (can't identify who edits what) and would make change_field_
         // notnull() below fail on any installation that has one — remove
         // them first rather than risk repeating the real production
-        // upgrade failure from Session 002, Teil 18.
+        // upgrade failure on installations that have such rows.
         $DB->delete_records_select(
             'local_adele_lp_editors',
             'userid IS NULL OR learningpathid IS NULL'
@@ -411,10 +402,9 @@ function xmldb_local_adele_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2026072402, 'local', 'adele');
     }
 
-    // Fix G.2 full solution (Session 003): create the new host-course index
-    // table and backfill it from mod_adele's existing embeddings, so
-    // upgrading sites do not start with an empty index that only catches up
-    // as activities are next saved.
+    // Create the new host-course index table and backfill it from
+    // mod_adele's existing embeddings, so upgrading sites do not start with
+    // an empty index that only catches up as activities are next saved.
     if ($oldversion < 2026072403) {
         $table = new xmldb_table('local_adele_host_courses');
         if (!$dbman->table_exists($table)) {

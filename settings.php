@@ -119,29 +119,17 @@ if ($hassiteconfig) {
         )
     );
 
-    // Learning Path Enrollment setting.
+    // Build the list of course-assignable roles (used by the assistant-role
+    // trigger setting below).
     $studentroleid = [];
     $allrolenames = role_get_names();
     $assignableroles = get_roles_for_contextlevels(CONTEXT_COURSE);
-    $defaultroleid = null;
 
     foreach ($allrolenames as $value) {
         if (in_array($value->id, $assignableroles)) {
             $studentroleid[$value->id] = $value->localname;
-            if ($value->shortname === 'student') {
-                $defaultroleid = $value->id;
-            }
         }
     }
-    $settings->add(
-        new admin_setting_configselect(
-            $componentname . '/enroll_as_setting',
-            get_string('enroll_as_setting', $componentname),
-            get_string('enroll_as_setting_desc', $componentname),
-            $defaultroleid,
-            $studentroleid
-        )
-    );
 
     $allroles = ['0' => get_string('noroleassigned', 'local_adele')];
     // This should keep indexes.

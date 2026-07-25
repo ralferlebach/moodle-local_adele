@@ -106,7 +106,7 @@ class user_path_relation {
     public function get_user_path_relation($learningpathid, $userid, $courseid) {
         global $DB;
 
-        // Fix (Session 003, Teil 22): course_id removed from the WHERE clause.
+        // The course_id column is removed from the WHERE clause.
         // The unique index (user_id, learning_path_id) "independent of the host
         // course" guarantees a single active snapshot per (user, path), while the
         // stored course_id is an arbitrary first-trigger value. Filtering by it

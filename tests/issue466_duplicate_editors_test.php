@@ -72,7 +72,7 @@ final class issue466_duplicate_editors_test extends advanced_testcase {
      * Pre-existing duplicate editor rows must not collide the get_records_sql key
      * (no "first column must be unique" debugging) and must collapse to one entry.
      *
-     * Fix (Session 003, Teil 16): updated for G.18 (Session 003, Teil 7), which
+     * Updated for the unique-index migration, which
      * added a database-level UNIQUE(userid, learningpathid) constraint on
      * local_adele_lp_editors specifically so this scenario (duplicate rows)
      * can no longer occur on an upgraded system — the upgrade step also
@@ -110,7 +110,7 @@ final class issue466_duplicate_editors_test extends advanced_testcase {
 
         // A genuine attempt to create a duplicate row (bypassing
         // create_editors()'s own idempotency check, the same way this test
-        // always has) must now fail at the database level (G.18) - the
+        // always has) must now fail at the database level - the
         // scenario this test used to simulate (duplicates silently existing)
         // can no longer arise on an upgraded system.
         $this->expectException(\dml_write_exception::class);

@@ -17,13 +17,10 @@
 /**
  * Code to be executed after the plugin's database scheme has been installed is defined here.
  *
- * Fix G.19 (Session 003): previously wrote directly into the {role},
- * {role_context_levels} and {role_capabilities} core tables (including a
- * hardcoded modifierid = 2), instead of using the Moodle role APIs that
- * exist precisely for this. Now uses create_role(), set_role_contextlevels()
- * and — where possible — assign_capability(), which handle sortorder,
- * modifierid (the actual installing user) and cache invalidation correctly.
- * Also fixes $descriptionstr being computed but never used — both roles
+ * Uses the Moodle role APIs — create_role(), set_role_contextlevels() and
+ * assign_capability() — rather than writing directly into the {role},
+ * {role_context_levels} and {role_capabilities} core tables, so sortorder,
+ * modifierid and cache invalidation are handled correctly. Both roles
  * previously got the same literal "Adele assistant" description regardless
  * of which one was being created.
  *

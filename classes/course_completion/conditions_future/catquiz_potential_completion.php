@@ -130,13 +130,13 @@ class catquiz_potential_completion implements course_completion {
         }
         $catquizzes = [];
         if (isset($node['completion']) && isset($node['completion']['nodes'])) {
-            foreach ($node['completion']['nodes'] as $complitionnode) {
+            foreach ($node['completion']['nodes'] as $completionnode) {
                 if (
-                    isset($complitionnode['data']) && isset($complitionnode['data']['label']) &&
-                    $complitionnode['data']['label'] == 'catquiz'
+                    isset($completionnode['data']) && isset($completionnode['data']['label']) &&
+                    $completionnode['data']['label'] == 'catquiz'
                 ) {
-                    $testid = $complitionnode['data']['value']['testid'];
-                    $scales = $complitionnode['data']['value']['scales'];
+                    $testid = $completionnode['data']['value']['testid'];
+                    $scales = $completionnode['data']['value']['scales'];
                     foreach ($scales as $scale) {
                         $validcatquiz = false;
                         if (!isset($scale['type'])) {
@@ -172,7 +172,7 @@ class catquiz_potential_completion implements course_completion {
                                 }
                             }
                         }
-                        $catquizzes[$complitionnode['id']][$scale['id']] = $validcatquiz;
+                        $catquizzes[$completionnode['id']][$scale['id']] = $validcatquiz;
                     }
                 }
             }

@@ -19,6 +19,7 @@
  *
  * @package     local_adele
  * @copyright   2026 Wunderbyte GmbH
+ * @copyright   2026 Ralf Erlebach
  * @license     http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
@@ -34,6 +35,7 @@ namespace local_adele;
  *
  * @package     local_adele
  * @copyright   2026 Wunderbyte GmbH
+ * @copyright   2026 Ralf Erlebach
  * @license     http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class enrol_state {
@@ -48,7 +50,7 @@ class enrol_state {
      * Course ids the user is entitled to right now on this learning path.
      *
      * Aggregated as a set across ALL nodes, so a shared target course stays
-     * entitled as long as any node still grants it (requirement A-6). Returns
+     * entitled as long as any node still grants it. Returns
      * an empty array when the learning path no longer exists or the user has
      * no active user path — both mean: no entitlement.
      *
@@ -110,16 +112,15 @@ class enrol_state {
      * Emit a clear, admin-visible signal that enrol_adele is required but
      * missing or inactive.
      *
-     * Decision G-Q1a (Session 003) revokes L-Q-08: local_adele and mod_adele
-     * no longer silently fall back to enrol_manual for ADELE-caused target-
-     * or host-course enrolments when enrol_adele is absent. Instead, no
-     * enrolment happens at all, and this method surfaces that fact clearly
-     * rather than leaving it silent. The end user's request is deliberately
-     * not interrupted with a fatal error — a missing companion plugin is an
-     * admin misconfiguration, not a reason to break a student's page — so
-     * this only logs via debugging() (visible from DEBUG_NORMAL upward).
-     * Admins additionally see a standing warning on the local_adele settings
-     * page whenever this condition holds (settings.php).
+     * local_adele and mod_adele do not fall back to enrol_manual for
+     * ADELE-caused target- or host-course enrolments when enrol_adele is
+     * absent; no enrolment happens at all, and this method surfaces that
+     * fact rather than leaving it silent. The end user's request is
+     * deliberately not interrupted with a fatal error — a missing companion
+     * plugin is an admin misconfiguration, not a reason to break a student's
+     * page — so this only logs via debugging() (visible from DEBUG_NORMAL
+     * upward). Admins additionally see a standing warning on the local_adele
+     * settings page whenever this condition holds.
      *
      * @return void
      */
@@ -127,8 +128,7 @@ class enrol_state {
         debugging(
             'local_adele: enrol_adele is not installed or not active. ' .
             'ADELE target/host course enrolments are NOT being created or ' .
-            'maintained until this is fixed. Install and enable enrol_adele ' .
-            '(decision G-Q1a, revokes L-Q-08).',
+            'maintained until this is fixed. Install and enable enrol_adele.',
             DEBUG_NORMAL
         );
     }
@@ -137,7 +137,7 @@ class enrol_state {
      * Ask enrol_adele to reconcile one user path, if the plugin is available.
      *
      * Warns via {@see warn_enrol_adele_missing()} instead of silently doing
-     * nothing when enrol_adele is absent (decision G-Q1a, revokes L-Q-08).
+     * nothing when enrol_adele is absent.
      *
      * @param int $learningpathid The learning path id.
      * @param int $userid The user id.
@@ -155,7 +155,7 @@ class enrol_state {
      * Ask enrol_adele to purge everything a learning path created, if available.
      *
      * Warns via {@see warn_enrol_adele_missing()} instead of silently doing
-     * nothing when enrol_adele is absent (decision G-Q1a, revokes L-Q-08).
+     * nothing when enrol_adele is absent.
      *
      * @param int $learningpathid The learning path id.
      * @return void
@@ -171,14 +171,12 @@ class enrol_state {
     /**
      * Keep the host-course index in sync with one mod_adele activity.
      *
-     * Fix G.2 full solution (Session 003): called from mod_adele's own
-     * adele_add_instance()/adele_update_instance() lifecycle hooks. This is
-     * the write side of the index that replaces enrol_adele's former direct
-     * read of mod_adele's own {adele} table and participantslist format —
-     * enrol_adele now calls get_host_embeddings() below instead, which
-     * knows nothing about either. mod_adele calling into local_adele here
-     * is not a new dependency direction: mod_adele already has a real,
-     * declared dependency on local_adele.
+     * Called from mod_adele's adele_add_instance()/adele_update_instance()
+     * lifecycle hooks. This is the write side of the index; enrol_adele reads
+     * it via get_host_embeddings() below instead of querying mod_adele's own
+     * {adele} table and participantslist format directly. mod_adele already
+     * declares a dependency on local_adele, so calling in here introduces no
+     * new dependency direction.
      *
      * @param int $adeleinstanceid mod_adele's own adele.id for this activity.
      * @param int $learningpathid The learning path this activity embeds.
@@ -218,8 +216,7 @@ class enrol_state {
     /**
      * Remove one mod_adele activity's row from the host-course index.
      *
-     * Fix G.2 full solution (Session 003): called from mod_adele's own
-     * adele_delete_instance() lifecycle hook.
+     * Called from mod_adele's adele_delete_instance() lifecycle hook.
      *
      * @param int $adeleinstanceid mod_adele's own adele.id for the deleted activity.
      * @return void
@@ -232,11 +229,10 @@ class enrol_state {
     /**
      * Which host courses embed a learning path, and via which options.
      *
-     * Fix G.2 full solution (Session 003): the read side enrol_adele now
-     * uses instead of querying mod_adele's own {adele} table directly.
-     * Returns already-normalised booleans, not mod_adele's raw
-     * participantslist string — enrol_adele no longer needs to know that
-     * format exists.
+     * The read side enrol_adele uses instead of querying mod_adele's own
+     * {adele} table directly. Returns already-normalised booleans rather than
+     * mod_adele's raw participantslist string, so enrol_adele does not need to
+     * know that format.
      *
      * @param int $learningpathid The learning path id.
      * @return array Rows keyed by id: courseid, option1/2/3 (bool each).
@@ -264,9 +260,8 @@ class enrol_state {
     /**
      * Which learning paths have a host-course embedding in the given course.
      *
-     * Fix G.2 full solution (Session 003): lets enrol_adele's
-     * user_enrolment_deleted observer find affected learning paths without
-     * reading mod_adele's {adele} table directly.
+     * Lets enrol_adele's user_enrolment_deleted observer find affected
+     * learning paths without reading mod_adele's {adele} table directly.
      *
      * @param int $courseid The host course id.
      * @return int[] Distinct learning path ids.

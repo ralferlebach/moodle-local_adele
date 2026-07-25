@@ -67,16 +67,14 @@ class node_completion {
             if (in_array($node->id, $uniquechildcourses)) {
                 foreach ($node->data->course_node_id as $subscribecourse) {
                     // Target course enrolment is owned exclusively by
-                    // enrol_adele (decision G-Q1a, Session 003, revokes
-                    // L-Q-08). The reconcile call after this loop is the
-                    // only enrolment path and warns clearly via
-                    // enrol_state::warn_enrol_adele_missing() when
-                    // enrol_adele is absent or inactive — no enrol_manual
-                    // fallback happens here any more. first_enrolled
-                    // stamping, boundary scheduling and the group assignment
-                    // below still run unconditionally, since timed
-                    // restrictions and group membership are independent of
-                    // which plugin performs the enrolment.
+                    // enrol_adele; the reconcile call after this loop is the
+                    // only enrolment path and warns via
+                    // enrol_state::warn_enrol_adele_missing() when enrol_adele
+                    // is absent or inactive. first_enrolled stamping, boundary
+                    // scheduling and the group assignment below still run
+                    // unconditionally, since timed restrictions and group
+                    // membership are independent of which plugin performs the
+                    // enrolment.
                     if (!isset($node->data->first_enrolled)) {
                         $node->data->first_enrolled = time();
                         $firstenrollededit = true;
@@ -97,9 +95,8 @@ class node_completion {
             self::trigger_user_path_update_new_enrollments($event, $userpath);
         }
         // Hand over to enrol_adele: enrols the user into the newly reachable
-        // child courses through the ADELE instances. Warns clearly (does not
-        // silently no-op) when enrol_adele is absent — decision G-Q1a,
-        // Session 003, revokes L-Q-08.
+        // child courses through the ADELE instances. Warns (does not silently
+        // no-op) when enrol_adele is absent.
         enrol_state::request_reconcile(
             (int) $event->other['userpath']->learning_path_id,
             (int) $event->other['userpath']->user_id

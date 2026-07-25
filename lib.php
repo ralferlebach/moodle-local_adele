@@ -93,8 +93,8 @@ function local_adele_pluginfile($course, $cm, $context, $filearea, $args, $force
         return false;
     }
 
-    // Fix G.15 (Session 003): previously served any file with a guessable
-    // pluginfile URL, without checking login or visibility at all.
+    // Require login and check visibility before serving any file, rather
+    // than serving on a guessable pluginfile URL alone.
     require_login();
 
     $allowedareas = ['lp_images', 'helpingslider', 'node_background_image'];

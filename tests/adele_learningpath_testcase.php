@@ -89,7 +89,7 @@ abstract class adele_learningpath_testcase extends advanced_testcase {
 
         // Create 5 courses (all with completion tracking enabled).
         //
-        // Fix (Session 003, Teil 14): explicit, guaranteed-unique shortname
+        // Explicit, guaranteed-unique shortname
         // per course. Without one, Moodle's generator auto-assigns "tc_N"
         // from an internal counter that is NOT shared across PHP processes -
         // under process-isolated PHPUnit runs (one process per test method),

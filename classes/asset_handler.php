@@ -90,13 +90,10 @@ class asset_handler {
     /**
      * Start a new attempt for a user.
      *
-     * Fix G.16 (Session 003): previously accepted any base64 payload
-     * unchecked (no size/MIME/image validation), and the "delete the old
-     * file first" check could never succeed — it looked for a filename
-     * without the timestamp suffix that the actual stored file always has,
-     * so old files accumulated indefinitely. Now uses get_area_files() to
-     * find and remove ALL previous files for this learning path,
-     * independent of the exact filename.
+     * Validates the base64 payload (size/MIME/image) before storing it, and
+     * uses get_area_files() to find and remove ALL previous files for this
+     * learning path independent of the exact filename, so old files do not
+     * accumulate.
      *
      * @param int $contextid
      * @param int $learningpathid

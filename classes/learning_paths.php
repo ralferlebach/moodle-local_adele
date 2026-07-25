@@ -401,7 +401,7 @@ class learning_paths {
     public static function delete_learning_path($params) {
         global $DB, $USER;
 
-        // Requirement A-3: remove every enrolment this learning path ever created,
+        // Remove every enrolment this learning path ever created,
         // BEFORE the path record disappears (no-op when enrol_adele is absent).
         enrol_state::request_purge((int) $params['learningpathid']);
 
@@ -449,7 +449,7 @@ class learning_paths {
     public static function get_learning_user_relations($data) {
         global $DB;
 
-        // Fix (Session 003, Teil 22): course_id removed from the WHERE clause,
+        // The course_id column is removed from the WHERE clause,
         // same reasoning as get_learning_user_relation() above. Here it matters
         // for the teacher view specifically: filtering all learners of a path by
         // a single course_id wrongly dropped every learner whose snapshot happens
@@ -608,7 +608,7 @@ class learning_paths {
     public static function get_learning_user_relation($data) {
         global $DB;
 
-        // Fix (Session 003, Teil 22): course_id removed from the WHERE clause.
+        // The course_id column is removed from the WHERE clause.
         // The local_adele_path_user unique index is (user_id, learning_path_id)
         // "independent of the host course" (its own db/install.xml comment, from
         // the enrol_adele decoupling, spec 2.1), so there is at most ONE active

@@ -250,8 +250,7 @@ class relation_update {
                 // target course enrolments against it (enrol where accessible,
                 // reactivate where suspended, suspend where no node grants the
                 // course any more). Warns clearly (does not silently no-op)
-                // when enrol_adele is absent — decision G-Q1a, Session 003,
-                // revokes L-Q-08.
+                // when enrol_adele is absent.
                 enrol_state::request_reconcile(
                     (int) $userpath->learning_path_id,
                     (int) $userpath->user_id
@@ -1316,11 +1315,9 @@ class relation_update {
     public static function subscribe_user_starting_node(&$userpath) {
         if (!empty($userpath->json['tree']['nodes'])) {
             foreach ($userpath->json['tree']['nodes'] as &$node) {
-                // Fixed (enrol_adele project, Session 002 Teil 8): missing '??'
-                // fallback crashed with "Undefined array key 'type'" on any node
-                // without an explicit type, surfaced by a real CI run. The sibling
-                // check in set_scheduled_adhoc_tasks() a few lines above already
-                // uses '??' for the identical comparison — this one had drifted.
+                // The '??' fallback avoids "Undefined array key 'type'" on any
+                // node without an explicit type; the sibling check in
+                // set_scheduled_adhoc_tasks() above uses the same guard.
                 if (
                     ($node['type'] ?? '') != 'dropzone' && isset($node['parentCourse']) &&
                     in_array('starting_node', $node['parentCourse'])
@@ -1356,9 +1353,8 @@ class relation_update {
             // both initial enrolment and later restriction-date edits; the dedup key
             // keeps it idempotent.
             adhoc_task_helper::set_scheduled_adhoc_tasks($node, $userpath);
-            // Target course enrolment is owned exclusively by enrol_adele
-            // (decision G-Q1a, Session 003, revokes L-Q-08). No enrol_manual
-            // fallback: the reconcile_user() call after this loop (via
+            // Target course enrolment is owned exclusively by enrol_adele.
+            // The reconcile_user() call after this loop (via
             // enrol_state::request_reconcile(), called once per user path
             // recompute in updated_learning_path()/revision_user_path_relation()
             // callers) is the only enrolment path and warns clearly via

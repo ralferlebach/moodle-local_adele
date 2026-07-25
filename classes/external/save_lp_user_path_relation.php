@@ -81,7 +81,7 @@ class save_lp_user_path_relation extends external_api {
         require_login();
 
         $context = context::instance_by_id($contextid);
-        // Fix (Session 003, Teil 16): see the identical comment in
+        // See the identical comment in
         // get_lp_user_path_relation.php — canmanage/teacheredit is
         // system-/course-role-based, not course-enrolment-based; a manager
         // acting on a course they are not enrolled in is the normal case.

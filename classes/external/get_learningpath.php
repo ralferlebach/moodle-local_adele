@@ -87,33 +87,25 @@ class get_learningpath extends external_api {
 
         $learningpaths = learning_paths::return_learningpaths();
 
-        // Fix (Session 003, Teil 16): the G-Q1a IDOR fix below broke a much
-        // more common case than the one it was guarding against.
-        // return_learningpaths() lists paths the current user EDITS
-        // (local_adele_lp_editors) — it has never included paths a user is
-        // merely SUBSCRIBED to as a learner. Every plain student calling
-        // this for their OWN path therefore always failed
-        // !isset($learningpaths[...]), and — having no teacheredit/
-        // check_access() either — hit the exception below unconditionally.
-        // A real CI Behat run surfaced this immediately (a student could no
-        // longer load their own runtime path at all). Added: a genuine
-        // subscription check against local_adele_path_user, using $USER->id
-        // (not the caller-supplied, unvalidated $params['userid'] — using
-        // that instead would reopen a variant of the same IDOR this fix
-        // originally closed).
+        // The return_learningpaths() call lists paths the current user EDITS
+        // (local_adele_lp_editors); it does not include paths a user is
+        // merely SUBSCRIBED to as a learner. Without the check below, a plain
+        // student loading their OWN runtime path fails the isset() test and
+        // hits the exception. A genuine subscription check against
+        // local_adele_path_user, using $USER->id (never the caller-supplied,
+        // unvalidated $params['userid'], which would reopen an IDOR), covers
+        // that case.
         $issubscribed = $DB->record_exists('local_adele_path_user', [
             'learning_path_id' => $params['learningpathid'],
             'user_id' => (int) $USER->id,
         ]);
 
-        // Bugfix (G.10 follow-up, Session 003): local/adele:edit is granted to the
-        // `user` archetype, so every authenticated user holds it - `!has_capability(
-        // 'local/adele:edit', ...)` was therefore always false and this branch never
-        // threw, regardless of whether the path belonged to the caller. Any logged-in
-        // user could read any learning path's full data (including its JSON tree) by
-        // id (IDOR). Replaced with the same teacher-or-editor gate used by the sibling
-        // getters (get_lp_user_path_relation.php etc.), plus the subscription check
-        // above for the (far more common) student-reading-their-own-path case.
+        // The local/adele:edit capability is granted to the `user` archetype, so every
+        // authenticated user holds it - guarding on it alone would let any
+        // logged-in user read any learning path's full data by id (IDOR).
+        // Uses the same teacher-or-editor gate as the sibling getters
+        // (get_lp_user_path_relation.php etc.), plus the subscription check
+        // above for the student-reading-their-own-path case.
         if (
             !$issubscribed
             && !isset($learningpaths[$params['learningpathid']])

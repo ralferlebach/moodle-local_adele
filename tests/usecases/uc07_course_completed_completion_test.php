@@ -128,7 +128,7 @@ final class uc07_course_completed_completion_test extends adele_learningpath_tes
         global $DB;
 
         $this->subscribe_users_to_lp();
-        // Ticket #502: "in progress" now requires a first course access, not mere
+        // The "in progress" state now requires a first course access, not mere
         // enrolment. Simulate the learner having opened dndnode_1's course.
         foreach ($DB->get_records('local_adele_path_user') as $accessrecord) {
             $this->mark_course_accessed_in_db((int)$this->courseids[0], (int)$accessrecord->user_id);

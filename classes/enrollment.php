@@ -96,7 +96,7 @@ class enrollment {
                     $id = $DB->insert_record('local_adele_path_user', $newrecord);
                     $userpath = $DB->get_record('local_adele_path_user', ['id' => $id]);
                 } catch (\dml_exception $e) {
-                    // Ticket #501: a concurrent request won the race and inserted
+                    // A concurrent request won the race and inserted
                     // the row first; the unique index (user_id, learning_path_id)
                     // rejected this insert. Reuse the row that now exists instead
                     // of failing or creating a duplicate. If no such row is found
@@ -136,12 +136,10 @@ class enrollment {
         // LP JSON (GitHub issue #444; aligns with the origin/dev_chris fix for the
         // related #433 "duplicate user learningpathes"). local_adele declares a
         // dependency on mod_adele, so joining {adele} is safe.
-        // Fix (Session 003, Teil 14): DISTINCT added. Without it, a learning
-        // path embedded via more than one mod_adele activity in the SAME
-        // host course (exactly what mod_adele's host_enrolment_priority_test
-        // exercises, "most generous embedding wins") made this JOIN return
+        // DISTINCT is required: a learning path embedded via more than one
+        // mod_adele activity in the SAME host course makes this JOIN return
         // the same lp.id more than once. get_records_sql() uses the first
-        // selected column as the array key, so a duplicate lp.id triggered
+        // selected column as the array key, so a duplicate lp.id triggers
         // "Duplicate value found in column 'id'" - and the caller
         // (enrolled(), below) would have called subscribe_user_to_learning_path()
         // twice for the same path, redundant even though harmless
@@ -193,19 +191,30 @@ class enrollment {
     }
 
     /**
-     * Assings the assistant role.
+     * Grant the site-wide assistant role when a user is assigned the
+     * configured trigger role.
      *
-     * @param object $event
+     * The enrollassistant setting names a role whose assignment (anywhere)
+     * should also grant the user the system-level adeleassistant role. Does
+     * nothing when the setting is empty or set to "no role" ('0'), or when the
+     * assigned role is not the trigger role.
+     *
+     * @param object $event The role_assigned event.
      */
     public static function assign_assistant_to_role($event) {
         global $DB;
         $configrole = get_config('local_adele', 'enrollassistant');
-        $eventroleid = $event->objectid;
-        $userid = $event->relateduserid;
-        $systemrole = $DB->get_record('role', ['shortname' => 'adeleassistant'], '*', MUST_EXIST);
-        $systemcontext = context_system::instance();
-        if ($configrole !== '' && ($eventroleid == $configrole)) {
-            role_assign($systemrole->id, $userid, $systemcontext->id);
+        if ($configrole === false || $configrole === '' || $configrole === '0') {
+            return;
         }
+        if ((string) $event->objectid !== (string) $configrole) {
+            return;
+        }
+        $systemrole = $DB->get_record('role', ['shortname' => 'adeleassistant']);
+        if (!$systemrole) {
+            return;
+        }
+        $systemcontext = context_system::instance();
+        role_assign($systemrole->id, $event->relateduserid, $systemcontext->id);
     }
 }

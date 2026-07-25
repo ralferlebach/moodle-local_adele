@@ -31,5 +31,6 @@ $plugin->requires = 2022112800;
 $plugin->maturity = MATURITY_ALPHA;
 $plugin->supported = [405, 405];
 $plugin->dependencies = [
-    'mod_adele' => 2024060300,
+    'mod_adele' => 2026072500,
+    'enrol_adele' => 2026072500,
 ];

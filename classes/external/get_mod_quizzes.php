@@ -87,13 +87,18 @@ class get_mod_quizzes extends external_api {
      * @return array
      */
     public static function execute($contextid, $availablecourses): array {
+        $params = self::validate_parameters(self::execute_parameters(), [
+            'contextid' => $contextid,
+            'availablecourses' => $availablecourses,
+        ]);
 
         require_login();
 
-        $context = context::instance_by_id($contextid);
+        $context = context::instance_by_id($params['contextid']);
+        self::validate_context($context);
         require_capability('local/adele:canmanage', $context);
 
-        return modquiz::get_mod_quizzes($availablecourses);
+        return modquiz::get_mod_quizzes($params['availablecourses']);
     }
 
     /**

@@ -64,6 +64,7 @@ $string['btnupdate_positions'] = 'Update positions';
 $string['btnupdatetext_manual_check'] = 'Save';
 $string['cachedef_navisteacher'] = 'Is teacher cache';
 $string['cancel'] = 'Cancel';
+$string['cannotdeleteembedded'] = 'This learning path cannot be deleted: {$a} course activity/activities still embed it. Remove those activities first.';
 $string['categories'] = 'Define category level';
 $string['categories_desc'] = 'Define at which course level courses should be included';
 $string['charthelper_child_nodes'] = 'Child nodes:';

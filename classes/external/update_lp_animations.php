@@ -81,15 +81,36 @@ class update_lp_animations extends external_api {
         $nodeid,
         $animations
     ): array {
+        global $USER;
+
+        $params = self::validate_parameters(self::execute_parameters(), [
+            'contextid' => $contextid,
+            'learningpathid' => $learningpathid,
+            'userid' => $userid,
+            'nodeid' => $nodeid,
+            'animations' => $animations,
+        ]);
+
         require_login();
-        $context = context::instance_by_id($contextid);
+        $context = context::instance_by_id($params['contextid']);
+        self::validate_context($context);
         require_capability('local/adele:view', $context);
 
+        // Capability local/adele:view is granted to the `user` archetype, so every authenticated
+        // user holds it - it is NOT a boundary. This is a purely personal UI
+        // preference (how animations render for one user on one path); without an
+        // ownership check, any user could overwrite any other user's setting by
+        // supplying a foreign userid (IDOR). No teacher/manager override is needed
+        // for a per-user display preference.
+        if ((int) $params['userid'] !== (int) $USER->id) {
+            throw new required_capability_exception($context, 'local/adele:view', 'nopermissions', '');
+        }
+
         return learning_path_update::update_animations(
-            $learningpathid,
-            $userid,
-            $nodeid,
-            $animations
+            $params['learningpathid'],
+            $params['userid'],
+            $params['nodeid'],
+            $params['animations']
         );
     }
 

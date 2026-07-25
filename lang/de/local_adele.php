@@ -64,6 +64,7 @@ $string['btnupdate_positions'] = 'Positionen aktualisieren';
 $string['btnupdatetext_manual_check'] = 'Speichern';
 $string['cachedef_navisteacher'] = 'Ist Lehrer-Cache';
 $string['cancel'] = 'Schließen';
+$string['cannotdeleteembedded'] = 'Dieser Lernpfad kann nicht gelöscht werden: {$a} Kursaktivität(en) betten ihn noch ein. Entfernen Sie diese Aktivitäten zuerst.';
 $string['categories'] = 'Kategorieebene definieren';
 $string['categories_desc'] = 'Definieren Sie, auf welcher Kursebene Kurse enthalten sein sollen';
 $string['charthelper_child_nodes'] = 'Untergeordnete Nodes';

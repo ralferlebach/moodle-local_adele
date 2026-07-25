@@ -68,8 +68,13 @@ class get_restrictions extends external_api {
      * @return array
      */
     public static function execute($contextid): array {
+        $params = self::validate_parameters(self::execute_parameters(), [
+            'contextid' => $contextid,
+        ]);
+
         require_login();
-        $context = context::instance_by_id($contextid);
+        $context = context::instance_by_id($params['contextid']);
+        self::validate_context($context);
         // Managers keep full access; editing-teachers may read the condition palette via
         // the dedicated teacheredit capability (#431), and a per-learning-path editor
         // (local_adele_lp_editors membership, surfaced by check_access()) may read it to

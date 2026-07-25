@@ -98,6 +98,7 @@ class save_learningpath extends external_api {
 
         require_login();
         $context = context::instance_by_id($contextid);
+        self::validate_context($context);
         if ($params['learningpathid'] == 0) {
             // Creating a new path: any editor/assistant/manager may create.
             if (empty(learning_paths::check_access())) {

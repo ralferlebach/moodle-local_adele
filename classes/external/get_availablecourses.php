@@ -78,6 +78,7 @@ class get_availablecourses extends external_api {
 
         require_login();
         $context = context::instance_by_id($contextid);
+        self::validate_context($context);
         require_capability('local/adele:view', $context);
 
         return learning_path_courses::get_availablecourses();

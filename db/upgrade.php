@@ -355,5 +355,109 @@ function xmldb_local_adele_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2026072301, 'local', 'adele');
     }
 
+    // Fix G.18 (Session 003): local_adele_lp_editors had no unique index and
+    // both columns were nullable, so duplicate (userid, learningpathid)
+    // rows were possible — the surrounding code already contained
+    // workarounds for exactly this. No other column on this table carries
+    // meaningful data (id, userid, learningpathid only), so keeping the
+    // lowest id per pair and discarding the rest loses nothing, unlike the
+    // similar cleanup above for local_adele_path_user.
+    if ($oldversion < 2026072402) {
+        $table = new xmldb_table('local_adele_lp_editors');
+
+        $duplicateids = $DB->get_fieldset_sql("
+            SELECT t1.id
+            FROM {local_adele_lp_editors} t1
+            WHERE EXISTS (
+                SELECT 1
+                FROM {local_adele_lp_editors} t2
+                WHERE t2.userid = t1.userid
+                  AND t2.learningpathid = t1.learningpathid
+                  AND t2.id > t1.id
+            )
+        ");
+        if ($duplicateids) {
+            $DB->delete_records_list('local_adele_lp_editors', 'id', $duplicateids);
+        }
+
+        // A row with a NULL userid or learningpathid cannot mean anything
+        // (can't identify who edits what) and would make change_field_
+        // notnull() below fail on any installation that has one — remove
+        // them first rather than risk repeating the real production
+        // upgrade failure from Session 002, Teil 18.
+        $DB->delete_records_select(
+            'local_adele_lp_editors',
+            'userid IS NULL OR learningpathid IS NULL'
+        );
+
+        $userid = new xmldb_field('userid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        if ($dbman->field_exists($table, $userid)) {
+            $dbman->change_field_notnull($table, $userid);
+        }
+        $learningpathid = new xmldb_field('learningpathid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        if ($dbman->field_exists($table, $learningpathid)) {
+            $dbman->change_field_notnull($table, $learningpathid);
+        }
+
+        $newindex = new xmldb_index(
+            'useridlearningpathid',
+            XMLDB_INDEX_UNIQUE,
+            ['userid', 'learningpathid']
+        );
+        if (!$dbman->index_exists($table, $newindex)) {
+            $dbman->add_index($table, $newindex);
+        }
+
+        upgrade_plugin_savepoint(true, 2026072402, 'local', 'adele');
+    }
+
+    // Fix G.2 full solution (Session 003): create the new host-course index
+    // table and backfill it from mod_adele's existing embeddings, so
+    // upgrading sites do not start with an empty index that only catches up
+    // as activities are next saved.
+    if ($oldversion < 2026072403) {
+        $table = new xmldb_table('local_adele_host_courses');
+        if (!$dbman->table_exists($table)) {
+            $table->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE, null);
+            $table->add_field('adeleinstanceid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+            $table->add_field('learningpathid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+            $table->add_field('courseid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+            $table->add_field('participantoption1', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0');
+            $table->add_field('participantoption2', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0');
+            $table->add_field('participantoption3', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0');
+            $table->add_field('timemodified', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+            $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
+            $table->add_index('adeleinstanceid', XMLDB_INDEX_UNIQUE, ['adeleinstanceid']);
+            $table->add_index('learningpathid', XMLDB_INDEX_NOTUNIQUE, ['learningpathid']);
+            $dbman->create_table($table);
+        }
+
+        // Backfill: only possible if mod_adele is already installed (its
+        // {adele} table must exist) - on a site installing local_adele
+        // before mod_adele for the first time, this is legitimately empty
+        // and mod_adele's own install/first save will populate it going
+        // forward via the new sync calls in its lifecycle hooks.
+        if ($dbman->table_exists('adele')) {
+            $embeddings = $DB->get_records('adele', null, '', 'id, learningpathid, course, participantslist');
+            foreach ($embeddings as $embedding) {
+                if (empty($embedding->learningpathid)) {
+                    continue;
+                }
+                $options = array_map('trim', explode(',', (string) $embedding->participantslist));
+                $DB->insert_record('local_adele_host_courses', (object) [
+                    'adeleinstanceid' => (int) $embedding->id,
+                    'learningpathid' => (int) $embedding->learningpathid,
+                    'courseid' => (int) $embedding->course,
+                    'participantoption1' => in_array('1', $options, true) ? 1 : 0,
+                    'participantoption2' => in_array('2', $options, true) ? 1 : 0,
+                    'participantoption3' => in_array('3', $options, true) ? 1 : 0,
+                    'timemodified' => time(),
+                ]);
+            }
+        }
+
+        upgrade_plugin_savepoint(true, 2026072403, 'local', 'adele');
+    }
+
     return true;
 }

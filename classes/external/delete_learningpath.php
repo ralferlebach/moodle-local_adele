@@ -78,6 +78,7 @@ class delete_learningpath extends external_api {
         require_login();
 
         $context = context::instance_by_id($contextid);
+        self::validate_context($context);
         // Deleting a path requires being an editor of THAT path (or a manager/admin) (#458).
         learning_paths::require_lp_editor_access($params['learningpathid'], $context);
 
@@ -92,6 +93,12 @@ class delete_learningpath extends external_api {
     public static function execute_returns(): external_single_structure {
         return new external_single_structure([
             'success' => new external_value(PARAM_BOOL, 'Successful deletion', VALUE_REQUIRED),
+            // Fix G.13 (Session 003): set when success is false and the
+            // reason is something more specific than a generic DB failure
+            // (currently: the path is still embedded in one or more
+            // mod_adele activities). Optional so existing callers that only
+            // read 'success' keep working unchanged.
+            'message' => new external_value(PARAM_TEXT, 'Reason when unsuccessful', VALUE_OPTIONAL),
             ]);
     }
 }

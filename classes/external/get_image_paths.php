@@ -69,9 +69,14 @@ class get_image_paths extends external_api {
      * @return array
      */
     public static function execute($contextid): array {
+        $params = self::validate_parameters(self::execute_parameters(), [
+            'contextid' => $contextid,
+        ]);
+
         require_login();
 
-        $context = context::instance_by_id($contextid);
+        $context = context::instance_by_id($params['contextid']);
+        self::validate_context($context);
         $sessionvalue = learning_paths::check_access();
 
         // Listing the stock images requires general editor access (clean denial, #458).

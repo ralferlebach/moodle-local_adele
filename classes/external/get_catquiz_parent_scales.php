@@ -66,9 +66,14 @@ class get_catquiz_parent_scales extends external_api {
      * @return array
      */
     public static function execute($contextid): array {
+        $params = self::validate_parameters(self::execute_parameters(), [
+            'contextid' => $contextid,
+        ]);
+
         require_login();
 
-        $context = context::instance_by_id($contextid);
+        $context = context::instance_by_id($params['contextid']);
+        self::validate_context($context);
         require_capability('local/adele:canmanage', $context);
 
         return catquiz::get_catquiz_parent_scales();

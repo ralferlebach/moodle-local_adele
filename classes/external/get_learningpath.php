@@ -72,6 +72,8 @@ class get_learningpath extends external_api {
      * @return array
      */
     public static function execute($userid, $learningpathid, $contextid): array {
+        global $DB, $USER;
+
         $params = self::validate_parameters(self::execute_parameters(), [
             'userid' => $userid,
             'learningpathid' => $learningpathid,
@@ -81,12 +83,34 @@ class get_learningpath extends external_api {
         require_login();
 
         $context = context::instance_by_id($contextid);
+        self::validate_context($context);
 
         $learningpaths = learning_paths::return_learningpaths();
 
+        // The return_learningpaths() call lists paths the current user EDITS
+        // (local_adele_lp_editors); it does not include paths a user is
+        // merely SUBSCRIBED to as a learner. Without the check below, a plain
+        // student loading their OWN runtime path fails the isset() test and
+        // hits the exception. A genuine subscription check against
+        // local_adele_path_user, using $USER->id (never the caller-supplied,
+        // unvalidated $params['userid'], which would reopen an IDOR), covers
+        // that case.
+        $issubscribed = $DB->record_exists('local_adele_path_user', [
+            'learning_path_id' => $params['learningpathid'],
+            'user_id' => (int) $USER->id,
+        ]);
+
+        // The local/adele:edit capability is granted to the `user` archetype, so every
+        // authenticated user holds it - guarding on it alone would let any
+        // logged-in user read any learning path's full data by id (IDOR).
+        // Uses the same teacher-or-editor gate as the sibling getters
+        // (get_lp_user_path_relation.php etc.), plus the subscription check
+        // above for the student-reading-their-own-path case.
         if (
-            !isset($learningpaths[$params['learningpathid']]) &&
-            !has_capability('local/adele:edit', $context)
+            !$issubscribed
+            && !isset($learningpaths[$params['learningpathid']])
+            && !has_capability('local/adele:teacheredit', $context)
+            && !learning_paths::check_access()
         ) {
             throw new required_capability_exception($context, 'local/adele:canmanage', 'nopermissions', 'error');
         }

@@ -81,6 +81,10 @@ class save_lp_user_path_relation extends external_api {
         require_login();
 
         $context = context::instance_by_id($contextid);
+        // See the identical comment in
+        // get_lp_user_path_relation.php — canmanage/teacheredit is
+        // system-/course-role-based, not course-enrolment-based; a manager
+        // acting on a course they are not enrolled in is the normal case.
         // Managers keep full access; editing-teachers may set a user's node status
         // (manual completion / master toggle) via teacheredit, without canmanage (#431).
         if (!has_capability('local/adele:canmanage', $context)) {

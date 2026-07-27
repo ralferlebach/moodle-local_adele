@@ -196,7 +196,7 @@ function xmldb_local_adele_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2025081200, 'local', 'adele');
     }
     if ($oldversion < 2026061800) {
-        // Ticket #431: the local/adele:teacheredit capability gained the editingteacher
+        // The local/adele:teacheredit capability gained the editingteacher
         // archetype so editing-teachers can operate master conditions without the
         // over-broad local/adele:canmanage. Archetype defaults only apply to fresh
         // installs, so grant it to existing editing-teacher roles here too. Do not
@@ -211,7 +211,7 @@ function xmldb_local_adele_upgrade($oldversion) {
     }
 
     if ($oldversion < 2026071500) {
-        // Ticket #482: the local/adele:teacheredit capability gained the manager
+        // The local/adele:teacheredit capability gained the manager
         // archetype so a course Manager operates a learning path like an editing
         // teacher. Archetype defaults only apply to fresh installs, so grant it to
         // existing manager roles here too. Do not overwrite any explicit admin
@@ -233,25 +233,53 @@ function xmldb_local_adele_upgrade($oldversion) {
         $reconcile = new \local_adele\task\reconcile_user_paths();
         \core\task\manager::queue_adhoc_task($reconcile, true);
 
-        // Ticket #501: guarantee at most one active user-path relation per
+        // Guarantee at most one active user-path relation per
         // (user_id, course_id, learning_path_id). First remove pre-existing
         // duplicates created by the historical check-then-insert race, keeping
         // the most recently created row (highest id). buildsqlqueryuserpath()
         // reads with ORDER BY id DESC, so the highest-id row is the one every
         // read/update path already targets and therefore carries the up-to-date
         // progress; the orphaned lower-id copies were never updated after
-        // creation, so nothing is lost. The nested derived table keeps the
-        // statement portable across PostgreSQL and MariaDB/MySQL.
-        $DB->execute("
-            DELETE FROM {local_adele_path_user}
-            WHERE id NOT IN (
-                SELECT keepid FROM (
-                    SELECT MAX(id) AS keepid
-                    FROM {local_adele_path_user}
-                    GROUP BY user_id, course_id, learning_path_id
-                ) keptrows
+        // creation, so nothing is lost.
+        //
+        // A single DELETE that references {local_adele_path_user} both as the
+        // target and inside its own WHERE clause triggers MySQL/MariaDB error
+        // 1093 ("You can't specify target table ... for update in FROM
+        // clause"); derived-table wrapping is not a reliable workaround. This
+        // is therefore split into a read-only SELECT (same-table self-joins
+        // are fine there) followed by a plain DELETE by explicit id list,
+        // which every supported RDBMS accepts unconditionally.
+        //
+        // course_id is added by step 2024052300 above, so in a normal
+        // sequential upgrade it is guaranteed to exist by the time we get
+        // here; the defensive check below covers a prior
+        // interrupted/partial upgrade on that installation left its
+        // savepoint recorded without the corresponding DDL having actually
+        // stuck. Rather than assume that can't happen again, guarantee the
+        // column exists immediately before relying on it, exactly like step
+        // 2024052300 already does for the same field — cheap, idempotent,
+        // and self-healing regardless of how the site got here.
+        $table = new xmldb_table('local_adele_path_user');
+        $coursefield = new xmldb_field('course_id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0', 'user_id');
+        if (!$dbman->field_exists($table, $coursefield)) {
+            $dbman->add_field($table, $coursefield);
+        }
+
+        $duplicateids = $DB->get_fieldset_sql("
+            SELECT t1.id
+            FROM {local_adele_path_user} t1
+            WHERE EXISTS (
+                SELECT 1
+                FROM {local_adele_path_user} t2
+                WHERE t2.user_id = t1.user_id
+                  AND t2.course_id = t1.course_id
+                  AND t2.learning_path_id = t1.learning_path_id
+                  AND t2.id > t1.id
             )
         ");
+        if ($duplicateids) {
+            $DB->delete_records_list('local_adele_path_user', 'id', $duplicateids);
+        }
 
         // With the duplicates removed, the unique index can be created.
         $table = new xmldb_table('local_adele_path_user');
@@ -265,6 +293,160 @@ function xmldb_local_adele_upgrade($oldversion) {
         }
 
         upgrade_plugin_savepoint(true, 2026072200, 'local', 'adele');
+    }
+
+    if ($oldversion < 2026072301) {
+        // A user path's identity is learning path + user; course_id is
+        // provenance only. The 2026072200 step above still enforced the old,
+        // course-bound identity; without this step a learning path embedded
+        // in two different host courses would keep creating a second,
+        // competing user path the moment both are active - the duplication
+        // (referenced in classes/enrollment.php) originally complained
+        // about — the two fixes were solving adjacent but different problems
+        // and the schema has to converge on one of them.
+        //
+        // Collapse remaining course_id-differentiated duplicates per
+        // (user_id, learning_path_id), keeping the highest id, mirroring the
+        // 2026072200 approach and the same self-join-then-delete-by-id shape
+        // (never a same-table subquery inside the DELETE itself).
+        $table = new xmldb_table('local_adele_path_user');
+        $oldindex = new xmldb_index(
+            'useridcourseidlpid',
+            XMLDB_INDEX_UNIQUE,
+            ['user_id', 'course_id', 'learning_path_id']
+        );
+        if ($dbman->index_exists($table, $oldindex)) {
+            $dbman->drop_index($table, $oldindex);
+        }
+
+        $duplicateids = $DB->get_fieldset_sql("
+            SELECT t1.id
+            FROM {local_adele_path_user} t1
+            WHERE EXISTS (
+                SELECT 1
+                FROM {local_adele_path_user} t2
+                WHERE t2.user_id = t1.user_id
+                  AND t2.learning_path_id = t1.learning_path_id
+                  AND t2.id > t1.id
+            )
+        ");
+        if ($duplicateids) {
+            $DB->delete_records_list('local_adele_path_user', 'id', $duplicateids);
+        }
+
+        $newindex = new xmldb_index(
+            'useridlpid',
+            XMLDB_INDEX_UNIQUE,
+            ['user_id', 'learning_path_id']
+        );
+        if (!$dbman->index_exists($table, $newindex)) {
+            $dbman->add_index($table, $newindex);
+        }
+
+        upgrade_plugin_savepoint(true, 2026072301, 'local', 'adele');
+    }
+
+    // The local_adele_lp_editors table had no unique index and both columns were
+    // nullable, so duplicate (userid, learningpathid) rows were possible —
+    // the surrounding code already contained
+    // workarounds for exactly this. No other column on this table carries
+    // meaningful data (id, userid, learningpathid only), so keeping the
+    // lowest id per pair and discarding the rest loses nothing, unlike the
+    // similar cleanup above for local_adele_path_user.
+    if ($oldversion < 2026072402) {
+        $table = new xmldb_table('local_adele_lp_editors');
+
+        $duplicateids = $DB->get_fieldset_sql("
+            SELECT t1.id
+            FROM {local_adele_lp_editors} t1
+            WHERE EXISTS (
+                SELECT 1
+                FROM {local_adele_lp_editors} t2
+                WHERE t2.userid = t1.userid
+                  AND t2.learningpathid = t1.learningpathid
+                  AND t2.id > t1.id
+            )
+        ");
+        if ($duplicateids) {
+            $DB->delete_records_list('local_adele_lp_editors', 'id', $duplicateids);
+        }
+
+        // A row with a NULL userid or learningpathid cannot mean anything
+        // (can't identify who edits what) and would make change_field_
+        // notnull() below fail on any installation that has one — remove
+        // them first rather than risk repeating the real production
+        // upgrade failure on installations that have such rows.
+        $DB->delete_records_select(
+            'local_adele_lp_editors',
+            'userid IS NULL OR learningpathid IS NULL'
+        );
+
+        $userid = new xmldb_field('userid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        if ($dbman->field_exists($table, $userid)) {
+            $dbman->change_field_notnull($table, $userid);
+        }
+        $learningpathid = new xmldb_field('learningpathid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        if ($dbman->field_exists($table, $learningpathid)) {
+            $dbman->change_field_notnull($table, $learningpathid);
+        }
+
+        $newindex = new xmldb_index(
+            'useridlearningpathid',
+            XMLDB_INDEX_UNIQUE,
+            ['userid', 'learningpathid']
+        );
+        if (!$dbman->index_exists($table, $newindex)) {
+            $dbman->add_index($table, $newindex);
+        }
+
+        upgrade_plugin_savepoint(true, 2026072402, 'local', 'adele');
+    }
+
+    // Create the new host-course index table and backfill it from
+    // mod_adele's existing embeddings, so upgrading sites do not start with
+    // an empty index that only catches up as activities are next saved.
+    if ($oldversion < 2026072403) {
+        $table = new xmldb_table('local_adele_host_courses');
+        if (!$dbman->table_exists($table)) {
+            $table->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE, null);
+            $table->add_field('adeleinstanceid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+            $table->add_field('learningpathid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+            $table->add_field('courseid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+            $table->add_field('participantoption1', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0');
+            $table->add_field('participantoption2', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0');
+            $table->add_field('participantoption3', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0');
+            $table->add_field('timemodified', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+            $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
+            $table->add_index('adeleinstanceid', XMLDB_INDEX_UNIQUE, ['adeleinstanceid']);
+            $table->add_index('learningpathid', XMLDB_INDEX_NOTUNIQUE, ['learningpathid']);
+            $dbman->create_table($table);
+        }
+
+        // Backfill: only possible if mod_adele is already installed (its
+        // {adele} table must exist) - on a site installing local_adele
+        // before mod_adele for the first time, this is legitimately empty
+        // and mod_adele's own install/first save will populate it going
+        // forward via the new sync calls in its lifecycle hooks.
+        if ($dbman->table_exists('adele')) {
+            $embeddings = $DB->get_records('adele', null, '', 'id, learningpathid, course, participantslist');
+            foreach ($embeddings as $embedding) {
+                if (empty($embedding->learningpathid)) {
+                    continue;
+                }
+                $options = array_map('trim', explode(',', (string) $embedding->participantslist));
+                $DB->insert_record('local_adele_host_courses', (object) [
+                    'adeleinstanceid' => (int) $embedding->id,
+                    'learningpathid' => (int) $embedding->learningpathid,
+                    'courseid' => (int) $embedding->course,
+                    'participantoption1' => in_array('1', $options, true) ? 1 : 0,
+                    'participantoption2' => in_array('2', $options, true) ? 1 : 0,
+                    'participantoption3' => in_array('3', $options, true) ? 1 : 0,
+                    'timemodified' => time(),
+                ]);
+            }
+        }
+
+        upgrade_plugin_savepoint(true, 2026072403, 'local', 'adele');
     }
 
     return true;

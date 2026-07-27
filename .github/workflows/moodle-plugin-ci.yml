@@ -12,9 +12,21 @@ jobs:
       min_php: '8.2'  # Optional: Set minimum PHP version
 
       # Command to install more dependencies
+      #
+      # enrol_adele added (Session 003, Teil 14): without it, local_adele's
+      # own test suite runs with enrol_adele genuinely absent - correct in
+      # principle (local_adele deliberately has no hard dependency on it,
+      # decision G-Q1a), but G-Q1a also means every reconcile attempt then
+      # calls debugging() to say so loudly, which advanced_testcase treats
+      # as an unexpected-debugging failure in tests that do not already
+      # anticipate it. Installing enrol_adele here matches the realistic
+      # "fully deployed ADELE ecosystem" case instead, avoiding that
+      # debugging() path entirely rather than retrofitting
+      # assertDebuggingCalled() into every affected test.
       extra_plugin_runners: |
         moodle-plugin-ci add-plugin --branch MOODLE_405_DEV Wunderbyte-GmbH/moodle-local_wunderbyte_table
-        moodle-plugin-ci add-plugin --branch master Wunderbyte-GmbH/moodle-mod_adele
+        moodle-plugin-ci add-plugin --branch development ralferlebach/moodle-mod_adele
+        moodle-plugin-ci add-plugin --branch development ralferlebach/moodle-enrol_adele
         # --- catquiz ecosystem temporarily disabled in CI ---
         # The adaptive-catquiz-v3 branch of local_catquiz declares a 'catquizcentralhub'
         # subplugin type whose directory is missing, so Moodle's component scan throws
@@ -135,7 +147,8 @@ jobs:
       # Command to install more dependencies
       extra_plugin_runners: |
         moodle-plugin-ci add-plugin --branch MOODLE_405_DEV Wunderbyte-GmbH/moodle-local_wunderbyte_table
-        moodle-plugin-ci add-plugin --branch master Wunderbyte-GmbH/moodle-mod_adele
+        moodle-plugin-ci add-plugin --branch development ralferlebach/moodle-mod_adele
+        moodle-plugin-ci add-plugin --branch development ralferlebach/moodle-enrol_adele
         # --- catquiz ecosystem temporarily disabled in CI ---
         # The adaptive-catquiz-v3 branch of local_catquiz declares a 'catquizcentralhub'
         # subplugin type whose directory is missing, so Moodle's component scan throws

@@ -96,7 +96,7 @@ class learning_path_courses {
         $entries = $DB->get_records_sql($select, $whereparamsquery['params']);
         foreach ($entries as $entry) {
             $context = context_course::instance($entry->course_node_id);
-            // Ticket #464 M5: the course summary is rendered via v-html in the expanded node card,
+            // The course summary is rendered via v-html in the expanded node card,
             // so sanitise it server-side (format_text purifies scripts/handlers while keeping
             // legitimate formatting). summary is declared PARAM_RAW precisely to carry this
             // already-purified HTML. filter => false: this runs from the get_availablecourses

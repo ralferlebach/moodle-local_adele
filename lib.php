@@ -93,6 +93,15 @@ function local_adele_pluginfile($course, $cm, $context, $filearea, $args, $force
         return false;
     }
 
+    // Require login and check visibility before serving any file, rather
+    // than serving on a guessable pluginfile URL alone.
+    require_login();
+
+    $allowedareas = ['lp_images', 'helpingslider', 'node_background_image'];
+    if (!in_array($filearea, $allowedareas, true)) {
+        return false;
+    }
+
     // Leave this line out if you set the itemid to null in make_pluginfile_url (set $itemid to 0 instead).
     $itemid = array_shift($args); // The first item in the $args array.
     $filename = array_pop($args); // The last item in the $args array.
@@ -102,6 +111,22 @@ function local_adele_pluginfile($course, $cm, $context, $filearea, $args, $force
     } else {
         // Var $args contains elements of the filepath.
         $filepath = '/' . implode('/', $args) . '/';
+    }
+
+    // Filearea lp_images is scoped to one specific learning path (itemid); the
+    // static assets (helpingslider/node_background_image) are shared UI
+    // chrome, not tied to a single learning path, so require_login() above
+    // is the only check that applies to them.
+    if ($filearea === 'lp_images' && $itemid) {
+        global $DB;
+        $visibility = $DB->get_field('local_adele_learning_paths', 'visibility', ['id' => $itemid]);
+        if ($visibility === false) {
+            return false; // Learning path no longer exists.
+        }
+        if (!$visibility && !\local_adele\learning_paths::check_access()) {
+            // Hidden path: only editors/managers/assistants may see its image.
+            return false;
+        }
     }
 
     // Retrieve the file from the Files API.

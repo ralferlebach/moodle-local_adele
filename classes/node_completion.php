@@ -53,8 +53,6 @@ class node_completion {
      */
     public static function enrol_child_courses($event) {
         // Get the user path relation.
-        global $DB;
-
         $userpath = $event->other['userpath']->json;
         if (is_string($userpath)) {
             $userpath = json_decode($userpath);
@@ -65,50 +63,26 @@ class node_completion {
         }
         $uniquechildcourses = array_unique($uniquechildcourses);
         $firstenrollededit = false;
-        $instances = [];
         foreach ($userpath->tree->nodes as &$node) {
             if (in_array($node->id, $uniquechildcourses)) {
                 foreach ($node->data->course_node_id as $subscribecourse) {
-                    if (isset($instances[$subscribecourse])) {
-                        $instance = $instances[$subscribecourse];
-                    } else {
-                        if (!enrol_is_enabled('manual')) {
-                            break;
-                        }
-                        if (!$enrol = enrol_get_plugin('manual')) {
-                            break;
-                        }
-                        $instance = $DB->get_record(
-                            'enrol',
-                            [
-                                'courseid' => $subscribecourse,
-                                'enrol' => 'manual',
-                            ]
-                        );
-                        $instances[$subscribecourse] = $instance;
-                    }
-
-                    if (!$instance) {
-                        continue;
-                    }
-
+                    // Target course enrolment is owned exclusively by
+                    // enrol_adele; the reconcile call after this loop is the
+                    // only enrolment path and warns via
+                    // enrol_state::warn_enrol_adele_missing() when enrol_adele
+                    // is absent or inactive. first_enrolled stamping, boundary
+                    // scheduling and the group assignment below still run
+                    // unconditionally, since timed restrictions and group
+                    // membership are independent of which plugin performs the
+                    // enrolment.
                     if (!isset($node->data->first_enrolled)) {
                         $node->data->first_enrolled = time();
                         $firstenrollededit = true;
                     }
-                    // Schedule tasks for any future restriction boundaries on this node.
-                    // The helper skips past boundaries, so calling it on every evaluation
-                    // covers both initial enrolment and later restriction-date edits.
                     adhoc_task_helper::set_scheduled_adhoc_tasks(
                         json_decode(json_encode($node), true),
                         $event->other['userpath']
                     );
-                    $selectedrole = get_config('local_adele', 'enroll_as_setting');
-                    $context = \context_course::instance($subscribecourse);
-                    $isenrolled = is_enrolled($context, $event->other['userpath']->user_id);
-                    if (!$isenrolled) {
-                        $enrol->enrol_user($instance, $event->other['userpath']->user_id, $selectedrole);
-                    }
                     self::enrol_user_group(
                         $userpath->tree->nodes,
                         $subscribecourse,
@@ -120,6 +94,13 @@ class node_completion {
         if ($firstenrollededit) {
             self::trigger_user_path_update_new_enrollments($event, $userpath);
         }
+        // Hand over to enrol_adele: enrols the user into the newly reachable
+        // child courses through the ADELE instances. Warns (does not silently
+        // no-op) when enrol_adele is absent.
+        enrol_state::request_reconcile(
+            (int) $event->other['userpath']->learning_path_id,
+            (int) $event->other['userpath']->user_id
+        );
         self::is_user_path_completed($userpath->tree, $event->other['userpath']);
     }
 

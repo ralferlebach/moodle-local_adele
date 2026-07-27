@@ -81,6 +81,8 @@ class get_lp_user_path_relations extends external_api {
         require_login();
 
         $context = context::instance_by_id($contextid);
+        // See the identical comment in
+        // get_lp_user_path_relation.php (singular) — same reasoning.
         require_capability('local/adele:view', $context);
 
         if ($context->contextlevel == CONTEXT_COURSE) {
@@ -90,7 +92,7 @@ class get_lp_user_path_relations extends external_api {
             $params['courseid'] = $coursecontext->instanceid;
         }
 
-        // Ticket #464 H2: local/adele:view is held by every authenticated user, so it is not a
+        // Local/adele:view is held by every authenticated user, so it is not a
         // boundary. This leaderboard returns the whole participant roster (names +
         // progress) for the path/course, so restrict it to course teachers / managers /
         // path editors, or a user actually enrolled in the course it belongs to. The

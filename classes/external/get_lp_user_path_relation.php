@@ -76,6 +76,17 @@ class get_lp_user_path_relation extends external_api {
         global $USER;
         require_login();
         $context = context::instance_by_id($contextid);
+        // The validate_context() call is removed again —
+        // real CI run showed it broke a legitimate case. For CONTEXT_COURSE,
+        // validate_context() effectively requires course ENROLMENT
+        // (require_login($course, ...) internally), but a learning-path
+        // editor's authority here comes from local_adele_lp_editors/
+        // canmanage/check_access() (path-level), not from being enrolled in
+        // whichever course this context happens to be. A manager or
+        // path-editor reading data scoped to a course they do not teach is
+        // the normal case here, not an edge case — the actual security
+        // boundary is the capability/ownership check a few lines below,
+        // which validate_context() does not add to.
         require_capability('local/adele:view', $context);
         if ($context->contextlevel == CONTEXT_COURSE) {
             $params['courseid'] = $context->instanceid;
@@ -84,7 +95,7 @@ class get_lp_user_path_relation extends external_api {
             $params['courseid'] = $coursecontext->instanceid;
         }
 
-        // Ticket #464 H2: local/adele:view is granted to the `user` archetype, so every
+        // Local/adele:view is granted to the `user` archetype, so every
         // authenticated user holds it - it is NOT a boundary. This getter returns the
         // requested user's email plus their full progress snapshot, so reading a path
         // that is not your own must be restricted to a course teacher (:teacheredit,

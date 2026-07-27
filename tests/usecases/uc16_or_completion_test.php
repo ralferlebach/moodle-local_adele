@@ -183,7 +183,7 @@ final class uc16_or_completion_test extends adele_learningpath_testcase {
             }
         }
 
-        // Ticket #502: inbetween now requires a first course access. dndnode_2's
+        // Inbetween now requires a first course access. dndnode_2's
         // course becomes accessible once dndnode_1 is complete; simulate the
         // learner opening it so the pending-completion state is inbetween, not
         // before. (For the completed/manual cases the node resolves to 'after'.)

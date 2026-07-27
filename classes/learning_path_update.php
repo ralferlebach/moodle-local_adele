@@ -173,7 +173,7 @@ class learning_path_update {
      * Recompute the active learning paths of a user that reference a given
      * activity instance in a completion condition.
      *
-     * Ticket #497: the affected paths are found by structurally decoding the
+     * The affected paths are found by structurally decoding the
      * stored snapshot and comparing ids type-safely, instead of a fragile LIKE
      * on the serialized JSON (which only matched the quoted-string form and
      * missed integer-serialised ids). Each matching path is recomputed at most

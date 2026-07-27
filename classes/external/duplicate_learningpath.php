@@ -78,6 +78,7 @@ class duplicate_learningpath extends external_api {
         require_login();
 
         $context = context::instance_by_id($contextid);
+        self::validate_context($context);
         // Duplicating a path is reserved for its OWNER (creator) or a manager/admin: an
         // assistant/editor who is only listed as an editor must not duplicate it (#471).
         learning_paths::require_lp_owner_access($params['learningpathid'], $context);

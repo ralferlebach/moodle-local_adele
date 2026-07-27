@@ -81,6 +81,7 @@ class get_catquiz_parent_scale extends external_api {
         require_login();
 
         $context = context::instance_by_id($contextid);
+        self::validate_context($context);
         require_capability('local/adele:canmanage', $context);
 
         if (!class_exists('local_catquiz\data\dataapi')) {

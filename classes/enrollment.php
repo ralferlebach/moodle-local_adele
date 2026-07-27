@@ -55,24 +55,29 @@ class enrollment {
     }
 
     /**
-     * Build sql query with config filters.
+     * Subscribe a user to a learning path (idempotent, race-safe).
+     *
+     * The identity of a user path is learning path + user (specification 2.1
+     * of the enrol_adele project); the host course is NOT part of it. $courseid
+     * is kept as an optional provenance hint only: it records which course
+     * triggered the first subscription and carries no further meaning. Callers
+     * should omit it.
      *
      * @param object $learningpath
      * @param object $params
-     * @param int $courseid
-     * @return array
+     * @param int|null $courseid Optional provenance only, no identity.
      */
-    public static function subscribe_user_to_learning_path($learningpath, $params, $courseid) {
+    public static function subscribe_user_to_learning_path($learningpath, $params, $courseid = null) {
         global $DB;
         if ($learningpath) {
             if (is_string($learningpath->json)) {
                 $learningpath->json = json_decode($learningpath->json, true);
             }
-            $userpath = self::buildsqlqueryuserpath($learningpath->id, $params->relateduserid, $courseid);
+            $userpath = self::buildsqlqueryuserpath($learningpath->id, $params->relateduserid);
             if (!$userpath) {
                 $newrecord = [
                     'user_id' => $params->relateduserid,
-                    'course_id' => $courseid,
+                    'course_id' => (int) ($courseid ?? 0),
                     'learning_path_id' => $learningpath->id,
                     'status' => 'active',
                     'timecreated' => time(),
@@ -91,13 +96,12 @@ class enrollment {
                     $id = $DB->insert_record('local_adele_path_user', $newrecord);
                     $userpath = $DB->get_record('local_adele_path_user', ['id' => $id]);
                 } catch (\dml_exception $e) {
-                    // Ticket #501: a concurrent request won the race and inserted
-                    // the row first; the unique index (user_id, course_id,
-                    // learning_path_id) rejected this insert. Reuse the row that
-                    // now exists instead of failing or creating a duplicate. If no
-                    // such row is found the exception was not a duplicate conflict
-                    // and must propagate.
-                    $userpath = self::buildsqlqueryuserpath($learningpath->id, $params->relateduserid, $courseid);
+                    // A concurrent request won the race and inserted
+                    // the row first; the unique index (user_id, learning_path_id)
+                    // rejected this insert. Reuse the row that now exists instead
+                    // of failing or creating a duplicate. If no such row is found
+                    // the exception was not a duplicate conflict and must propagate.
+                    $userpath = self::buildsqlqueryuserpath($learningpath->id, $params->relateduserid);
                     if (!$userpath) {
                         throw $e;
                     }
@@ -132,7 +136,16 @@ class enrollment {
         // LP JSON (GitHub issue #444; aligns with the origin/dev_chris fix for the
         // related #433 "duplicate user learningpathes"). local_adele declares a
         // dependency on mod_adele, so joining {adele} is safe.
-        $sql = "SELECT lp.id, lp.json
+        // DISTINCT is required: a learning path embedded via more than one
+        // mod_adele activity in the SAME host course makes this JOIN return
+        // the same lp.id more than once. get_records_sql() uses the first
+        // selected column as the array key, so a duplicate lp.id triggers
+        // "Duplicate value found in column 'id'" - and the caller
+        // (enrolled(), below) would have called subscribe_user_to_learning_path()
+        // twice for the same path, redundant even though harmless
+        // (idempotent per that method's own docblock). Pre-existing bug,
+        // not introduced this session — surfaced by that test.
+        $sql = "SELECT DISTINCT lp.id, lp.json
         FROM {local_adele_learning_paths} lp
         JOIN {adele} a ON a.learningpathid = lp.id
         WHERE a.course = :courseid";
@@ -143,51 +156,65 @@ class enrollment {
     }
 
     /**
-     * Build sql query with config filters.
+     * Find the active user path for a learning path + user pair.
+     *
+     * course_id is deliberately NOT part of the lookup any more: a learning
+     * path is a system-wide entity, and binding the user path to a host course
+     * produced duplicate paths when the same learning path was embedded in
+     * several courses (enrol_adele project specification 2.1). The third
+     * parameter is accepted and ignored for callers that still pass it.
      *
      * @param int $learningpathid
      * @param int $userid
-     * @param int $courseid
-     * @return array
+     * @param int|null $courseid Ignored, kept for backwards compatibility.
+     * @return object|false
      */
-    public static function buildsqlqueryuserpath($learningpathid, $userid, $courseid) {
+    public static function buildsqlqueryuserpath($learningpathid, $userid, $courseid = null) {
         global $DB;
-        // Using named parameter :courseid in the SQL query.
         $sql = "SELECT *
         FROM {local_adele_path_user} lpu
         WHERE lpu.learning_path_id = :learningpathid
         AND lpu.status = 'active'
         AND lpu.user_id = :userid
-        AND lpu.course_id = :courseid
         ORDER BY lpu.id DESC";
 
         // Providing the named parameter in the $params array.
         $params = [
             'learningpathid' => (int)$learningpathid,
             'userid' => (int)$userid,
-            'courseid' => (int)$courseid,
         ];
 
         // Using get_records_sql function to execute the query with parameters.
-        $record = $DB->get_record_sql($sql, $params);
+        $record = $DB->get_record_sql($sql, $params, IGNORE_MULTIPLE);
 
         return $record;
     }
 
     /**
-     * Assings the assistant role.
+     * Grant the site-wide assistant role when a user is assigned the
+     * configured trigger role.
      *
-     * @param object $event
+     * The enrollassistant setting names a role whose assignment (anywhere)
+     * should also grant the user the system-level adeleassistant role. Does
+     * nothing when the setting is empty or set to "no role" ('0'), or when the
+     * assigned role is not the trigger role.
+     *
+     * @param object $event The role_assigned event.
      */
     public static function assign_assistant_to_role($event) {
         global $DB;
         $configrole = get_config('local_adele', 'enrollassistant');
-        $eventroleid = $event->objectid;
-        $userid = $event->relateduserid;
-        $systemrole = $DB->get_record('role', ['shortname' => 'adeleassistant'], '*', MUST_EXIST);
-        $systemcontext = context_system::instance();
-        if ($configrole !== '' && ($eventroleid == $configrole)) {
-            role_assign($systemrole->id, $userid, $systemcontext->id);
+        if ($configrole === false || $configrole === '' || $configrole === '0') {
+            return;
         }
+        if ((string) $event->objectid !== (string) $configrole) {
+            return;
+        }
+        $systemrole = $DB->get_record('role', ['shortname' => 'adeleassistant']);
+        if (!$systemrole) {
+            return;
+        }
+        $systemcontext = context_system::instance();
+        role_assign($systemrole->id, $event->relateduserid, $systemcontext->id);
     }
 }

@@ -70,12 +70,19 @@ class set_new_image extends external_api {
      * @return array
      */
     public static function execute($contextid, $learningpathid, $image): array {
+        $params = self::validate_parameters(self::execute_parameters(), [
+            'contextid' => $contextid,
+            'learningpathid' => $learningpathid,
+            'image' => $image,
+        ]);
+
         require_login();
 
-        $context = context::instance_by_id($contextid);
+        $context = context::instance_by_id($params['contextid']);
+        self::validate_context($context);
         require_capability('local/adele:canmanage', $context);
 
-        return asset_handler::set_new_image($contextid, $learningpathid, $image);
+        return asset_handler::set_new_image($params['contextid'], $params['learningpathid'], $params['image']);
     }
 
     /**

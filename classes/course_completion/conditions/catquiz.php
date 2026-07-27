@@ -154,21 +154,21 @@ class catquiz implements course_completion {
             return [];
         }
         if (isset($node['completion']) && isset($node['completion']['nodes'])) {
-            foreach ($node['completion']['nodes'] as $complitionnode) {
+            foreach ($node['completion']['nodes'] as $completionnode) {
                 if (
-                    isset($complitionnode['data']) && isset($complitionnode['data']['label'])
-                    && $complitionnode['data']['label'] == 'catquiz' && isset($complitionnode['data']['value']['testid'])
+                    isset($completionnode['data']) && isset($completionnode['data']['label'])
+                    && $completionnode['data']['label'] == 'catquiz' && isset($completionnode['data']['value']['testid'])
                 ) {
                     $validationtype = get_config('local_adele', 'quizsettings');
-                    $testidcourseid = $complitionnode['data']['value']['testid_courseid'];
-                    $scales = $complitionnode['data']['value']['scales'] ?? null;
+                    $testidcourseid = $completionnode['data']['value']['testid_courseid'];
+                    $scales = $completionnode['data']['value']['scales'] ?? null;
                     $scaleattemptset = [
                         'scales' => 0,
                         'attempts' => 0,
                     ];
                     $scaleids = self::get_scale_ids($scales, $scaleattemptset);
                     $parentscaleglobal = $scales['parent']['scale'] ?? false;
-                    $componentid = $complitionnode['data']['value']['componentid'];
+                    $componentid = $completionnode['data']['value']['componentid'];
 
                     $records = Local_catquizCatquiz::return_data_from_attemptstable(
                         100,
@@ -177,9 +177,9 @@ class catquiz implements course_completion {
                         0,
                         $userid
                     );
-                    $catquizzes['inbetween'][$complitionnode['id']] = false;
+                    $catquizzes['inbetween'][$completionnode['id']] = false;
                     if (count($records) > 0) {
-                        $catquizzes['inbetween'][$complitionnode['id']] = true;
+                        $catquizzes['inbetween'][$completionnode['id']] = true;
                     }
                     $allpassedrecords = [];
                     $partialpassedrecords = [];
@@ -197,19 +197,19 @@ class catquiz implements course_completion {
                     );
                     if ($test != null) {
                         $coursemoduleid = get_coursemodule_from_instance('adaptivequiz', $componentid, $test->course);
-                        $catquizzes[$complitionnode['id']]['placeholders']['quiz_name'] =
+                        $catquizzes[$completionnode['id']]['placeholders']['quiz_name'] =
                         '<a href="' . $CFG->wwwroot . '/mod/adaptivequiz/view.php?id=' .
                         $coursemoduleid->id .
-                        // Ticket #464 H4: escape the test name inside the intended anchor (v-html sink).
+                        // Escape the test name inside the intended anchor (v-html sink).
                         '" target="_blank">' . format_string(
                             $test->name,
                             true,
                             ['context' => \context_system::instance(), 'filter' => false]
                         ) . '</a>';
                     } else {
-                        $catquizzes[$complitionnode['id']]['placeholders']['quiz_name'] = 'Test';
+                        $catquizzes[$completionnode['id']]['placeholders']['quiz_name'] = 'Test';
                     }
-                    $catquizzes[$complitionnode['id']]['placeholders']['quiz_attempts_best'] = '';
+                    $catquizzes[$completionnode['id']]['placeholders']['quiz_attempts_best'] = '';
 
                     foreach ($records as $record) {
                         $personabilityresults = Local_catquizCatquiz::get_personabilityresults_of_quizattempt($record);
@@ -322,19 +322,19 @@ class catquiz implements course_completion {
                         $validationtype == 'single_quiz' &&
                         !empty($allpassedrecords)
                     ) {
-                        $catquizzes['completed'][$complitionnode['id']] = $allpassedrecords;
+                        $catquizzes['completed'][$completionnode['id']] = $allpassedrecords;
                     } else if (
                         isset($partialpassedrecords['scale']) &&
                         isset($partialpassedrecords['percentage']) &&
                         count($partialpassedrecords['scale']) == $scaleattemptset['scales'] &&
                         count($partialpassedrecords['percentage']) == $scaleattemptset['attempts']
                     ) {
-                        $catquizzes['completed'][$complitionnode['id']] = $partialpassedrecords;
+                        $catquizzes['completed'][$completionnode['id']] = $partialpassedrecords;
                         $filteredpercentageofrightanswers = array_intersect_key(
                             $percentageofrightanswersbyscalekeyid,
                             array_flip($partialpassedattemptids)
                         );
-                        $catquizzes[$complitionnode['id']]['placeholders']['quiz_attempts_list'] =
+                        $catquizzes[$completionnode['id']]['placeholders']['quiz_attempts_list'] =
                           self::get_record_list(
                               $scales,
                               $partialpassedattemptids,
@@ -342,9 +342,9 @@ class catquiz implements course_completion {
                               $subscaleids
                           );
                     } else {
-                        $catquizzes['completed'][$complitionnode['id']] = false;
+                        $catquizzes['completed'][$completionnode['id']] = false;
                         if ($bestresult) {
-                            $catquizzes[$complitionnode['id']]['placeholders']['quiz_attempts_list'] =
+                            $catquizzes[$completionnode['id']]['placeholders']['quiz_attempts_list'] =
                             self::get_record_list(
                                 $scales,
                                 $bestpartialpassedattemptids,
@@ -354,7 +354,7 @@ class catquiz implements course_completion {
                         }
                     }
                 } else {
-                    $catquizzes['completed'][$complitionnode['id']] = false;
+                    $catquizzes['completed'][$completionnode['id']] = false;
                 }
             }
         }
@@ -463,7 +463,7 @@ class catquiz implements course_completion {
               'time' => date("j.n.y", $attemptsentries[$attempt['attemptid']]->endtime !== '0'
               ? $attemptsentries[$attempt['attemptid']]->endtime
               : $attemptsentries[$attempt['attemptid']]->timemodified),
-              // Ticket #464 H4: the scale name is rendered via v-html in the attempts list.
+              // The scale name is rendered via v-html in the attempts list.
               'scale' => format_string(
                   $scalemap[$scale]['name'],
                   true,

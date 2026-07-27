@@ -246,6 +246,15 @@ class relation_update {
                 // can skip when the viewer's language already matches it (#493 performance).
                 $userpath->json['feedback_lang'] = current_language();
                 $userpathid = user_path_relation::revision_user_path_relation($userpath);
+                // Hand the persisted state to enrol_adele, which reconciles the
+                // target course enrolments against it (enrol where accessible,
+                // reactivate where suspended, suspend where no node grants the
+                // course any more). Warns clearly (does not silently no-op)
+                // when enrol_adele is absent.
+                enrol_state::request_reconcile(
+                    (int) $userpath->learning_path_id,
+                    (int) $userpath->user_id
+                );
                 if ($creation) {
                     global $DB;
                     $createduserpath = $DB->get_record('local_adele_path_user', ['id' => $userpathid]);
@@ -1306,8 +1315,11 @@ class relation_update {
     public static function subscribe_user_starting_node(&$userpath) {
         if (!empty($userpath->json['tree']['nodes'])) {
             foreach ($userpath->json['tree']['nodes'] as &$node) {
+                // The '??' fallback avoids "Undefined array key 'type'" on any
+                // node without an explicit type; the sibling check in
+                // set_scheduled_adhoc_tasks() above uses the same guard.
                 if (
-                    $node['type'] != 'dropzone' && isset($node['parentCourse']) &&
+                    ($node['type'] ?? '') != 'dropzone' && isset($node['parentCourse']) &&
                     in_array('starting_node', $node['parentCourse'])
                 ) {
                     self::enrol_user_into_node($node, $userpath);
@@ -1329,11 +1341,9 @@ class relation_update {
      * @return void
      */
     public static function enrol_user_into_node(&$node, $userpath) {
-        global $DB;
         if (!isset($node['data']['course_node_id']) || is_int($node['data']['course_node_id'])) {
             return;
         }
-        $instances = [];
         foreach ($node['data']['course_node_id'] as $courseid) {
             if (!isset($node['data']['first_enrolled'])) {
                 $node['data']['first_enrolled'] = time();
@@ -1343,33 +1353,13 @@ class relation_update {
             // both initial enrolment and later restriction-date edits; the dedup key
             // keeps it idempotent.
             adhoc_task_helper::set_scheduled_adhoc_tasks($node, $userpath);
-            if (isset($instances[$courseid])) {
-                $instance = $instances[$courseid];
-            } else {
-                if (!enrol_is_enabled('manual')) {
-                    break;
-                }
-                if (!$enrol = enrol_get_plugin('manual')) {
-                    break;
-                }
-                $instance = $DB->get_record(
-                    'enrol',
-                    [
-                        'courseid' => $courseid,
-                        'enrol' => 'manual',
-                    ]
-                );
-                $instances[$courseid] = $instance;
-            }
-            if (!$instance) {
-                continue;
-            }
-            $context = \context_course::instance($courseid);
-            $isenrolled = is_enrolled($context, $userpath->user_id);
-            if (!$isenrolled) {
-                $selectedrole = get_config('local_adele', 'enroll_as_setting');
-                $enrol->enrol_user($instance, $userpath->user_id, $selectedrole);
-            }
+            // Target course enrolment is owned exclusively by enrol_adele.
+            // The reconcile_user() call after this loop (via
+            // enrol_state::request_reconcile(), called once per user path
+            // recompute in updated_learning_path()/revision_user_path_relation()
+            // callers) is the only enrolment path and warns clearly via
+            // enrol_state::warn_enrol_adele_missing() when enrol_adele is
+            // absent or inactive.
         }
     }
 }

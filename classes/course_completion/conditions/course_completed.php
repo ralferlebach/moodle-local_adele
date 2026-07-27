@@ -164,7 +164,7 @@ class course_completed implements course_completion {
                 // Get the course completion instance.
                 $completion = new completion_info($course);
                 $progress = progress::get_course_progress_percentage($course, $userid);
-                // Ticket #502: "in progress" starts at the first course access
+                // The "in progress" state starts at the first course access
                 // (erster Kursaufruf), not at mere enrolment. A learner who is
                 // only enrolled but has never opened the course is NOT started.
                 // The timed processing-duration restriction is unaffected; it
@@ -186,7 +186,7 @@ class course_completed implements course_completion {
                     $isinbetween = true;
                 }
                 $progresses[] = $progress;
-                // Ticket #464 H4: this list is rendered via v-html in the node feedback, so the
+                // This list is rendered via v-html in the node feedback, so the
                 // course name must be HTML-escaped (matching is keyed on course id, not name).
                 $courseprogresslist[] = format_string(
                     $course->fullname,
@@ -197,18 +197,18 @@ class course_completed implements course_completion {
             $coursecompletion['completed'][$courseid] = $completed;
         }
         if (isset($node['completion']) && isset($node['completion']['nodes'])) {
-            foreach ($node['completion']['nodes'] as $complitionnode) {
+            foreach ($node['completion']['nodes'] as $completionnode) {
                 if (
-                    isset($complitionnode['data']) &&
-                    isset($complitionnode['data']['label']) &&
-                    $complitionnode['data']['label'] == 'course_completed'
+                    isset($completionnode['data']) &&
+                    isset($completionnode['data']['label']) &&
+                    $completionnode['data']['label'] == 'course_completed'
                 ) {
-                    $minvalue = $complitionnode['data']['value']['min_courses'] ?? 1;
-                    $coursecompletion[$complitionnode['id']]['placeholders']['numb_courses'] = $minvalue;
-                    $coursecompletion[$complitionnode['id']]['placeholders']['course_list'] = $courseprogresslist;
-                    $coursecompletion[$complitionnode['id']]['placeholders']['numb_courses_total'] = count($courseprogresslist);
-                    $coursecompletion['completed'][$complitionnode['id']] = $finished >= $minvalue ? true : false;
-                    $coursecompletion['inbetween'][$complitionnode['id']] = $isinbetween;
+                    $minvalue = $completionnode['data']['value']['min_courses'] ?? 1;
+                    $coursecompletion[$completionnode['id']]['placeholders']['numb_courses'] = $minvalue;
+                    $coursecompletion[$completionnode['id']]['placeholders']['course_list'] = $courseprogresslist;
+                    $coursecompletion[$completionnode['id']]['placeholders']['numb_courses_total'] = count($courseprogresslist);
+                    $coursecompletion['completed'][$completionnode['id']] = $finished >= $minvalue ? true : false;
+                    $coursecompletion['inbetween'][$completionnode['id']] = $isinbetween;
                     if (count($courses) > 1) {
                         $counttodo = $minvalue;
                         $numbcourses = count($courses);
@@ -232,12 +232,12 @@ class course_completed implements course_completion {
                             . get_string('course_description_before_condition_course_completed_aus', 'local_adele') .
                             $numbcourses . get_string('course_description_before_condition_course_completed_kursen', 'local_adele');
                         }
-                        $coursecompletion[$complitionnode['id']]['placeholders']['item'] = $string;
+                        $coursecompletion[$completionnode['id']]['placeholders']['item'] = $string;
                         // The {item_total} placeholder feeds the info-symbol and shows the
                         // ABSOLUTE criterion: the configured minimum of the total, independent
                         // of how many courses the participant has finished, so the info-symbol
                         // always matches the editor setting and the progress percentage (#483).
-                        $coursecompletion[$complitionnode['id']]['placeholders']['item_total'] =
+                        $coursecompletion[$completionnode['id']]['placeholders']['item_total'] =
                             $minvalue . ' ' . get_string('course_restricition_before_condition_from', 'local_adele') .
                             $numbcourses . ' '
                             . get_string('course_description_before_condition_course_completed_kursen', 'local_adele');
@@ -248,8 +248,8 @@ class course_completed implements course_completion {
                         // in getfeedback() would resolve to empty and drop the requirement word
                         // (e.g. " bearbeiten." instead of "diesen Kurs bearbeiten.") (#483).
                         $itemstring = get_string('course_description_before_condition_course_completed_item', 'local_adele');
-                        $coursecompletion[$complitionnode['id']]['placeholders']['item'] = $itemstring;
-                        $coursecompletion[$complitionnode['id']]['placeholders']['item_total'] = $itemstring;
+                        $coursecompletion[$completionnode['id']]['placeholders']['item'] = $itemstring;
+                        $coursecompletion[$completionnode['id']]['placeholders']['item_total'] = $itemstring;
                     }
                 }
             }
@@ -262,7 +262,7 @@ class course_completed implements course_completion {
     /**
      * Whether the user has ever accessed the given course (first course view).
      *
-     * Ticket #502: this is the "started" (Bearbeitungsbeginn) criterion for the
+     * This is the "started" (Bearbeitungsbeginn) criterion for the
      * progress display. Moodle records a row in user_lastaccess the first time a
      * user accesses a course, so the presence of that row means the course has
      * been opened at least once.

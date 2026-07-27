@@ -88,6 +88,10 @@ class get_catquiz_tests extends external_api {
      * @return array
      */
     public static function execute($contextid, $availablecourses): array {
+        $params = self::validate_parameters(self::execute_parameters(), [
+            'contextid' => $contextid,
+            'availablecourses' => $availablecourses,
+        ]);
 
         require_login();
 
@@ -97,10 +101,11 @@ class get_catquiz_tests extends external_api {
             return [];
         }
 
-        $context = context::instance_by_id($contextid);
+        $context = context::instance_by_id($params['contextid']);
+        self::validate_context($context);
         require_capability('local/adele:canmanage', $context);
 
-        return catquiz::get_catquiz_tests($availablecourses);
+        return catquiz::get_catquiz_tests($params['availablecourses']);
     }
 
     /**

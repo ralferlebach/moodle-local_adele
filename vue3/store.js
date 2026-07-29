@@ -215,6 +215,10 @@ export function createAppStore() {
             setstartNode(state, data) {
                 state.startnode = data.startnode;
             },
+            // Node display fields live under node.data - that is what the renderers
+            // read and what ControlsPath persists. Writing them top-level (and dropping
+            // description/estimate_duration entirely) silently lost every node
+            // description on save (GitHub #484).
             updatedNode(state, data) {
                 state.node.fullname = data.fullname;
                 state.node.description = data.description;
@@ -224,14 +228,20 @@ export function createAppStore() {
                 state.learningpath.json.tree.nodes = state.learningpath.json.tree.nodes.map(element_node => {
                     if (element_node.id === data.node_id) {
                       return { ...element_node,
-                        fullname: data.fullname,
-                        selected_course_image: data.selected_course_image,
-                        selected_image: data.selected_image,
+                        data: { ...element_node.data,
+                          fullname: data.fullname,
+                          description: data.description,
+                          estimate_duration: data.estimate_duration,
+                          selected_course_image: data.selected_course_image,
+                          selected_image: data.selected_image,
+                        },
                       };
                     }
                     return element_node;
                 });
             },
+            // Per-course texts of a stack belong into course_node_id_description of the
+            // TREE node; the stack node's own name/description stay untouched (#484).
             updatedCourseNode(state, data) {
               if (!state.node.course_node_id_description) {
                 state.node.course_node_id_description = {}
@@ -243,9 +253,15 @@ export function createAppStore() {
               state.learningpath.json.tree.nodes = state.learningpath.json.tree.nodes.map(element_node => {
                   if (element_node.id === state.node.node_id) {
                     return { ...element_node,
-                      fullname: data.fullname,
-                      selected_course_image: data.selected_course_image,
-                      selected_image: data.selected_image,
+                      data: { ...element_node.data,
+                        course_node_id_description: {
+                          ...(element_node.data.course_node_id_description || {}),
+                          [data.courseid]: {
+                            fullname: data.fullname,
+                            description: data.description,
+                          },
+                        },
+                      },
                     };
                   }
                   return element_node;

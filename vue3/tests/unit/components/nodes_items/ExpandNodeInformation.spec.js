@@ -129,6 +129,18 @@ describe('ExpandNodeInformation.vue', () => {
     expect(wrapper.find('.list-group-text').text()).toBe(storeMock.state.strings.nodes_no_description);
   });
 
+  it('falls back to the stack description when the course has none (#484)', async () => {
+    const wrapper = mount(ExpandNodeInformation, {
+      props: {
+        courses: [{ id: 1 }],
+        data: { course_id: 1, description: 'STACK-DESC' },
+      },
+    });
+    await wrapper.find('.icon-container').trigger('click');
+    await wrapper.vm.$nextTick();
+    expect(wrapper.find('.list-group-text').element.innerHTML).toContain('STACK-DESC');
+  });
+
   it('renders the first course description if multiple courses are provided', async () => {
     const courses = [
       { id: 1, description: 'First course description.' },
@@ -222,7 +234,11 @@ describe('ExpandNodeInformation.vue', () => {
     expect(text).not.toBe(storeMock.state.strings.nodes_no_description);
   });
 
-  it('prioritises the node description over the course description (#484)', async () => {
+  // Retest feedback on #484 (2026-07-29): this dialog belongs to ONE course card,
+  // so when the course carries its OWN editor text it must win over the (stack)
+  // node's description - the earlier fix had the priority inverted, which made
+  // every course inside a stack show the stack's description.
+  it('prioritises the course\'s own description over the node description (#484)', async () => {
     const wrapper = mount(ExpandNodeInformation, {
       props: {
         courses: [{ id: 1, description: 'Course level description' }],
@@ -233,8 +249,8 @@ describe('ExpandNodeInformation.vue', () => {
     await wrapper.find('.icon-container').trigger('click');
     await wrapper.vm.$nextTick();
     const text = wrapper.find('.list-group-text').text();
-    expect(text).toContain('Node level description');
-    expect(text).not.toContain('Course level description');
+    expect(text).toContain('Course level description');
+    expect(text).not.toContain('Node level description');
   });
 
   it('uses the store LIGHT_GRAY for the popup card background', async () => {

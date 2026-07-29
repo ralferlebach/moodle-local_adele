@@ -662,13 +662,15 @@ class learning_paths {
             }
             // Reflect the CURRENT learning-path-wide settings (feedback/info toggles) rather than the
             // frozen per-user snapshot, so toggling them takes effect for already-subscribed students (#474).
-            $mastersettings = json_decode($masterlp->json, true)['settings'] ?? null;
-            if ($mastersettings !== null) {
-                $decoded = json_decode($record->json, true);
-                if (is_array($decoded)) {
+            $masterjson = json_decode($masterlp->json, true);
+            $mastersettings = $masterjson['settings'] ?? null;
+            $decoded = json_decode($record->json, true);
+            if (is_array($decoded)) {
+                if ($mastersettings !== null) {
                     $decoded['settings'] = $mastersettings;
-                    $record->json = json_encode($decoded);
                 }
+                self::overlay_master_display_fields($decoded, $masterjson);
+                $record->json = json_encode($decoded);
             }
             // Re-render the feedback/info strings in the CURRENT (viewer's) language so they follow
             // a language switch instead of the language the recompute happened to run in (#493).
@@ -729,6 +731,44 @@ class learning_paths {
             $node = self::checknodeprogression($node, $userid);
         }
         return json_encode($json);
+    }
+
+    /**
+     * Overlay display-only node texts from the master learning path onto a
+     * per-user snapshot tree.
+     *
+     * The snapshot copies the tree at subscription time, so a node description
+     * (or per-course text of a stack) the editor adds LATER never reaches
+     * already-subscribed students (GitHub #484). These fields carry no
+     * progress/verdict state, so the master is authoritative for them - the
+     * same rule the settings toggles already follow (#474).
+     *
+     * @param array $decoded The decoded per-user snapshot json (modified in place).
+     * @param array|null $masterjson The decoded master learning-path json.
+     * @return void
+     */
+    public static function overlay_master_display_fields(array &$decoded, ?array $masterjson): void {
+        $masternodes = [];
+        foreach (($masterjson['tree']['nodes'] ?? []) as $masternode) {
+            if (isset($masternode['id'])) {
+                $masternodes[$masternode['id']] = $masternode['data'] ?? [];
+            }
+        }
+        if (!$masternodes || empty($decoded['tree']['nodes']) || !is_array($decoded['tree']['nodes'])) {
+            return;
+        }
+        $displayfields = ['fullname', 'description', 'estimate_duration', 'course_node_id_description'];
+        foreach ($decoded['tree']['nodes'] as $i => $snapshotnode) {
+            $nodeid = $snapshotnode['id'] ?? null;
+            if ($nodeid === null || !isset($masternodes[$nodeid])) {
+                continue;
+            }
+            foreach ($displayfields as $field) {
+                if (array_key_exists($field, $masternodes[$nodeid])) {
+                    $decoded['tree']['nodes'][$i]['data'][$field] = $masternodes[$nodeid][$field];
+                }
+            }
+        }
     }
 
     /**

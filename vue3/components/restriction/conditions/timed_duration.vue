@@ -51,12 +51,17 @@
       class="row input-group mb-3"
       style="margin-left: 0;"
     >
+      <!-- Explicit :value/@input instead of v-model: the v-model directive
+           skipped the DOM update on reopen-prefill (state carried the stored
+           value while the input rendered empty); a plain value binding patches
+           unconditionally. -->
       <input
         :id="`restriction-${restriction.node_id}-duration`"
-        v-model="data.selectedDuration"
+        :value="data.selectedDuration"
         :name="`restriction-${restriction.node_id}-duration`"
         class="col-md-6 form-control"
         :placeholder="store.state.strings.course_name_condition_timed_duration_duration_value"
+        @input="data.selectedDuration = $event.target.value"
         @change="onChange()"
       >
       <select 
@@ -107,7 +112,10 @@ const props = defineProps({
 
 const data = ref({
   selectedOption: null,
-  durationValue: 1,
+  // No sneaky default: the unit must be a conscious choice like the other two
+  // fields, otherwise an untouched select passes the completeness validation
+  // although the editor never picked a unit (#494/#566 retest).
+  durationValue: null,
   selectedDuration: null,
 });
 
@@ -138,17 +146,26 @@ onMounted(() => {
   }
 });
 
-// Watch for changes in modelValue
+// Watch for changes in modelValue. vue-flow briefly detaches node data while
+// replacing nodes (reopen re-ingestion); never let a transient null/undefined
+// wipe the form state (#494/#566 retest: amount rendered empty on reopen).
 watch(() => props.modelValue, (newValue) => {
-  data.value = newValue;
+  if (newValue != null) {
+    data.value = newValue;
+  }
 }, { deep: true } );
 
 watch(() => data.value.selectedDuration, (newValue, oldValue) => {
+  // Allow clearing the field while typing (#566 retest: the reset made the old
+  // value impossible to delete); the save validation catches an empty amount.
+  if (newValue === '' || newValue == null) {
+    return;
+  }
   const parsedValue = parseInt(newValue, 10);
 
   // Check if it's not a number (NaN), less than 1, or a float
   if (isNaN(parsedValue) || parsedValue < 1 || parsedValue !== parseFloat(newValue)) {
-    // Reset to old value if it was valid, otherwise, default to 1
+    // Reset to old value if it was valid, otherwise clear the field.
     data.value.selectedDuration = oldValue && oldValue > 0 && parseInt(oldValue, 10) === parseFloat(oldValue) ? oldValue : '';
   } else {
     data.value.selectedDuration = parsedValue.toString();

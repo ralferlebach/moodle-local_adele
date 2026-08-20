@@ -483,6 +483,7 @@ $string['task_check_timed_restrictions'] = 'Zeitgesteuerte Lernpfad-Voraussetzun
 $string['task_reconcile_user_paths'] = 'Aktive Lernpfade abgleichen (Node-Abschluss neu berechnen)';
 $string['timed_duration_incomplete_modal'] = 'Bitte definieren Sie eine gültige Dauer und Zeiteinheit für das Zugangskriterium „Bearbeitungszeitraum“, bevor Sie speichern.';
 $string['timed_incomplete_modal'] = 'Bitte geben Sie mindestens einen Start- oder Endzeitpunkt für das Zugangskriterium „Start- und Endzeitpunkt“ an, bevor Sie speichern.';
+$string['timed_order_modal'] = 'Der Endzeitpunkt muss nach dem Startzeitpunkt liegen.';
 $string['title_change_visibility'] = 'Sichtbarkeit geändert';
 $string['title_delete'] = 'Lernpfad gelöscht';
 $string['title_duplicate'] = 'Lernpfad dupliziert';

@@ -709,6 +709,134 @@ class behat_local_adele extends behat_base {
     }
 
     /**
+     * Click a button only when it is currently present (conditional UI flows,
+     * e.g. a discard-confirmation prompt that may or may not appear).
+     *
+     * @When /^I click on "(?P<button>[^"]+)" "button" if it exists$/
+     *
+     * @param string $button Button label.
+     */
+    public function i_click_on_button_if_it_exists(string $button): void {
+        try {
+            $node = $this->find_button($button);
+        } catch (\Exception $e) {
+            return;
+        }
+        if ($node->isVisible()) {
+            $node->click();
+        }
+    }
+
+    /**
+     * Click an element by CSS selector only when it is currently present.
+     *
+     * @When /^I click on "(?P<selector>[^"]+)" "css_element" if it exists$/
+     *
+     * @param string $selector CSS selector.
+     */
+    public function i_click_on_css_if_it_exists(string $selector): void {
+        $node = $this->getSession()->getPage()->find('css', $selector);
+        if ($node && $node->isVisible()) {
+            $node->click();
+        }
+    }
+
+    /**
+     * Assert exactly one element matches a CSS selector (guards against stale
+     * duplicate DOM from an incompletely unmounted editor session).
+     *
+     * @Then /^exactly one "(?P<selector>[^"]+)" element should exist$/
+     *
+     * @param string $selector CSS selector.
+     */
+    public function exactly_one_element_should_exist(string $selector): void {
+        $count = count($this->getSession()->getPage()->findAll('css', $selector));
+        if ($count !== 1) {
+            throw new \RuntimeException("Expected exactly 1 element for '{$selector}', found {$count}.");
+        }
+    }
+
+    /**
+     * Assert a stored restriction-condition value of a SAVED learning path.
+     *
+     * @Then /^learning path "(?P<lpname>[^"]+)" node "(?P<nodeid>[^"]+)" restriction "(?P<label>[^"]+)" value "(?P<field>[^"]+)" should be "(?P<expected>[^"]*)"$/
+     *
+     * @param string $lpname Learning path name.
+     * @param string $nodeid Tree node id.
+     * @param string $label Condition label (e.g. timed_duration).
+     * @param string $field Value field name (e.g. selectedDuration).
+     * @param string $expected Expected stored value.
+     */
+    public function learning_path_restriction_value_should_be(
+        string $lpname,
+        string $nodeid,
+        string $label,
+        string $field,
+        string $expected
+    ): void {
+        global $DB;
+        $lp = $DB->get_record('local_adele_learning_paths', ['name' => $lpname], '*', MUST_EXIST);
+        $json = json_decode($lp->json, true);
+        foreach (($json['tree']['nodes'] ?? []) as $node) {
+            if (($node['id'] ?? '') !== $nodeid) {
+                continue;
+            }
+            foreach (($node['restriction']['nodes'] ?? []) as $c) {
+                if (($c['data']['label'] ?? '') !== $label) {
+                    continue;
+                }
+                $actual = (string) ($c['data']['value'][$field] ?? '');
+                if ($actual !== $expected) {
+                    throw new \RuntimeException(
+                        "Stored {$label}.{$field} of {$nodeid} is '{$actual}', expected '{$expected}'."
+                    );
+                }
+                return;
+            }
+            throw new \RuntimeException("No {$label} condition stored on {$nodeid}.");
+        }
+        throw new \RuntimeException("Node {$nodeid} not found in \"{$lpname}\".");
+    }
+
+    /**
+     * Assert a node of a SAVED learning path carries no restriction conditions.
+     *
+     * Guards the criteria editor's Close flow (#476/#494 retests): a criterion
+     * added on the canvas and then abandoned via "Close" must not survive into
+     * the persisted learning-path json.
+     *
+     * @Then /^learning path "(?P<lpname>[^"]+)" node "(?P<nodeid>[^"]+)" should have no restriction conditions$/
+     *
+     * @param string $lpname Learning path name.
+     * @param string $nodeid Tree node id (e.g. dndnode_1).
+     */
+    public function learning_path_node_should_have_no_restriction(string $lpname, string $nodeid): void {
+        global $DB;
+        $lp = $DB->get_record('local_adele_learning_paths', ['name' => $lpname], '*', MUST_EXIST);
+        $json = json_decode($lp->json, true);
+        foreach (($json['tree']['nodes'] ?? []) as $node) {
+            if (($node['id'] ?? '') !== $nodeid) {
+                continue;
+            }
+            $conditions = $node['restriction']['nodes'] ?? [];
+            $real = array_filter($conditions, static function ($c) {
+                return ($c['type'] ?? '') !== 'feedback' && isset($c['data']['label']);
+            });
+            if ($real !== []) {
+                throw new \RuntimeException(sprintf(
+                    'Node %s of "%s" unexpectedly carries %d restriction condition(s): %s',
+                    $nodeid,
+                    $lpname,
+                    count($real),
+                    implode(', ', array_map(static fn($c) => $c['data']['label'], $real))
+                ));
+            }
+            return;
+        }
+        throw new \RuntimeException("Node {$nodeid} not found in learning path \"{$lpname}\".");
+    }
+
+    /**
      * Assert the current page carries no Moodle exception / coding-error notice.
      *
      * Guards scenarios (e.g. #464 get_availablecourses $PAGE codingerror) where a

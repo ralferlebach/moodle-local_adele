@@ -78,21 +78,40 @@ function toggleClass() {
   emit('change-class');
 }
 
-const stopWatcher = watch(() => learningpathCompletion.value, async () => {
-  // Watch for changes of the learning path
-  if (learningpathCompletion.value && learningpathCompletion.value.json.tree &&
-    store.state.node != undefined && learningpathCompletion.value.json != '') {
-      let condition = learningpathCompletion.value.json.tree.nodes.filter(node => {
-        return node.id === store.state.node.node_id
-      })
-      const flowchart = loadFlowChart(condition[0][props.condition], store.state.view)
-      if (flowchart) {
-        setNodes(flowchart.nodes)
-        setEdges(flowchart.edges)
-      }
+// (Re-)ingest on every availability change AND on mount: the previous one-shot
+// watch never fired again after a remount, so reopening the editor showed the
+// prior session's abandoned canvas (#476/#494 retests).
+function ingestCondition() {
+  const source = learningpathCompletion.value || props.learningpath
+  if (!source || !source.json || !source.json.tree || store.state.node == undefined) {
+    return false
   }
-  stopWatcher()
+  const treenode = source.json.tree.nodes.find(node => {
+    return node.id === store.state.node.node_id
+  })
+  if (!treenode) {
+    return false
+  }
+  // DEEP COPY: same reference-leak protection as the restriction editor -
+  // the canvas must never share objects with the stored tree (#476/#494).
+  const conditioncopy = treenode[props.condition]
+    ? JSON.parse(JSON.stringify(treenode[props.condition]))
+    : { nodes: [], edges: [] };
+  const flowchart = loadFlowChart(conditioncopy, store.state.view)
+  if (flowchart) {
+    setNodes(flowchart.nodes)
+    setEdges(flowchart.edges)
+  }
+  return true
+}
+const stopWatcher = watch(() => learningpathCompletion.value, async () => {
+  if (ingestCondition()) {
+    stopWatcher()
+  }
 }, { deep: true } );
+// Setup-time ingestion (before the condition-form children mount) so value
+// prefill works; the watch above covers a learning path that arrives late.
+ingestCondition()
 
 // Prepare and save learning path
 const onSave = async () => {
@@ -137,6 +156,10 @@ const onSave = async () => {
   })
 
   //save learning path
+  // Keep the previous tree so a REFUSED save (validation alert) can roll back:
+  // otherwise the rejected criterion lingers in the editor session and
+  // reappears on reopen although it was never saved (#494/#566 retest).
+  const previousnodes = learningpathCompletion.value.json.tree.nodes
   learningpathCompletion.value.json.tree.nodes = learningpathCompletion.value.json.tree.nodes
     .filter(element_node => element_node.type !== 'dropzone')
     .map(element_node => {
@@ -145,7 +168,14 @@ const onSave = async () => {
       }
       return element_node;
   });
-  const learningpathID = await store.dispatch('saveLearningpath', learningpathCompletion.value)
+  let learningpathID
+  try {
+    learningpathID = await store.dispatch('saveLearningpath', learningpathCompletion.value)
+  } catch {
+    // saveLearningpath already showed the validation alert.
+    learningpathCompletion.value.json.tree.nodes = previousnodes
+    return
+  }
   router.push('/learningpaths/edit/' + learningpathID);
   onCancelConfirmation(true);
   notify({

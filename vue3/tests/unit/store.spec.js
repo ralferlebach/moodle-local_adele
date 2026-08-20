@@ -78,20 +78,59 @@ describe('invalidTimedConditionLabel (#494)', () => {
     expect(invalidTimedConditionLabel(wrap({ label: 'timed', value: { start: null, end: '2026-02-01T10:00' } }))).toBeNull();
   });
 
-  // 'timed_duration': needs a positive duration AND a time unit.
-  it('flags a "timed_duration" with no time unit selected', () => {
-    expect(invalidTimedConditionLabel(wrap({ label: 'timed_duration', value: { durationValue: 3, selectedDuration: null } })))
-      .toBe('timed_duration');
+  // 'timed': a set start AND end must be in the right order (#494 retest).
+  it('flags a "timed" whose end is not after its start (#494)', () => {
+    expect(invalidTimedConditionLabel(wrap({
+      label: 'timed', value: { start: '2026-02-01T10:00', end: '2026-01-01T10:00' },
+    }))).toBe('timed_order');
+    expect(invalidTimedConditionLabel(wrap({
+      label: 'timed', value: { start: '2026-01-01T10:00', end: '2026-01-01T10:00' },
+    }))).toBe('timed_order');
   });
 
-  it('flags a "timed_duration" with a zero/empty duration', () => {
-    expect(invalidTimedConditionLabel(wrap({ label: 'timed_duration', value: { durationValue: 0, selectedDuration: 1 } })))
-      .toBe('timed_duration');
+  it('allows a "timed" with start before end', () => {
+    expect(invalidTimedConditionLabel(wrap({
+      label: 'timed', value: { start: '2026-01-01T10:00', end: '2026-02-01T10:00' },
+    }))).toBeNull();
   });
 
-  it('allows a valid "timed_duration" (positive value + unit, including the 0 = days unit)', () => {
-    expect(invalidTimedConditionLabel(wrap({ label: 'timed_duration', value: { durationValue: 2, selectedDuration: 0 } })))
-      .toBeNull();
+  // 'timed_duration' field semantics (#566): selectedDuration = the AMOUNT,
+  // durationValue = the UNIT select (0 = days is a legitimate choice!),
+  // selectedOption = the start mode (0 = learning path is legitimate).
+  it('allows a fully filled "2 days from node opening" criterion (#566)', () => {
+    expect(invalidTimedConditionLabel(wrap({
+      label: 'timed_duration',
+      value: { selectedOption: '1', selectedDuration: '2', durationValue: 0 },
+    }))).toBeNull();
+  });
+
+  it('allows the 0-valued selects (days unit, learning-path start) (#566)', () => {
+    expect(invalidTimedConditionLabel(wrap({
+      label: 'timed_duration',
+      value: { selectedOption: 0, selectedDuration: '1', durationValue: 0 },
+    }))).toBeNull();
+  });
+
+  it('flags a missing or non-positive amount', () => {
+    expect(invalidTimedConditionLabel(wrap({
+      label: 'timed_duration',
+      value: { selectedOption: '1', selectedDuration: null, durationValue: 0 },
+    }))).toBe('timed_duration');
+    expect(invalidTimedConditionLabel(wrap({
+      label: 'timed_duration',
+      value: { selectedOption: '1', selectedDuration: '0', durationValue: 2 },
+    }))).toBe('timed_duration');
+  });
+
+  it('flags a missing unit or start mode', () => {
+    expect(invalidTimedConditionLabel(wrap({
+      label: 'timed_duration',
+      value: { selectedOption: '1', selectedDuration: '2', durationValue: '' },
+    }))).toBe('timed_duration');
+    expect(invalidTimedConditionLabel(wrap({
+      label: 'timed_duration',
+      value: { selectedDuration: '2', durationValue: 0 },
+    }))).toBe('timed_duration');
   });
 
   it('ignores unrelated criteria and is defensive against empty structures', () => {

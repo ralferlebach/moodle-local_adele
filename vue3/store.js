@@ -60,8 +60,10 @@ function hasIncompleteCondition(json) {
 /**
  * Timed access criteria must carry their required inputs before they can be saved,
  * otherwise they are unsatisfiable and render "missing date"-style hints (#494):
- * - 'timed' (start/end time): at least one of start or end must be set;
- * - 'timed_duration' (editing period): a positive duration value AND a time unit.
+ * - 'timed' (start/end time): at least one of start or end must be set, and a
+ *   fully set window must end after it starts ('timed_order');
+ * - 'timed_duration' (editing period): a positive amount (selectedDuration), a
+ *   time unit (durationValue, 0 = days) and a start mode (selectedOption).
  *
  * @param {object} json The learning-path tree json.
  * @returns {(string|null)} The label of the first invalid timed criterion, or null.
@@ -76,11 +78,25 @@ export function invalidTimedConditionLabel(json) {
         for (const c of conditions) {
             const data = c && c.data ? c.data : {};
             const value = data.value || {};
-            if (data.label === 'timed' && isEmpty(value.start) && isEmpty(value.end)) {
-                return 'timed';
+            if (data.label === 'timed') {
+                if (isEmpty(value.start) && isEmpty(value.end)) {
+                    return 'timed';
+                }
+                // Both set: the window must be forward in time (#494 retest).
+                if (!isEmpty(value.start) && !isEmpty(value.end)
+                    && new Date(value.start) >= new Date(value.end)) {
+                    return 'timed_order';
+                }
             }
             if (data.label === 'timed_duration') {
-                if (isEmpty(value.durationValue) || Number(value.durationValue) <= 0 || isEmpty(value.selectedDuration)) {
+                // Field semantics (#566): selectedDuration = the AMOUNT (must be
+                // a positive number); durationValue = the UNIT select where
+                // 0 = days is a legitimate choice; selectedOption = the start
+                // mode where 0 = learning path is legitimate (and PHP silently
+                // never schedules the boundary task without it).
+                if (isEmpty(value.selectedDuration) || Number(value.selectedDuration) <= 0
+                    || isEmpty(value.durationValue)
+                    || isEmpty(value.selectedOption)) {
                     return 'timed_duration';
                 }
             }
@@ -449,11 +465,14 @@ export function createAppStore() {
                 // required inputs is unsatisfiable ("missing date" hints). Refuse the save.
                 const invalidtimed = invalidTimedConditionLabel(payload.json);
                 if (invalidtimed) {
+                    const timedmessages = {
+                        timed: context.state.strings.timed_incomplete_modal,
+                        timed_order: context.state.strings.timed_order_modal,
+                        timed_duration: context.state.strings.timed_duration_incomplete_modal,
+                    };
                     Notification.alert(
                         context.state.strings.restriction_incomplete_title,
-                        invalidtimed === 'timed'
-                            ? context.state.strings.timed_incomplete_modal
-                            : context.state.strings.timed_duration_incomplete_modal
+                        timedmessages[invalidtimed]
                     );
                     throw new Error('local_adele/incomplete-timed-criterion');
                 }

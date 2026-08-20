@@ -759,7 +759,7 @@ class behat_local_adele extends behat_base {
     /**
      * Assert a stored restriction-condition value of a SAVED learning path.
      *
-     * @Then /^learning path "(?P<lpname>[^"]+)" node "(?P<nodeid>[^"]+)" restriction "(?P<label>[^"]+)" value "(?P<field>[^"]+)" should be "(?P<expected>[^"]*)"$/
+     * @Then /^learning path "([^"]+)" node "([^"]+)" restriction "([^"]+)" value "([^"]+)" should be "([^"]*)"$/
      *
      * @param string $lpname Learning path name.
      * @param string $nodeid Tree node id.

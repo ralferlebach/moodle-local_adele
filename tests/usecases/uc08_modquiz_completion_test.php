@@ -78,9 +78,10 @@ require_once(__DIR__ . '/../adele_learningpath_testcase.php'); // phpcs:ignore m
 #[CoversClass(course_completion\course_completion_status::class)]
 final class uc08_modquiz_completion_test extends adele_learningpath_testcase {
     /**
-     * The grade threshold set on the modquiz completion condition (5.0 out of 10.0).
+     * The modquiz threshold as a PERCENTAGE of the quiz maximum grade (#499):
+     * 50% of the max grade 10.0 - the same effective bar as the former 5.0.
      */
-    private const GRADE_THRESHOLD = 5.0;
+    private const GRADE_THRESHOLD = 50.0;
 
     /**
      * ID of the quiz instance created in courseids[0] by patch_node_ids().
@@ -179,6 +180,14 @@ final class uc08_modquiz_completion_test extends adele_learningpath_testcase {
             'timemodified'  => time(),
             'sumgrades'     => $sumgrades,
         ]);
+        // The condition judges Moodle's OFFICIAL final grade (quiz_grades),
+        // seeded here as quiz grading would (sumgrades 10 : grade 10 = 1:1) (#499).
+        $DB->insert_record('quiz_grades', (object)[
+            'quiz' => $quizid,
+            'userid' => $userid,
+            'grade' => $sumgrades,
+            'timemodified' => time(),
+        ]);
     }
 
     // -------------------------------------------------------------------------
@@ -268,7 +277,7 @@ final class uc08_modquiz_completion_test extends adele_learningpath_testcase {
             $this->insert_quiz_attempt_in_db(
                 $this->quizid,
                 (int)$record->user_id,
-                1.0 // Below GRADE_THRESHOLD (5.0).
+                1.0 // Grade 1/10 = 10%, below GRADE_THRESHOLD (50%).
             );
         }
 
@@ -347,7 +356,7 @@ final class uc08_modquiz_completion_test extends adele_learningpath_testcase {
             $this->insert_quiz_attempt_in_db(
                 $this->quizid,
                 (int)$record->user_id,
-                self::GRADE_THRESHOLD
+                5.0 // Grade 5/10 = 50% >= GRADE_THRESHOLD (50%).
             );
         }
 

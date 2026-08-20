@@ -86,7 +86,10 @@ final class uc14_course_completed_and_modquiz_completion_test extends adele_lear
     /**
      * Grade threshold set on the modquiz completion condition (5.0 out of 10.0).
      */
-    private const GRADE_THRESHOLD = 5.0;
+    /**
+     * The modquiz threshold as a PERCENTAGE of the quiz maximum grade (#499).
+     */
+    private const GRADE_THRESHOLD = 50.0;
 
     /**
      * ID of the quiz instance created in courseids[0] by patch_node_ids().
@@ -189,6 +192,15 @@ final class uc14_course_completed_and_modquiz_completion_test extends adele_lear
             'timefinish'   => time(),
             'timemodified' => time(),
             'sumgrades'    => $sumgrades,
+        ]);
+        // The condition judges Moodle's OFFICIAL final grade (quiz_grades),
+        // scaled to the quiz maximum grade - seed it like quiz grading would
+        // (sumgrades 10 : grade 10 here, i.e. 1:1) (#499).
+        $DB->insert_record('quiz_grades', (object)[
+            'quiz' => $quizid,
+            'userid' => $userid,
+            'grade' => $sumgrades,
+            'timemodified' => time(),
         ]);
     }
 
@@ -302,7 +314,7 @@ final class uc14_course_completed_and_modquiz_completion_test extends adele_lear
             $this->insert_quiz_attempt_in_db(
                 $this->quizid,
                 (int)$record->user_id,
-                1.0 // Below GRADE_THRESHOLD (5.0).
+                1.0 // Grade 1/10 = 10%, below GRADE_THRESHOLD (50%).
             );
         }
 
@@ -380,7 +392,7 @@ final class uc14_course_completed_and_modquiz_completion_test extends adele_lear
             $this->insert_quiz_attempt_in_db(
                 $this->quizid,
                 (int)$record->user_id,
-                self::GRADE_THRESHOLD // 5.0 >= 5.0 → completed.
+                5.0 // Grade 5/10 = 50% >= 50% → completed.
             );
         }
 

@@ -179,7 +179,6 @@ class modquiz implements course_completion {
                     isset($completion['data']) && isset($completion['data']['label']) &&
                     $completion['data']['label'] == 'modquiz'
                 ) {
-                    $validcatquiz = false;
                     $sql = "SELECT q.name, q.sumgrades, q.grade, cm.id AS cmid
                         FROM {quiz} q
                         JOIN {course_modules} cm ON cm.instance = q.id
@@ -187,6 +186,9 @@ class modquiz implements course_completion {
                         WHERE m.name = 'quiz' AND q.id = :quizid";
                     $quizid = $completion['data']['value']['quizid'] ?? 0;
                     $record = $DB->get_record_sql($sql, ['quizid' => $quizid]);
+                    // The configured threshold is a PERCENTAGE of the quiz's maximum
+                    // grade (#499) - immune to rescaling and question-weight changes.
+                    $threshold = (float) ($completion['data']['value']['grade'] ?? 0);
                     if ($record) {
                         $modquizzes[$completion['id']]['placeholders']['quiz_name_link'] =
                           '<a href="' .
@@ -197,36 +199,34 @@ class modquiz implements course_completion {
                           // Escape the quiz name inside the intended anchor (v-html sink).
                           format_string($record->name, true, ['context' => \context_system::instance(), 'filter' => false]) .
                           '</a>';
-                        $modquizzes[$completion['id']]['placeholders']['minnumb'] =
-                        $completion['data']['value']['grade'] ?? $record->sumgrades ?? 0;
-                        $modquizzes[$completion['id']]['placeholders']['maxnumb'] = isset($record->grade)
-                        ? number_format(self::round_to_one_decimal($record->grade), 1)
-                        : '0.00';
                     } else {
                         $modquizzes[$completion['id']]['placeholders']['quiz_name_link'] =
                           'Mod Quiz';
                     }
-                    $modquizzes[$completion['id']]['placeholders']['scale_min'] = $completion['data']['value']['grade'] ?? 0;
+                    $modquizzes[$completion['id']]['placeholders']['minnumb'] =
+                        number_format(self::round_to_one_decimal($threshold), 1);
+                    $modquizzes[$completion['id']]['placeholders']['maxnumb'] = '100';
+                    $modquizzes[$completion['id']]['placeholders']['scale_min'] = $threshold;
 
-                    $data = $this->get_modquiz_records($completion, $userid);
-                    $modquizzes['inbetween'][$completion['id']] = false;
-                    if (count($data) > 0) {
-                        $modquizzes['inbetween'][$completion['id']] = true;
+                    // Moodle's OFFICIAL final quiz grade (quiz_grades respects the
+                    // grade method, regrades, and excludes previews/unfinished
+                    // attempts), expressed as a percentage of the maximum grade (#499).
+                    $percent = 0.0;
+                    $finalgrade = $DB->get_record('quiz_grades', ['quiz' => $quizid, 'userid' => $userid]);
+                    if ($finalgrade && $record && (float) $record->grade > 0) {
+                        $percent = (float) $finalgrade->grade / (float) $record->grade * 100;
                     }
-                    $modquizzes['completed'][$completion['id']] = false;
-                    foreach ($data as $key => $lastgrade) {
-                        if ((float)$key >= $bestgrade) {
-                            $bestgrade = (float)$key;
-                            $maxgrade = $completion['data']['value']['grade'];
-                        }
-                        if ((float)$key >= (float)$completion['data']['value']['grade']) {
-                            $validcatquiz = true;
-                        }
+                    // The "in progress" state needs a finished, non-preview attempt.
+                    $modquizzes['inbetween'][$completion['id']] = $this->has_real_finished_attempt($quizid, $userid);
+                    $modquizzes['completed'][$completion['id']] =
+                        $finalgrade !== false && $record && (float) $record->grade > 0 && $percent >= $threshold;
+                    if ($percent >= $bestgrade) {
+                        $bestgrade = $percent;
+                        $maxgrade = $threshold;
                     }
                     $modquizzes[$completion['id']]['placeholders']['currentbest'] =
                         '(' . get_string('course_description_after_condition_modquiz_best', 'local_adele') .
-                         number_format(self::round_down_to_one_decimal($bestgrade), 1) . ')';
-                    $modquizzes['completed'][$completion['id']] = $validcatquiz;
+                         number_format(self::round_down_to_one_decimal($percent), 1) . '%)';
                 } else {
                     $modquizzes['completed'][$completion['id']] = false;
                 }
@@ -245,19 +245,17 @@ class modquiz implements course_completion {
     }
 
     /**
-     * Helper function to return localized description strings.
-     * @param array $completion
+     * Whether the user has at least one finished, non-preview attempt (#499).
+     * @param int $quizid
      * @param int $userid
-     * @return array
+     * @return bool
      */
-    protected function get_modquiz_records($completion, $userid) {
+    protected function has_real_finished_attempt($quizid, $userid): bool {
         global $DB;
-        return $DB->get_records_select(
+        return $DB->record_exists_select(
             'quiz_attempts',
-            'quiz = :quiz AND userid = :userid',
-            ['quiz' => $completion['data']['value']['quizid'] ?? 0, 'userid' => $userid],
-            'timemodified DESC',
-            'sumgrades'
+            "quiz = :quiz AND userid = :userid AND state = 'finished' AND preview = 0",
+            ['quiz' => $quizid, 'userid' => $userid]
         );
     }
 }

@@ -114,7 +114,27 @@ describe('modQuiz.vue', () => {
     // Simulate entering a grade
     await gradeInput.setValue('80')
 
-    expect(wrapper.vm.grade).toBe('80')
+    // type=number coerces to a numeric value (#499 percent input).
+    expect(wrapper.vm.grade).toBe(80)
+  })
+
+  it('clamps the percent threshold to 0-100 (#499)', async () => {
+    const wrapper = mount(modQuiz, {
+      global: { plugins: [store] },
+      props: {
+        modelValue: {},
+        completion: { description: 'Complete the quiz to pass the course.' }
+      }
+    })
+    wrapper.vm.selectedQuiz = '1'
+    await nextTick()
+    const gradeInput = wrapper.find('input#grade')
+    await gradeInput.setValue('150')
+    await nextTick()
+    expect(wrapper.vm.grade).toBe(100)
+    await gradeInput.setValue('-5')
+    await nextTick()
+    expect(wrapper.vm.grade).toBe(0)
   })
 
   it('emits update:modelValue when grade or quiz selection changes', async () => {
@@ -137,7 +157,7 @@ describe('modQuiz.vue', () => {
 
     // Check that the event has been emitted
     expect(wrapper.emitted('update:modelValue')).toBeTruthy()
-    expect(wrapper.emitted('update:modelValue')[0]).toEqual([{ quizid: "1", grade: '75' }])
+    expect(wrapper.emitted('update:modelValue')[0]).toEqual([{ quizid: "1", grade: 75 }])
   })
 
   it('completion values will be shown', async () => {

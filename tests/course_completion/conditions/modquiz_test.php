@@ -76,13 +76,18 @@ final class modquiz_test extends advanced_testcase {
             ->willReturn((object)[
                 'name' => 'Sample Quiz Name',
                 'cmid' => 65,
+                'grade' => 100,
             ]);
+        // Moodle's official final grade: 65 of max 100 = 65% (#499).
+        $DB->expects($this->any())
+            ->method('get_record')
+            ->willReturn((object)['grade' => 65]);
         $modquiz = $this->getMockBuilder(modquiz::class)
-            ->onlyMethods(['get_modquiz_records'])
+            ->onlyMethods(['has_real_finished_attempt'])
             ->getMock();
 
-        $modquiz->method('get_modquiz_records')
-            ->willReturn([65 => (object)['grade' => 65]]);
+        $modquiz->method('has_real_finished_attempt')
+            ->willReturn(true);
 
         // Test incomplete node data (expecting no completion).
         $nodeincomplete = [

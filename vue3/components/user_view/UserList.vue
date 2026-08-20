@@ -100,7 +100,14 @@ import ProgressBar from '../nodes_items/ProgressBar.vue';
 
 // Load Store
 const store = useStore();
-const sortedRelations = ref([...store.state.lpuserpathrelations.slice(0, 10)]);
+// Store values booted from HTML attributes arrive as strings while the WS
+// delivers numeric ids - compare by number or the own-results filter never
+// fires (#569). The server enforces the setting too; this mirrors it for the UI.
+const onlyOwnResults = (list) =>
+  store.state.view === 'student' && Number(store.state.userlist) === 2
+    ? list.filter(obj => Number(obj.id) === Number(store.state.user))
+    : list;
+const sortedRelations = ref([...onlyOwnResults(store.state.lpuserpathrelations).slice(0, 10)]);
 const sortKey = ref('');
 const sortDirection = ref(1);
 const focusEntry = ref(null);
@@ -113,11 +120,7 @@ const columnWidth = computed(() => `${100 / columnCount.value}%`);
 watch(
   () => store.state.lpuserpathrelations,
   (newVal) => {
-    if (store.state.view === 'student' && store.state.userlist === 2) {
-      sortedRelations.value = newVal.filter(obj => obj.id === store.state.user);
-    } else {
-      sortedRelations.value = [...newVal];
-    }
+    sortedRelations.value = [...onlyOwnResults(newVal)];
 
     setFocusEntry()
     scrollIntoFocus()

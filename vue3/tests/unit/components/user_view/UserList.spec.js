@@ -152,15 +152,16 @@ describe('UserList.vue', () => {
     expect(wrapper.findAll('tbody tr.highlighted-row')).toHaveLength(0);
   });
 
-  it('filters to the current user only when student view and userlist === 2', async () => {
+  it('filters to the current user only when student view and userlist is 2', async () => {
+    // Userlist and user reach the store as STRINGS (HTML getAttribute in
+    // main.js) while the WS returns numeric ids; the old strict === filter
+    // never fired on real data, so students saw the whole list (#569).
     const wrapper = factory({
       view: 'student',
-      userlist: 2,
-      user: 2,
+      userlist: '2',
+      user: '2',
       lpuserpathrelation: { user_id: 2 },
     });
-    // Initially the un-filtered slice is shown; the own-only filter runs in the
-    // watcher, which fires only on a reference change of lpuserpathrelations.
     const store = wrapper.vm.$store;
     store.state.lpuserpathrelations = [...relations];
     await wrapper.vm.$nextTick();
@@ -169,5 +170,19 @@ describe('UserList.vue', () => {
     expect(rows).toHaveLength(1);
     // Student view drops the ID column, so first cell is the first name.
     expect(rows[0].find('td').text()).toBe('Bea'); // user id 2 -> Bea
+  });
+
+  it('applies the own-results filter to the initial render too (#569)', () => {
+    // Relations already in the store when the component mounts must not flash
+    // the full list before the watcher fires.
+    const wrapper = factory({
+      view: 'student',
+      userlist: '2',
+      user: '1',
+      lpuserpathrelation: { user_id: 1 },
+    });
+    const rows = wrapper.findAll('tbody tr');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].find('td').text()).toBe('Alan'); // user id 1 -> Alan
   });
 });

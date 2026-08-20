@@ -137,6 +137,7 @@ class get_learningpaths extends external_api {
                     'image' => new external_value(PARAM_TEXT, 'Item image'),
                     'visibility' => new external_value(PARAM_TEXT, 'visibility'),
                     'isowner' => new external_value(PARAM_TEXT, 'canbedeleted'),
+                    'ownerless' => new external_value(PARAM_BOOL, 'owner vanished, no successor (#571)', VALUE_OPTIONAL),
                     'owner' => new external_single_structure([
                         'name' => new external_value(PARAM_TEXT, 'Owner (creator) full name'),
                         'email' => new external_value(PARAM_TEXT, 'Owner (creator) email'),
@@ -157,6 +158,7 @@ class get_learningpaths extends external_api {
                     'image' => new external_value(PARAM_TEXT, 'Item image'),
                     'visibility' => new external_value(PARAM_TEXT, 'visibility'),
                     'isowner' => new external_value(PARAM_TEXT, 'canbedeleted'),
+                    'ownerless' => new external_value(PARAM_BOOL, 'owner vanished, no successor (#571)', VALUE_OPTIONAL),
                     'owner' => new external_single_structure([
                         'name' => new external_value(PARAM_TEXT, 'Owner (creator) full name'),
                         'email' => new external_value(PARAM_TEXT, 'Owner (creator) email'),

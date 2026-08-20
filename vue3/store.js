@@ -316,9 +316,11 @@ export function createAppStore() {
                 const lang = document.documentElement.lang.replace(/-/g, '_');
                 context.commit('setLang', lang);
             },
-            async loadComponentStrings(context) {
+            async loadComponentStrings(context, stringsrev) {
                 const lang = document.documentElement.lang.replace(/-/g, '_');
-                const cacheKey = 'local_adele/strings/' + lang;
+                // Versioned per plugin release: without the rev, browsers kept serving
+                // stale cached strings after upgrades (labels rendered "undefined").
+                const cacheKey = 'local_adele/strings/' + lang + '/' + (stringsrev || '0');
                 const cachedStrings = moodleStorage.get(cacheKey);
                 if (cachedStrings) {
                     context.commit('setStrings', JSON.parse(cachedStrings));
@@ -595,6 +597,14 @@ export function createAppStore() {
             },
             removeLpEditUsers(context, params) {
               ajax('local_adele_remove_lp_edit_users', {
+                contextid: context.state.contextid,
+                lpid: params.lpid,
+                userid: params.userid,
+              });
+            },
+            // Transfer the ownership of a learning path (Adele Manager only, #488).
+            async setLpOwner(context, params) {
+              return await ajax('local_adele_set_lp_owner', {
                 contextid: context.state.contextid,
                 lpid: params.lpid,
                 userid: params.userid,

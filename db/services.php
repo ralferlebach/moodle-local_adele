@@ -215,6 +215,14 @@ $functions = [
       'ajax' => true,
       'capabilities' => 'local/adele:view',
     ],
+    'local_adele_set_lp_owner' => [
+      'classname' => 'local_adele\external\set_lp_owner',
+      'classpath' => '',
+      'description' => 'Transfer the ownership of a learning path (Adele Manager only)',
+      'type' => 'write',
+      'ajax' => true,
+      'capabilities' => 'local/adele:canmanage',
+    ],
     'local_adele_search_users' => [
       'classname' => 'local_adele\external\search_users',
       'classpath' => '',

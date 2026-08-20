@@ -19,7 +19,7 @@
  *
  * @package     local_adele
  * @author      Jacob Viertel
- * @copyright  2023 Wunderbyte GmbH
+ * @copyright  2026 Wunderbyte GmbH
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
@@ -28,38 +28,38 @@ declare(strict_types=1);
 namespace local_adele\external;
 
 use context;
+use context_system;
 use core_external\external_api;
 use core_external\external_function_parameters;
 use core_external\external_single_structure;
 use core_external\external_value;
-use local_adele\learning_path_editors;
-use local_adele\learning_paths;
-use required_capability_exception;
+use invalid_parameter_exception;
+use local_adele\ownership;
 
 /**
- * External Service for local adele.
+ * Transfer the ownership of a learning path (#488). Adele-Manager-only.
  *
  * @package     local_adele
  * @author      Jacob Viertel
- * @copyright  2023 Wunderbyte GmbH
+ * @copyright  2026 Wunderbyte GmbH
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-class remove_lp_edit_users extends external_api {
+class set_lp_owner extends external_api {
     /**
-     * Describes the parameters for get_next_question webservice.
+     * Describes the parameters for set_lp_owner webservice.
      *
      * @return external_function_parameters
      */
     public static function execute_parameters(): external_function_parameters {
         return new external_function_parameters([
-            'contextid'  => new external_value(PARAM_INT, 'contextid', VALUE_REQUIRED),
-            'lpid'  => new external_value(PARAM_INT, 'contextid', VALUE_REQUIRED),
-            'userid'  => new external_value(PARAM_INT, 'contextid', VALUE_REQUIRED),
-            ]);
+            'contextid' => new external_value(PARAM_INT, 'contextid', VALUE_REQUIRED),
+            'lpid' => new external_value(PARAM_INT, 'learning path id', VALUE_REQUIRED),
+            'userid' => new external_value(PARAM_INT, 'new owner user id', VALUE_REQUIRED),
+        ]);
     }
 
     /**
-     * Webservice for the local catquiz plugin to get next question.
+     * Hand the learning path to a new owner.
      *
      * @param int $contextid
      * @param int $lpid
@@ -67,36 +67,27 @@ class remove_lp_edit_users extends external_api {
      * @return array
      */
     public static function execute($contextid, $lpid, $userid): array {
+        global $DB;
         $params = self::validate_parameters(self::execute_parameters(), [
             'contextid' => $contextid,
             'lpid' => $lpid,
             'userid' => $userid,
         ]);
 
-        global $DB, $USER;
         require_login();
         $context = context::instance_by_id($params['contextid']);
         self::validate_context($context);
-        // Removing a named person from this path requires being an editor of THAT path (#458).
-        learning_paths::require_lp_editor_access($params['lpid'], $context);
-        // Removing ANOTHER editor is reserved for the path owner and the Adele
-        // Manager; a plain editor may only remove themselves (#571 sidequest).
-        if ((int) $params['userid'] !== (int) $USER->id) {
-            $ownerid = (int) $DB->get_field('local_adele_learning_paths', 'createdby', ['id' => $params['lpid']]);
-            if (
-                $ownerid !== (int) $USER->id
-                && !has_capability('local/adele:canmanage', \context_system::instance())
-            ) {
-                throw new required_capability_exception(
-                    \context_system::instance(),
-                    'local/adele:canmanage',
-                    'nopermissions',
-                    ''
-                );
-            }
-        }
+        // Changing who OWNS a path is reserved for the Adele Manager (site
+        // admins pass implicitly) - deliberately not for editors or the
+        // assistant role (#488).
+        require_capability('local/adele:canmanage', context_system::instance());
 
-        return learning_path_editors::remove_editors($params['lpid'], $params['userid']);
+        $newowner = $DB->get_record('user', ['id' => $params['userid']]);
+        if (ownership::is_vanished($newowner)) {
+            throw new invalid_parameter_exception('The designated owner does not exist or is deleted.');
+        }
+        ownership::set_owner($params['lpid'], $params['userid']);
+        return ['success' => true];
     }
 
     /**
@@ -106,7 +97,7 @@ class remove_lp_edit_users extends external_api {
      */
     public static function execute_returns(): external_single_structure {
         return new external_single_structure([
-                    'success' => new external_value(PARAM_INT, 'Condition description'),
-                ]);
+            'success' => new external_value(PARAM_BOOL, 'ownership transferred'),
+        ]);
     }
 }

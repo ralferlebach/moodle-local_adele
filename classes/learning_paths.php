@@ -276,6 +276,9 @@ class learning_paths {
                 'description' => '',
                 'image' => '',
                 'json' => '',
+                'ownerid' => 0,
+                'ownername' => '',
+                'ownerless' => false,
             ];
             return $learningpath;
         }
@@ -283,10 +286,20 @@ class learning_paths {
         $learningpath = $DB->get_record(
             'local_adele_learning_paths',
             ['id' => $params['learningpathid']],
-            'id, name, description, image, json'
+            'id, name, description, image, json, createdby'
         );
         $learningpath = self::get_image_paths($learningpath);
-        return (array) $learningpath;
+        $learningpath = (array) $learningpath;
+        // Owner info for the editors panel: golden crown + "Owner:" label (#488),
+        // orphaned marker when the owner vanished (#571).
+        $ownerid = (int) ($learningpath['createdby'] ?? 0);
+        unset($learningpath['createdby']);
+        $fields = 'id, deleted, ' . implode(', ', \core_user\fields::get_name_fields());
+        $owner = $ownerid ? $DB->get_record('user', ['id' => $ownerid], $fields) : null;
+        $learningpath['ownerid'] = $ownerid;
+        $learningpath['ownerless'] = ownership::is_vanished($owner);
+        $learningpath['ownername'] = $learningpath['ownerless'] ? '' : fullname($owner);
+        return $learningpath;
     }
 
     /**
@@ -1196,13 +1209,18 @@ class learning_paths {
                 $createdby = (int) ($path['createdby'] ?? 0);
                 unset($path['createdby']);
                 $owner = ['name' => '', 'email' => ''];
+                $ownerless = true;
                 if ($createdby) {
                     if (!isset($usercache[$createdby])) {
-                        // Select all name fields so fullname() has everything it may format.
-                        $fields = 'id, email, ' . implode(', ', \core_user\fields::get_name_fields());
+                        // Select all name fields so fullname() has everything it may format;
+                        // deleted for the ownerless flag (#571).
+                        $fields = 'id, email, deleted, ' . implode(', ', \core_user\fields::get_name_fields());
                         $usercache[$createdby] = $DB->get_record('user', ['id' => $createdby], $fields);
                     }
-                    if ($usercache[$createdby]) {
+                    // A vanished owner shows no stale name; the flag drives the
+                    // "ownerless" warning for Admin/Adele Manager (#571).
+                    $ownerless = ownership::is_vanished($usercache[$createdby]);
+                    if (!$ownerless) {
                         $owner = [
                             'name' => fullname($usercache[$createdby]),
                             'email' => $usercache[$createdby]->email,
@@ -1210,6 +1228,7 @@ class learning_paths {
                     }
                 }
                 $path['owner'] = $owner;
+                $path['ownerless'] = $ownerless;
                 $editors = [];
                 foreach (learning_path_editors::get_editors((int) $path['id']) as $editor) {
                     $editors[] = ['name' => trim(($editor['firstname'] ?? '') . ' ' . ($editor['lastname'] ?? ''))];

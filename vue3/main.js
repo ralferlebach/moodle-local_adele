@@ -63,7 +63,9 @@ function init() {
             app.use(VueInputAutowidth);
             app.use(Notifications);
             const store = createAppStore();
-            store.dispatch('loadComponentStrings');
+            // The plugin version keys the localStorage string cache, so every
+            // plugin upgrade invalidates stale cached strings automatically.
+            store.dispatch('loadComponentStrings', localAdeleAppElement.getAttribute('stringsrev'));
             app.use(store);
             const appRouter = createAppRouter();
             app.use(appRouter);

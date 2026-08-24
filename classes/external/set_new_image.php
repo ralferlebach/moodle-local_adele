@@ -34,6 +34,7 @@ use external_value;
 use external_single_structure;
 use external_multiple_structure;
 use local_adele\asset_handler;
+use local_adele\learning_paths;
 
 defined('MOODLE_INTERNAL') || die();
 
@@ -80,7 +81,11 @@ class set_new_image extends external_api {
 
         $context = context::instance_by_id($params['contextid']);
         self::validate_context($context);
-        require_capability('local/adele:canmanage', $context);
+        // Everyone who may edit the path may give it an image (#459): managers
+        // and admins always, per-path editors for their paths, any
+        // editor/assistant for a still-unsaved path (id 0) - same rule as the
+        // other mutating services (#458).
+        learning_paths::require_lp_editor_access($params['learningpathid'], $context);
 
         return asset_handler::set_new_image($params['contextid'], $params['learningpathid'], $params['image']);
     }

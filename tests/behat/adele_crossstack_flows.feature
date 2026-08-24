@@ -187,3 +187,31 @@ Feature: High-value cross-stack Adele flows that unit tests cannot reach
     # The student's node is now ACCESSIBLE - proving completion routed to the student.
     Then "[data-id='dndnode_2'] .icon-link i.fa-play" "css_element" should exist
     And "[data-id='dndnode_2'] .icon-link i.fa-lock" "css_element" should not exist
+
+  @javascript
+  Scenario: The progress list refreshes on tab return without a reload (#568)
+    # The path canvas already refreshes in place when the student returns to the
+    # tab (#485). The progress/ranking list below it fed from the same page must
+    # follow: after a teacher-side completion, firing the tab-return refresh has
+    # to update the student's row (completed nodes 0 -> 1) WITHOUT a reload.
+    Given the following "local_adele > learningpaths" exist:
+      | name                | description    | filepath                                            | courses | image |
+      | Completion gated LP | Tabreturn desc | local/adele/tests/fixtures/completion_gated_lp.json | C1,C2   |       |
+    And a learning path activity "Adele Tabreturn" for "Completion gated LP" exists in course "C1"
+    And I log in as "student"
+    And I am on "Course 1" course homepage
+    And I follow "Adele Tabreturn"
+    And I wait until the page is ready
+    And I wait until "#adele-userlist-toggle" "css_element" exists
+    And I wait until "[data-id='dndnode_2']" "css_element" exists
+    # Student view: cells are firstname, lastname, progress, completed nodes, rank.
+    And I should see "0" in the "#adele-userlist-row-r1 td:nth-child(4)" "css_element"
+    And "[data-id='dndnode_2'] .icon-link i.fa-lock" "css_element" should exist
+    # The teacher completes the parent course while the student's tab stays open.
+    When "teacher" completes the course "C1" for "student"
+    And I trigger the learning path tab-return refresh
+    And I wait "3" seconds
+    # The canvas refreshed in place (gated node unlocked) - the refresh ran...
+    Then "[data-id='dndnode_2'] .icon-link i.fa-play" "css_element" should exist
+    # ...and the progress list followed without a reload (#568).
+    And I should see "1" in the "#adele-userlist-row-r1 td:nth-child(4)" "css_element"

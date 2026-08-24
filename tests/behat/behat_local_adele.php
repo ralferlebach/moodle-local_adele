@@ -931,4 +931,16 @@ class behat_local_adele extends behat_base {
             );
         }
     }
+
+    /**
+     * Simulate the student returning to the browser tab (#568): fire the same
+     * window 'focus' event the tab-return listeners (#485) react to. A real
+     * tab switch cannot be scripted in webdriver, but the handlers are
+     * identical for 'focus', 'pageshow' and visibilitychange->visible.
+     *
+     * @When /^I trigger the learning path tab-return refresh$/
+     */
+    public function i_trigger_the_learning_path_tab_return_refresh(): void {
+        $this->getSession()->executeScript("window.dispatchEvent(new Event('focus'));");
+    }
 }

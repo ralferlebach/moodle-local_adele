@@ -279,6 +279,10 @@ const refreshPath = () => {
           }
         }, 300)
       }
+      // The progress/ranking list on the same page must follow the refresh
+      // too - unconditionally, because OTHER participants' progress changes
+      // even when the student's own status signature did not (#568).
+      await store.dispatch('fetchUserPathRelations')
     } finally {
       refreshInFlight = false
     }

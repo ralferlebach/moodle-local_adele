@@ -175,6 +175,9 @@ class get_lp_user_path_relations extends external_api {
                     'progress' => new external_single_structure([
                         'completed_nodes' => new external_value(PARAM_TEXT, 'completed nodes'),
                         'progress' => new external_value(PARAM_FLOAT, 'progress'),
+                        'route_completed' => new external_value(PARAM_INT, 'completed nodes on the best route'),
+                        'route_total' => new external_value(PARAM_INT, 'length of the best route'),
+                        'total_nodes' => new external_value(PARAM_INT, 'total nodes of the path'),
                     ]),
                     'rank' => new external_value(PARAM_INT, 'Ranking'),
                 ])

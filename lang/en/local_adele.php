@@ -559,6 +559,7 @@ $string['user_view_go_back_overview'] = 'Back to learning path list';
 $string['user_view_id'] = 'ID';
 $string['user_view_lastname'] = 'Last name';
 $string['user_view_nodes'] = 'Completed nodes';
+$string['user_view_nodes_tooltip'] = '{$a->completed} of {$a->total} nodes completed in total';
 $string['user_view_progress'] = 'Progress';
 $string['user_view_user_list'] = 'User list';
 $string['user_view_user_list_hide'] = 'Hide ';

@@ -23,6 +23,7 @@
 
 import UserList from '../../../../components/user_view/UserList.vue';
 import ProgressBar from '../../../../components/nodes_items/ProgressBar.vue';
+import tooltipDirective from '../../../../directives/tooltip';
 import { createStore } from 'vuex';
 import { mount } from '@vue/test-utils';
 
@@ -35,14 +36,23 @@ const strings = {
   user_view_lastname: 'Last name',
   user_view_progress: 'Progress',
   user_view_nodes: 'Nodes',
+  user_view_nodes_tooltip: '{$a->completed} of {$a->total} nodes completed in total',
   userlistranking: 'Rank',
   nodes_items_no_progress: 'No progress',
 };
 
+// Progress carries the best-route numbers (#461 revisit): route_completed /
+// route_total drive the x/y cell, completed_nodes / total_nodes the tooltip.
 const relations = [
-  { id: 3, firstname: 'Cara', lastname: 'Zeal', rank: 2, progress: { progress: 40, completed_nodes: 2 } },
-  { id: 1, firstname: 'Alan', lastname: 'Young', rank: 1, progress: { progress: 90, completed_nodes: 5 } },
-  { id: 2, firstname: 'Bea', lastname: 'Xu', rank: 3, progress: { progress: 10, completed_nodes: 1 } },
+  { id: 3, firstname: 'Cara', lastname: 'Zeal', rank: 2,
+    progress: { progress: 40, completed_nodes: 2, route_completed: 2, route_total: 5, total_nodes: 6 } },
+  { id: 1, firstname: 'Alan', lastname: 'Young', rank: 1,
+    progress: { progress: 90, completed_nodes: 5, route_completed: 9, route_total: 10, total_nodes: 12 } },
+  // Bea's raw count (6) is HIGHER than Cara's/Alan's route numerators on
+  // purpose: sorting the column by the old raw key would order her last,
+  // sorting by the best-route numerator orders her first.
+  { id: 2, firstname: 'Bea', lastname: 'Xu', rank: 3,
+    progress: { progress: 50, completed_nodes: 6, route_completed: 1, route_total: 2, total_nodes: 12 } },
 ];
 
 const buildStore = (overrides = {}) =>
@@ -70,6 +80,7 @@ const factory = (storeOverrides) =>
     global: {
       plugins: [buildStore(storeOverrides)],
       components: { ProgressBar },
+      directives: { tooltip: tooltipDirective },
       stubs: {
         'router-link': {
           props: ['to'],
@@ -170,6 +181,45 @@ describe('UserList.vue', () => {
     expect(rows).toHaveLength(1);
     // Student view drops the ID column, so first cell is the first name.
     expect(rows[0].find('td').text()).toBe('Bea'); // user id 2 -> Bea
+  });
+
+  it('shows the best route as x/y in the completed-nodes cell (#461)', () => {
+    const wrapper = factory();
+    // Teacher view: td5 is the completed-nodes cell. Bea's best route is 1/2.
+    const beaRow = wrapper.findAll('tbody tr').find((tr) => tr.text().includes('Bea'));
+    expect(beaRow.findAll('td')[4].text()).toBe('1/2');
+    // Cara's best route 2/5 - independent of her raw count of 2/6.
+    const caraRow = wrapper.findAll('tbody tr').find((tr) => tr.text().includes('Cara'));
+    expect(caraRow.findAll('td')[4].text()).toBe('2/5');
+  });
+
+  it('reveals the raw totals in a tooltip on the completed-nodes cell (#461)', async () => {
+    jest.useFakeTimers();
+    const raf = global.requestAnimationFrame;
+    // The directive positions itself inside requestAnimationFrame; run it synchronously.
+    global.requestAnimationFrame = (cb) => cb();
+    try {
+      const wrapper = factory();
+      const beaRow = wrapper.findAll('tbody tr').find((tr) => tr.text().includes('Bea'));
+      await beaRow.findAll('td')[4].trigger('mouseenter');
+      jest.advanceTimersByTime(300);
+      const tooltip = document.querySelector('.custom-tooltip');
+      expect(tooltip).not.toBeNull();
+      expect(tooltip.textContent).toBe('6 of 12 nodes completed in total');
+    } finally {
+      jest.useRealTimers();
+      global.requestAnimationFrame = raf;
+      document.querySelectorAll('.custom-tooltip').forEach((el) => el.remove());
+    }
+  });
+
+  it('sorts the completed-nodes column by the best-route numerator (#461)', async () => {
+    const wrapper = factory();
+    const nodesHeader = wrapper.findAll('th')[4];
+    await nodesHeader.trigger('click');
+    // Ascending by route_completed: Bea (1), Cara (2), Alan (9).
+    const names = wrapper.findAll('tbody tr td:nth-child(2)').map((td) => td.text());
+    expect(names).toEqual(['Bea', 'Cara', 'Alan']);
   });
 
   it('applies the own-results filter to the initial render too (#569)', () => {

@@ -559,6 +559,7 @@ $string['user_view_go_back_overview'] = 'Zurück zu Lernpfadliste';
 $string['user_view_id'] = 'ID';
 $string['user_view_lastname'] = 'Nachname';
 $string['user_view_nodes'] = 'Abgeschlossene Nodes';
+$string['user_view_nodes_tooltip'] = '{$a->completed} von {$a->total} Knoten insgesamt abgeschlossen';
 $string['user_view_progress'] = 'Fortschritt';
 $string['user_view_user_list'] = '';
 $string['user_view_user_list_hide'] = 'Liste Lernpfadnutzer verbergen';

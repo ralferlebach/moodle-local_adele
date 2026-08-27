@@ -54,7 +54,7 @@
               <th @click="sortTable('progress.progress')" :class="getSortClass('progress.progress')" :style="{ width: columnWidth }" :title="store.state.strings.user_view_progress">
                 {{ store.state.strings.user_view_progress }}
               </th>
-              <th @click="sortTable('progress.completed_nodes')" :class="getSortClass('progress.completed_nodes')" :style="{ width: columnWidth }" :title="store.state.strings.user_view_nodes">
+              <th @click="sortTable('progress.route_completed')" :class="getSortClass('progress.route_completed')" :style="{ width: columnWidth }" :title="store.state.strings.user_view_nodes">
                 {{ store.state.strings.user_view_nodes }}
               </th>
               <th @click="sortTable('rank')" :class="getSortClass('rank')" :style="{ width: columnWidth }" :title="store.state.strings.userlistranking">
@@ -83,7 +83,9 @@
                 <td :style="{ width: columnWidth }">
                   <ProgressBar :progress="relation.progress.progress" />
                 </td>
-                <td :style="{ width: columnWidth }">{{ relation.progress.completed_nodes }}</td>
+                <td :style="{ width: columnWidth }" v-tooltip="nodesTooltip(relation)">
+                  {{ relation.progress.route_completed }}/{{ relation.progress.route_total }}
+                </td>
                 <td :style="{ width: columnWidth }">{{ relation.rank }}</td>
               </tr>
             </transition-group>
@@ -108,6 +110,19 @@ const onlyOwnResults = (list) =>
     ? list.filter(obj => Number(obj.id) === Number(store.state.user))
     : list;
 const sortedRelations = ref([...onlyOwnResults(store.state.lpuserpathrelations).slice(0, 10)]);
+
+// The cell shows the BEST ROUTE as x/y (#461); the tooltip carries the raw
+// totals. Moodle-style {$a->...} placeholders are substituted here because the
+// SPA receives raw strings; an empty return suppresses the tooltip entirely.
+const nodesTooltip = (relation) => {
+  const template = store.state.strings.user_view_nodes_tooltip;
+  if (!template) {
+    return '';
+  }
+  return template
+    .replace('{$a->completed}', relation.progress.completed_nodes)
+    .replace('{$a->total}', relation.progress.total_nodes);
+};
 const sortKey = ref('');
 const sortDirection = ref(1);
 const focusEntry = ref(null);

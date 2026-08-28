@@ -165,7 +165,7 @@ $functions = [
       'description' => 'Set new image',
       'type' => 'write',
       'ajax' => true,
-      'capabilities' => 'local/adele:edit',
+      'capabilities' => 'local/adele:canmanage',
     ],
     'local_adele_update_user_path_relation' => [
       'classname' => 'local_adele\external\update_user_path_relation',

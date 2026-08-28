@@ -78,4 +78,8 @@
       'eventname' => '\core\event\role_assigned',
       'callback' => 'local_adele_observer::assign_assistant_to_role',
     ],
+    [
+      'eventname' => '\core\event\user_deleted',
+      'callback' => 'local_adele_observer::user_deleted',
+    ],
  ];

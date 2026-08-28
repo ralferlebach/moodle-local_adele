@@ -118,3 +118,57 @@ describe('LearningPathList.vue visibility toggle', () => {
     expect(text).toContain('vic@example.com');
   });
 });
+
+describe('LearningPathList.vue ownerless handling (#571)', () => {
+  const makeStore = (lp, view = 'manager') => ({
+    state: {
+      learningpaths: [lp],
+      viewlearningpaths: [],
+      editablepaths: {},
+      view,
+      undoNodes: [],
+      contextid: 1,
+      user: 2,
+      learningPathID: 0,
+      strings: new Proxy({}, { get: (_t, k) => String(k) }),
+    },
+    dispatch: jest.fn().mockResolvedValue(undefined),
+    commit: jest.fn(),
+  });
+
+  const lpBase = { id: 7, name: 'Orphan LP', description: 'x', visibility: 1, image: '', isowner: 'true' };
+
+  const doMount = () => mount(LearningPathList, {
+    global: {
+      stubs: { HelpingSlider: true },
+      directives: { tooltip: {} },
+    },
+  });
+
+  it('shows the ownerless badge and the manager banner for an orphaned path', async () => {
+    useStore.mockReturnValue(makeStore({ ...lpBase, ownerless: true, owner: { name: '', email: '' } }));
+    useRouter.mockReturnValue({ push: jest.fn() });
+    const wrapper = doMount();
+    await wrapper.vm.$nextTick();
+    expect(wrapper.find('.ownerless-badge').exists()).toBe(true);
+    expect(wrapper.find('.ownerless-banner').exists()).toBe(true);
+  });
+
+  it('shows neither badge nor banner when the owner is alive', async () => {
+    useStore.mockReturnValue(makeStore({ ...lpBase, ownerless: false, owner: { name: 'Alice A', email: 'a@a.at' } }));
+    useRouter.mockReturnValue({ push: jest.fn() });
+    const wrapper = doMount();
+    await wrapper.vm.$nextTick();
+    expect(wrapper.find('.ownerless-badge').exists()).toBe(false);
+    expect(wrapper.find('.ownerless-banner').exists()).toBe(false);
+  });
+
+  it('hides the banner from non-managers', async () => {
+    useStore.mockReturnValue(makeStore({ ...lpBase, ownerless: true, owner: { name: '', email: '' } }, 'assistant'));
+    useRouter.mockReturnValue({ push: jest.fn() });
+    const wrapper = doMount();
+    await wrapper.vm.$nextTick();
+    expect(wrapper.find('.ownerless-banner').exists()).toBe(false);
+  });
+});
+

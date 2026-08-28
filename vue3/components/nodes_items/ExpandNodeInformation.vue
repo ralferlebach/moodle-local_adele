@@ -114,11 +114,15 @@
                 Description
               </b>
               <div class="list-group-text">
-                <div v-if="data && data.description">
-                  {{ data.description }}
-                </div>
-                <div v-else-if="courses[0] && courses[0].description">
+                <!-- This dialog belongs to ONE course card, so the course's own
+                     editor text wins over the (stack) node's description; the
+                     node description is the fallback for courses without an own
+                     text (#484). -->
+                <div v-if="courses[0] && courses[0].description">
                   <div v-html="courses[0].description"/>
+                </div>
+                <div v-else-if="data && data.description">
+                  {{ data.description }}
                 </div>
                 <div v-else-if="courses[0] && courses[0].summary">
                   <div v-html="courses[0].summary"/>

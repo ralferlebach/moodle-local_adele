@@ -48,6 +48,10 @@
         <input
           id="grade"
           v-model="grade"
+          type="number"
+          min="0"
+          max="100"
+          step="1"
           class="form-control"
         >
       </div>
@@ -98,7 +102,19 @@ onMounted(async () => {
   }, { deep: true } );
 });
 
+// The threshold is a percentage of the quiz maximum grade (#499).
 watch(() => grade.value, async () => {
+  if (grade.value !== null && grade.value !== '') {
+    const numeric = Number(grade.value);
+    if (numeric > 100) {
+      grade.value = 100;
+      return;
+    }
+    if (numeric < 0) {
+      grade.value = 0;
+      return;
+    }
+  }
   data.value = {
     quizid: selectedQuiz.value,
     grade: grade.value,

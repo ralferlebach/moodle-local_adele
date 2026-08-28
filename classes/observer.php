@@ -138,4 +138,14 @@ class local_adele_observer {
     public static function catquiz_attempt_finished(base $event) {
         $observer = learning_path_update::catquiz_finished($event);
     }
+
+    /**
+     * A user account was deleted: pass their learning paths to the next editor
+     * and drop their editor memberships (#571).
+     *
+     * @param base $event
+     */
+    public static function user_deleted(base $event) {
+        \local_adele\ownership::handle_user_deleted((int) $event->objectid);
+    }
 }

@@ -58,6 +58,34 @@ const addUser = (user) => {
   isListVisible.value = false;
 };
 
+// Current owner of the path (delivered by get_learningpath, #488/#571).
+const ownerId = computed(() => Number(store.state.learningpath && store.state.learningpath.ownerid) || 0);
+const ownerName = computed(() => (store.state.learningpath && store.state.learningpath.ownername) || '');
+const ownerLess = computed(() => !!(store.state.learningpath && store.state.learningpath.ownerless));
+const isOwnerCard = (user) => Number(user.id) === ownerId.value;
+
+// Hand the path to a new owner (Adele Manager only, #488).
+const setOwner = async (user) => {
+  const confirmation = confirm(
+    (store.state.strings.setowner_confirm || '') + ' ' + user.firstname + ' ' + user.lastname
+  );
+  if (!confirmation) {
+    return;
+  }
+  await store.dispatch('setLpOwner', {
+    lpid: store.state.learningPathID,
+    userid: user.id,
+  });
+  // Reflect the transfer immediately: golden crown + owner label flip.
+  if (store.state.learningpath) {
+    store.state.learningpath.ownerid = user.id;
+    store.state.learningpath.ownername = user.firstname + ' ' + user.lastname;
+    store.state.learningpath.ownerless = false;
+  }
+};
+
+const isManager = computed(() => store.state.view == 'manager');
+
 const removeUser = (userId) => {
   const confirmation = confirm(store.state.strings.editordeleteconfirmation);
   if (
@@ -104,6 +132,14 @@ onBeforeUnmount(() => {
   <div class="col-6">
     <h4>
       {{ store.state.strings.selectuser }}
+      <small class="owner-label ml-2">
+        <i class="fa fa-crown crown-owner" aria-hidden="true" />
+        {{ store.state.strings.owner_label }}
+        <b v-if="ownerName">{{ ownerName }}</b>
+        <span v-else-if="ownerLess" class="badge badge-warning">
+          {{ store.state.strings.main_ownerless }}
+        </span>
+      </small>
     </h4>
     <input
       v-model="searchQuery"
@@ -143,6 +179,20 @@ onBeforeUnmount(() => {
       >
         <div class="card-body p-2 d-flex align-items-center justify-content-between">
           <span>{{ user.firstname }} {{ user.lastname }}</span>
+          <i
+            v-if="isOwnerCard(user)"
+            class="fa fa-crown crown-owner ml-2 owner-crown"
+            :title="store.state.strings.setowner_current"
+            aria-hidden="true"
+          />
+          <button
+            v-else-if="isManager"
+            class="btn btn-link p-0 ml-2 setowner-btn"
+            @click="setOwner(user)"
+            :title="store.state.strings.setowner_button"
+          >
+            <i class="fa fa-crown crown-grey" aria-hidden="true" />
+          </button>
           <button
             v-if="selectedUsers.length > 1"
             class="btn btn-link text-danger p-0"
@@ -158,6 +208,19 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.crown-owner {
+  color: #d4af37;
+}
+.crown-grey {
+  color: #adb5bd;
+}
+.setowner-btn:hover .crown-grey {
+  color: #d4af37;
+}
+.owner-label {
+  font-size: 0.75em;
+  color: #555;
+}
 .user-search-input {
   width: 100%;
 }

@@ -25,6 +25,12 @@
   <div>
     <HelpingSlider />
     <h3>{{ store.state.strings.pluginname }}</h3>
+    <div
+      v-if="store.state.view == 'manager' && ownerlessCount > 0"
+      class="alert alert-warning ownerless-banner"
+    >
+      {{ store.state.strings.ownerless_banner }} ({{ ownerlessCount }})
+    </div>
     <div class="col-lg-2">
       <button
         v-if="store.state.view != null && (store.state.view == 'manager' || store.state.view == 'assistant')"
@@ -181,6 +187,11 @@
                   v-if="singlelearningpath.owner.email"
                 > ({{ singlelearningpath.owner.email }})</span>
               </div>
+              <div v-else-if="singlelearningpath.ownerless">
+                <span class="badge badge-warning ownerless-badge">
+                  {{ store.state.strings.main_ownerless }}
+                </span>
+              </div>
             </div>
           </div>
           <div
@@ -271,6 +282,11 @@
                   v-if="viewablelearningpath.owner.email"
                 > ({{ viewablelearningpath.owner.email }})</span>
               </div>
+              <div v-else-if="viewablelearningpath.ownerless">
+                <span class="badge badge-warning ownerless-badge">
+                  {{ store.state.strings.main_ownerless }}
+                </span>
+              </div>
             </div>
           </div>
 
@@ -300,6 +316,12 @@ const filteredLpItem = computed(() => {
 
 const viewLearningPaths = computed(() => {
     return store.state.viewlearningpaths;
+})
+
+// Paths whose owner vanished with no successor (#571) - drives the manager warning banner.
+const ownerlessCount = computed(() => {
+  const paths = Array.isArray(store.state.learningpaths) ? store.state.learningpaths : [];
+  return paths.filter((lp) => lp && lp.ownerless).length;
 })
 
 const search = ref('');

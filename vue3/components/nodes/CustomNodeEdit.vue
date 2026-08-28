@@ -114,43 +114,17 @@ onMounted(() => {
     active.value = true
   }
 
-  const triggerAnimation = () => {
-    // hasTimedCondition is determined above from the node's actual timed /
-    // timed_duration restriction nodes (see onMounted), not from the polluted
-    // restrictioncriteria object.
-    if (
-      props.data.completion.feedback &&
-      props.data.completion.feedback.status !== 'closed' &&
-      props.data.completion.feedback.status !== 'not_accessible' &&
-      props.data.completion.feedback.status_restriction !== 'after'
-    ) {
-      if (
-        props.data.animations &&
-        props.data.animations.seenrestriction === false &&
-        startanimation.value
-      ) {
-        iconState.value = 'expanding';
-        setTimeout(() => {
-          iconClass.value = 'fa-play';
-          setTimeout(() => {
-            iconState.value = 'fading';
-            setTimeout(() => {
-              triggerAnimation();
-              if (!startanimation.value) {
-                iconClass.value = 'fa-play';
-              } else {
-                iconClass.value = 'fa-lock';
-              }
-            }, 2000);
-          }, 2000);
-        }, 750);
-      } else {  
-        iconClass.value = 'fa-play';
-        iconState.value = '';
-      }
-    }
-  };
-  triggerAnimation();
+  // No lock->play attention animation any more (#570): the flipping icon (and
+  // its flipping tooltip) made accessible nodes read as locked. An accessible
+  // node shows a steady play symbol from the first paint on.
+  if (
+    props.data.completion.feedback &&
+    props.data.completion.feedback.status !== 'closed' &&
+    props.data.completion.feedback.status !== 'not_accessible' &&
+    props.data.completion.feedback.status_restriction !== 'after'
+  ) {
+    iconClass.value = 'fa-play';
+  }
 })
 
 const { statusMessage } = useStatusMessage(computed(() => props.data));
@@ -259,7 +233,6 @@ const goToCourse = () => {
     window.open(course_link, '_blank');
   }
 }
-const iconState = ref('initial');
 const iconClass = ref('fa-lock');
 const hasTimedCondition = ref(false);
 
@@ -300,13 +273,7 @@ const courseLinkTitle = computed(() =>
                   :class="{ 'icon-with-ring': hasTimedCondition }"
                   :style="hasTimedCondition ? { backgroundImage: 'url(' + store.state.wwwroot + '/local/adele/public/ring.png)' } : {}"
                 >
-                  <i :class="['fa', iconClass,
-                      {
-                        'icon-fading': iconState === 'fading',
-                        'icon-expanding': iconState === 'expanding',
-                        'icon-fadingIn': iconState === 'fadingIn',
-                      },
-                    ]" />
+                  <i :class="['fa', iconClass]" />
                 </div>
               </button>
             </div>
@@ -342,54 +309,6 @@ const courseLinkTitle = computed(() =>
 </template>
 
 <style scoped>
-@keyframes fading {
-  100% {
-    opacity: 0;
-    transform: scale(0.2);
-  }
-}
-
-.icon-fading {
-  animation: fading 1s ease-out forwards;
-}
-
-@keyframes expanding {
-  0% {
-    transform: scale(0.2);
-    opacity: 0.1;
-  }
-
-  80% {
-    transform: scale(1.5);
-    opacity: 0.5;
-  }
-
-  100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-}
-
-.icon-expanding {
-  animation: expanding 0.75s ease-in-out forwards;
-}
-
-@keyframes fadingIn {
-  0% {
-    opacity: 0;
-    transform: scale(0.2);
-  }
-
-  100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-.icon-fadingIn {
-  animation: fadingIn 1s ease-out forwards;
-}
-
 .card-body-outer {
   display: flex;
   justify-content: center;

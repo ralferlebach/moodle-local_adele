@@ -60,8 +60,10 @@ function hasIncompleteCondition(json) {
 /**
  * Timed access criteria must carry their required inputs before they can be saved,
  * otherwise they are unsatisfiable and render "missing date"-style hints (#494):
- * - 'timed' (start/end time): at least one of start or end must be set;
- * - 'timed_duration' (editing period): a positive duration value AND a time unit.
+ * - 'timed' (start/end time): at least one of start or end must be set, and a
+ *   fully set window must end after it starts ('timed_order');
+ * - 'timed_duration' (editing period): a positive amount (selectedDuration), a
+ *   time unit (durationValue, 0 = days) and a start mode (selectedOption).
  *
  * @param {object} json The learning-path tree json.
  * @returns {(string|null)} The label of the first invalid timed criterion, or null.
@@ -76,11 +78,25 @@ export function invalidTimedConditionLabel(json) {
         for (const c of conditions) {
             const data = c && c.data ? c.data : {};
             const value = data.value || {};
-            if (data.label === 'timed' && isEmpty(value.start) && isEmpty(value.end)) {
-                return 'timed';
+            if (data.label === 'timed') {
+                if (isEmpty(value.start) && isEmpty(value.end)) {
+                    return 'timed';
+                }
+                // Both set: the window must be forward in time (#494 retest).
+                if (!isEmpty(value.start) && !isEmpty(value.end)
+                    && new Date(value.start) >= new Date(value.end)) {
+                    return 'timed_order';
+                }
             }
             if (data.label === 'timed_duration') {
-                if (isEmpty(value.durationValue) || Number(value.durationValue) <= 0 || isEmpty(value.selectedDuration)) {
+                // Field semantics (#566): selectedDuration = the AMOUNT (must be
+                // a positive number); durationValue = the UNIT select where
+                // 0 = days is a legitimate choice; selectedOption = the start
+                // mode where 0 = learning path is legitimate (and PHP silently
+                // never schedules the boundary task without it).
+                if (isEmpty(value.selectedDuration) || Number(value.selectedDuration) <= 0
+                    || isEmpty(value.durationValue)
+                    || isEmpty(value.selectedOption)) {
                     return 'timed_duration';
                 }
             }
@@ -215,6 +231,10 @@ export function createAppStore() {
             setstartNode(state, data) {
                 state.startnode = data.startnode;
             },
+            // Node display fields live under node.data - that is what the renderers
+            // read and what ControlsPath persists. Writing them top-level (and dropping
+            // description/estimate_duration entirely) silently lost every node
+            // description on save (GitHub #484).
             updatedNode(state, data) {
                 state.node.fullname = data.fullname;
                 state.node.description = data.description;
@@ -224,14 +244,20 @@ export function createAppStore() {
                 state.learningpath.json.tree.nodes = state.learningpath.json.tree.nodes.map(element_node => {
                     if (element_node.id === data.node_id) {
                       return { ...element_node,
-                        fullname: data.fullname,
-                        selected_course_image: data.selected_course_image,
-                        selected_image: data.selected_image,
+                        data: { ...element_node.data,
+                          fullname: data.fullname,
+                          description: data.description,
+                          estimate_duration: data.estimate_duration,
+                          selected_course_image: data.selected_course_image,
+                          selected_image: data.selected_image,
+                        },
                       };
                     }
                     return element_node;
                 });
             },
+            // Per-course texts of a stack belong into course_node_id_description of the
+            // TREE node; the stack node's own name/description stay untouched (#484).
             updatedCourseNode(state, data) {
               if (!state.node.course_node_id_description) {
                 state.node.course_node_id_description = {}
@@ -243,9 +269,15 @@ export function createAppStore() {
               state.learningpath.json.tree.nodes = state.learningpath.json.tree.nodes.map(element_node => {
                   if (element_node.id === state.node.node_id) {
                     return { ...element_node,
-                      fullname: data.fullname,
-                      selected_course_image: data.selected_course_image,
-                      selected_image: data.selected_image,
+                      data: { ...element_node.data,
+                        course_node_id_description: {
+                          ...(element_node.data.course_node_id_description || {}),
+                          [data.courseid]: {
+                            fullname: data.fullname,
+                            description: data.description,
+                          },
+                        },
+                      },
                     };
                   }
                   return element_node;
@@ -300,9 +332,11 @@ export function createAppStore() {
                 const lang = document.documentElement.lang.replace(/-/g, '_');
                 context.commit('setLang', lang);
             },
-            async loadComponentStrings(context) {
+            async loadComponentStrings(context, stringsrev) {
                 const lang = document.documentElement.lang.replace(/-/g, '_');
-                const cacheKey = 'local_adele/strings/' + lang;
+                // Versioned per plugin release: without the rev, browsers kept serving
+                // stale cached strings after upgrades (labels rendered "undefined").
+                const cacheKey = 'local_adele/strings/' + lang + '/' + (stringsrev || '0');
                 const cachedStrings = moodleStorage.get(cacheKey);
                 if (cachedStrings) {
                     context.commit('setStrings', JSON.parse(cachedStrings));
@@ -431,11 +465,14 @@ export function createAppStore() {
                 // required inputs is unsatisfiable ("missing date" hints). Refuse the save.
                 const invalidtimed = invalidTimedConditionLabel(payload.json);
                 if (invalidtimed) {
+                    const timedmessages = {
+                        timed: context.state.strings.timed_incomplete_modal,
+                        timed_order: context.state.strings.timed_order_modal,
+                        timed_duration: context.state.strings.timed_duration_incomplete_modal,
+                    };
                     Notification.alert(
                         context.state.strings.restriction_incomplete_title,
-                        invalidtimed === 'timed'
-                            ? context.state.strings.timed_incomplete_modal
-                            : context.state.strings.timed_duration_incomplete_modal
+                        timedmessages[invalidtimed]
                     );
                     throw new Error('local_adele/incomplete-timed-criterion');
                 }
@@ -579,6 +616,14 @@ export function createAppStore() {
             },
             removeLpEditUsers(context, params) {
               ajax('local_adele_remove_lp_edit_users', {
+                contextid: context.state.contextid,
+                lpid: params.lpid,
+                userid: params.userid,
+              });
+            },
+            // Transfer the ownership of a learning path (Adele Manager only, #488).
+            async setLpOwner(context, params) {
+              return await ajax('local_adele_set_lp_owner', {
                 contextid: context.state.contextid,
                 lpid: params.lpid,
                 userid: params.userid,

@@ -139,6 +139,9 @@ class get_learningpath extends external_api {
             'description' => new external_value(PARAM_TEXT, 'Item name'),
             'image' => new external_value(PARAM_TEXT, 'Item image'),
             'json' => new external_value(PARAM_RAW, 'Additional JSON data'),
+            'ownerid' => new external_value(PARAM_INT, 'Owner (creator) user id', VALUE_OPTIONAL),
+            'ownername' => new external_value(PARAM_TEXT, 'Owner full name, empty when vanished', VALUE_OPTIONAL),
+            'ownerless' => new external_value(PARAM_BOOL, 'Owner vanished (#571)', VALUE_OPTIONAL),
         ]);
     }
 }

@@ -66,3 +66,112 @@ Feature: As an admin I perform basic adele actions - create, update, duplicate, 
     And I should see "Course 3" in the ".vue-flow.learning-path-flow" "css_element"
     And "[data-id=\"dndnode_2dndnode_1\"]" "css_element" should exist
     And "[data-id=\"dndnode_3dndnode_2\"]" "css_element" should exist
+
+  @javascript
+  Scenario: Abandoning a criterion via Close must not persist it (#476 #494 retests)
+    # Azadeh's retest: adding an access criterion and leaving the criteria editor
+    # via "Close" (instead of Save) kept the criterion; the path then saved with
+    # no error and the student view broke again. Closing must DISCARD the
+    # abandoned criterion.
+    Given I log in as "admin"
+    And I click on "Learning Paths" "button" in the "#usernavigation" "css_element"
+    And I click on "Add a new learning path" "button"
+    And I set the field "goalnameplaceholder" to "Close Leak LP"
+    And I set the field "goalsubjectplaceholder" to "Close leak description"
+    And I drag and drop HTML5 from ".learning-path-nodes-container .nodes > :first-child" to "[data-id='starting_node']"
+    And I pan vue flow to "[data-id='dndnode_1']"
+    And I wait "1" seconds
+    # Open the FIRST node's criteria editor and drop a "parent nodes" condition
+    # (the #476 case - it may never be saved on a first node).
+    And I click on "[data-id='dndnode_1'] .icon-link .fa-lock" "css_element"
+    And I drag and drop HTML5 from ".learning-path-nodes-container .nodes > :nth-child(4)" to ".vue-flow__pane.vue-flow__container.draggable"
+    And I wait "1" seconds
+    # Abandon via Close (not Save); confirm the discard prompt if it appears.
+    And I click on "Close" "button" in the ".vue-flow__panel.save-restore-controls" "css_element"
+    And I wait "1" seconds
+    # The discard confirmation may or may not appear (that inconsistency is part
+    # of the bug); accept it when shown.
+    And I click on "Close anyway" "button" if it exists
+    And I wait "1" seconds
+    # Save the whole learning path.
+    And I click on "Save" "button" in the ".vue-flow__panel.save-restore-controls" "css_element"
+    And I wait "1" seconds
+    Then I should see "Close Leak LP" in the ".learningcardcont .learningcard" "css_element"
+    And learning path "Close Leak LP" node "dndnode_1" should have no restriction conditions
+    # Reopen the criteria editor: the canvas must show the STORED (empty) state,
+    # not resurrect the abandoned condition (stale-canvas half of the retest).
+    And I click on ".learningcardcont .learningcard " "css_element"
+    And I wait "1" seconds
+    And I pan vue flow to "[data-id='dndnode_1']"
+    And I click on "[data-id='dndnode_1'] .icon-link .fa-lock" "css_element"
+    And I wait "1" seconds
+    And "[data-id^='condition_']" "css_element" should not exist
+    # The user's exact sequence: add an INVALID timed criterion, try to save the
+    # criteria (blocked with the validation alert), close, reopen - the rejected
+    # criterion must NOT linger in the editor session.
+    And I drag and drop HTML5 from ".learning-path-nodes-container .nodes > :first-child" to ".vue-flow__pane.vue-flow__container.draggable"
+    And I wait "1" seconds
+    And I click on "Save" "button" in the ".vue-flow__panel.save-restore-controls" "css_element"
+    And I wait "1" seconds
+    And I click on ".modal.show .modal-footer button" "css_element" if it exists
+    And I wait "1" seconds
+    And I click on "Close" "button" in the ".vue-flow__panel.save-restore-controls" "css_element"
+    And I wait "1" seconds
+    And I click on "Close anyway" "button" if it exists
+    And I wait "1" seconds
+    And I click on "[data-id='dndnode_1'] .icon-link .fa-lock" "css_element"
+    And I wait "1" seconds
+    And "[data-id^='condition_']" "css_element" should not exist
+    And learning path "Close Leak LP" node "dndnode_1" should have no restriction conditions
+
+  @javascript
+  Scenario: Editing a saved criterion - Save persists, Close discards (#494 #566 retests)
+    Given I log in as "admin"
+    And I click on "Learning Paths" "button" in the "#usernavigation" "css_element"
+    And I click on "Add a new learning path" "button"
+    And I set the field "goalnameplaceholder" to "Roundtrip LP"
+    And I set the field "goalsubjectplaceholder" to "Roundtrip description"
+    And I drag and drop HTML5 from ".learning-path-nodes-container .nodes > :first-child" to "[data-id='starting_node']"
+    And I pan vue flow to "[data-id='dndnode_1']"
+    And I wait "1" seconds
+    # Create a COMPLETE "2 days from node opening" duration criterion (#566: this
+    # exact combination was falsely rejected before).
+    And I click on "[data-id='dndnode_1'] .icon-link .fa-lock" "css_element"
+    And I drag and drop HTML5 from ".learning-path-nodes-container .nodes > :nth-child(2)" to ".vue-flow__pane.vue-flow__container.draggable"
+    And I wait "1" seconds
+    And I set the field "restriction-condition_1-option" to "1"
+    And I set the field "restriction-condition_1-duration" to "2"
+    And I set the field "restriction-condition_1-format" to "0"
+    And I click on "Save" "button" in the ".vue-flow__panel.save-restore-controls" "css_element"
+    And I wait "1" seconds
+    And I click on "Save" "button" in the ".vue-flow__panel.save-restore-controls" "css_element"
+    And I wait "1" seconds
+    Then learning path "Roundtrip LP" node "dndnode_1" restriction "timed_duration" value "selectedDuration" should be "2"
+    # Abandon an edit via Close: the stored value must survive.
+    And I click on ".learningcardcont .learningcard " "css_element"
+    And I wait "1" seconds
+    And I pan vue flow to "[data-id='dndnode_1']"
+    And I click on "[data-id='dndnode_1'] .icon-link .fa-lock" "css_element"
+    And I wait "1" seconds
+    And I set the field "restriction-condition_1-duration" to "9"
+    And I click on "Close" "button" in the ".vue-flow__panel.save-restore-controls" "css_element"
+    And I wait "1" seconds
+    And I click on "Close anyway" "button" if it exists
+    And I wait "1" seconds
+    Then learning path "Roundtrip LP" node "dndnode_1" restriction "timed_duration" value "selectedDuration" should be "2"
+    # Reopen: the field must show the STORED 2, and a saved edit must persist.
+    And I pan vue flow to "[data-id='dndnode_1']"
+    And I click on "[data-id='dndnode_1'] .icon-link .fa-lock" "css_element"
+    And I wait "3" seconds
+    And "[data-id='condition_1']" "css_element" should exist
+    And exactly one "[data-id='condition_1']" element should exist
+    And exactly one "#restriction-condition_1-duration" element should exist
+    And the field "restriction-condition_1-format" matches value "0"
+    And the field "restriction-condition_1-option" matches value "1"
+    And the field "restriction-condition_1-duration" matches value "2"
+    And I set the field "restriction-condition_1-duration" to "9"
+    And I click on "Save" "button" in the ".vue-flow__panel.save-restore-controls" "css_element"
+    And I wait "1" seconds
+    And I click on "Save" "button" in the ".vue-flow__panel.save-restore-controls" "css_element"
+    And I wait "1" seconds
+    Then learning path "Roundtrip LP" node "dndnode_1" restriction "timed_duration" value "selectedDuration" should be "9"

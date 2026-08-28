@@ -19,7 +19,7 @@
  *
  * @package     local_adele
  * @author      Jacob Viertel
- * @copyright  2023 Wunderbyte GmbH
+ * @copyright  2026 Wunderbyte GmbH
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
@@ -28,66 +28,66 @@ declare(strict_types=1);
 namespace local_adele\external;
 
 use context;
-use external_api;
-use external_function_parameters;
-use external_value;
-use external_single_structure;
-use external_multiple_structure;
-use local_adele\asset_handler;
-use local_adele\learning_paths;
-
-defined('MOODLE_INTERNAL') || die();
-
-require_once($CFG->libdir . '/externallib.php');
+use context_system;
+use core_external\external_api;
+use core_external\external_function_parameters;
+use core_external\external_single_structure;
+use core_external\external_value;
+use invalid_parameter_exception;
+use local_adele\ownership;
 
 /**
- * External Service for local adele.
+ * Transfer the ownership of a learning path (#488). Adele-Manager-only.
  *
  * @package     local_adele
  * @author      Jacob Viertel
- * @copyright  2023 Wunderbyte GmbH
+ * @copyright  2026 Wunderbyte GmbH
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-class set_new_image extends external_api {
+class set_lp_owner extends external_api {
     /**
-     * Describes the parameters for get_next_question webservice.
+     * Describes the parameters for set_lp_owner webservice.
      *
      * @return external_function_parameters
      */
     public static function execute_parameters(): external_function_parameters {
         return new external_function_parameters([
             'contextid' => new external_value(PARAM_INT, 'contextid', VALUE_REQUIRED),
-            'learningpathid' => new external_value(PARAM_INT, 'contextid', VALUE_REQUIRED),
-            'image' => new external_value(PARAM_RAW, 'file data', VALUE_REQUIRED),
+            'lpid' => new external_value(PARAM_INT, 'learning path id', VALUE_REQUIRED),
+            'userid' => new external_value(PARAM_INT, 'new owner user id', VALUE_REQUIRED),
         ]);
     }
 
     /**
-     * Webservice for the local adele plugin to get next question.
+     * Hand the learning path to a new owner.
      *
      * @param int $contextid
-     * @param int $learningpathid
-     * @param mixed $image
+     * @param int $lpid
+     * @param int $userid
      * @return array
      */
-    public static function execute($contextid, $learningpathid, $image): array {
+    public static function execute($contextid, $lpid, $userid): array {
+        global $DB;
         $params = self::validate_parameters(self::execute_parameters(), [
             'contextid' => $contextid,
-            'learningpathid' => $learningpathid,
-            'image' => $image,
+            'lpid' => $lpid,
+            'userid' => $userid,
         ]);
 
         require_login();
-
         $context = context::instance_by_id($params['contextid']);
         self::validate_context($context);
-        // Everyone who may edit the path may give it an image (#459): managers
-        // and admins always, per-path editors for their paths, any
-        // editor/assistant for a still-unsaved path (id 0) - same rule as the
-        // other mutating services (#458).
-        learning_paths::require_lp_editor_access($params['learningpathid'], $context);
+        // Changing who OWNS a path is reserved for the Adele Manager (site
+        // admins pass implicitly) - deliberately not for editors or the
+        // assistant role (#488).
+        require_capability('local/adele:canmanage', context_system::instance());
 
-        return asset_handler::set_new_image($params['contextid'], $params['learningpathid'], $params['image']);
+        $newowner = $DB->get_record('user', ['id' => $params['userid']]);
+        if (ownership::is_vanished($newowner)) {
+            throw new invalid_parameter_exception('The designated owner does not exist or is deleted.');
+        }
+        ownership::set_owner($params['lpid'], $params['userid']);
+        return ['success' => true];
     }
 
     /**
@@ -97,8 +97,7 @@ class set_new_image extends external_api {
      */
     public static function execute_returns(): external_single_structure {
         return new external_single_structure([
-                'status' => new external_value(PARAM_TEXT, 'Image path'),
-                'filename' => new external_value(PARAM_TEXT, 'Image path'),
+            'success' => new external_value(PARAM_BOOL, 'ownership transferred'),
         ]);
     }
 }

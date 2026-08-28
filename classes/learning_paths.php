@@ -276,6 +276,9 @@ class learning_paths {
                 'description' => '',
                 'image' => '',
                 'json' => '',
+                'ownerid' => 0,
+                'ownername' => '',
+                'ownerless' => false,
             ];
             return $learningpath;
         }
@@ -283,10 +286,20 @@ class learning_paths {
         $learningpath = $DB->get_record(
             'local_adele_learning_paths',
             ['id' => $params['learningpathid']],
-            'id, name, description, image, json'
+            'id, name, description, image, json, createdby'
         );
         $learningpath = self::get_image_paths($learningpath);
-        return (array) $learningpath;
+        $learningpath = (array) $learningpath;
+        // Owner info for the editors panel: golden crown + "Owner:" label (#488),
+        // orphaned marker when the owner vanished (#571).
+        $ownerid = (int) ($learningpath['createdby'] ?? 0);
+        unset($learningpath['createdby']);
+        $fields = 'id, deleted, ' . implode(', ', \core_user\fields::get_name_fields());
+        $owner = $ownerid ? $DB->get_record('user', ['id' => $ownerid], $fields) : null;
+        $learningpath['ownerid'] = $ownerid;
+        $learningpath['ownerless'] = ownership::is_vanished($owner);
+        $learningpath['ownername'] = $learningpath['ownerless'] ? '' : fullname($owner);
+        return $learningpath;
     }
 
     /**
@@ -482,11 +495,13 @@ class learning_paths {
                     'progress' => $progress ?? null,
                 ];
             }
+            // Percent first (#461 revisit: equal relative progress ties), raw
+            // completed count as tie-break (more absolute work ranks higher).
             usort($userpathlist, function ($a, $b) {
-                if ($a['progress']['completed_nodes'] === $b['progress']['completed_nodes']) {
-                    return $b['progress']['progress'] <=> $a['progress']['progress'];
+                if ($a['progress']['progress'] === $b['progress']['progress']) {
+                    return $b['progress']['completed_nodes'] <=> $a['progress']['completed_nodes'];
                 }
-                return $b['progress']['completed_nodes'] <=> $a['progress']['completed_nodes'];
+                return $b['progress']['progress'] <=> $a['progress']['progress'];
             });
             $rank = 1;
             $prevuser = null;
@@ -514,33 +529,86 @@ class learning_paths {
     }
 
     /**
-     * Get user path relation.
+     * Roster progress for one learner's snapshot (#461, revisited).
      *
-     * @param object $relationnodes
-     * @return array
+     * The percentage measures the learner's BEST ROUTE through the graph: the
+     * maximum over all root->terminal routes of completed-on-route divided by
+     * route length. On OR-branched paths finishing the short branch therefore
+     * reads 100% (and half of it 50%), independent of how long the other
+     * branches are; it reaches 100% exactly when the path is completed. The
+     * raw completed/total counts keep their meaning and feed the roster
+     * tooltip and the ranking tie-break. Routes come from the cycle-safe
+     * enumerator in node_completion (#447). Graphs without any route (empty
+     * tree, no starting node, dead-end cycle) fall back to the raw semantics,
+     * mirrored into the route fields so the display stays consistent.
+     *
+     * @param object $relationnodes Decoded path_user snapshot.
+     * @return array completed_nodes, progress, route_completed, route_total, total_nodes
      */
     public static function getnodeprogress($relationnodes) {
         try {
             $validnodes = 0;
             $totalnodes = 0;
+            $valid = [];
             if (isset($relationnodes->user_path_relation)) {
                 foreach ($relationnodes->user_path_relation as $key => $node) {
                     if (strstr($key, '_module') == false) {
                         if ($node->completionnode->valid) {
                             $validnodes++;
+                            $valid[$key] = true;
                         }
                         $totalnodes++;
                     }
                 }
             }
-            // The teacher-view progress reflects how many of the path's nodes the learner has
-            // completed (completed / total), so the percentage always matches the completed-node
-            // count shown next to it. Previously it was the best single root-to-leaf path's ratio,
-            // which read as 100% on a branching path as soon as one full branch was done (#461).
-            $progress = $totalnodes > 0 ? ($validnodes / $totalnodes) : 0;
+
+            // Best route: highest completed/length ratio (integer cross-
+            // multiplication, no float equality); equal ratios resolve toward
+            // the route with the fewest REMAINING nodes - "1/2" communicates
+            // "one node to go" better than "5/10".
+            $best = null;
+            foreach (self::get_route_candidates($relationnodes) as $route) {
+                $length = 0;
+                $completed = 0;
+                foreach ($route as $nodeid) {
+                    // Module overlay nodes are not part of the path (mirrors
+                    // the raw-count exclusion above).
+                    if (strstr((string) $nodeid, '_module') != false) {
+                        continue;
+                    }
+                    $length++;
+                    if (!empty($valid[$nodeid])) {
+                        $completed++;
+                    }
+                }
+                if ($length === 0) {
+                    continue;
+                }
+                if (
+                    $best === null
+                    || $completed * $best['length'] > $best['completed'] * $length
+                    || ($completed * $best['length'] === $best['completed'] * $length
+                        && $length - $completed < $best['length'] - $best['completed'])
+                ) {
+                    $best = ['completed' => $completed, 'length' => $length];
+                }
+            }
+
+            if ($best !== null) {
+                $routecompleted = $best['completed'];
+                $routetotal = $best['length'];
+                $progress = $best['completed'] / $best['length'];
+            } else {
+                $routecompleted = $validnodes;
+                $routetotal = $totalnodes;
+                $progress = $totalnodes > 0 ? ($validnodes / $totalnodes) : 0;
+            }
             return [
                 'completed_nodes' => $validnodes,
                 'progress' => round(100 * $progress, 2),
+                'route_completed' => $routecompleted,
+                'route_total' => $routetotal,
+                'total_nodes' => $totalnodes,
             ];
         } catch (Exception $e) {
             debugging('Error in getnodeprogress: ' . $e->getMessage());
@@ -552,51 +620,37 @@ class learning_paths {
     }
 
     /**
-     * Find a paths in learning path.
+     * The snapshot's root->terminal routes, memoised per tree topology.
      *
-     * @param array $node
-     * @param array $currentpath
-     * @param array $paths
-     * @param array $nodes
-     * @return array
-     */
-    public static function findpaths($node, $currentpath, &$paths, $nodes) {
-        $currentpath[] = $node['id'];
-
-        if (isset($node['childCourse']) && empty($node['childCourse'])) {
-            $paths[] = $currentpath;
-            return;
-        }
-
-        foreach ($node['childCourse'] as $childid) {
-            // Guard against loops (e.g. A->B->C->B): never revisit a node already on
-            // the current path, which would recurse forever (GitHub #447).
-            if (in_array($childid, $currentpath)) {
-                continue;
-            }
-            $childnode = self::findnodebyid($childid, $nodes);
-            if ($childnode) {
-                self::findpaths($childnode, $currentpath, $paths, $nodes);
-            }
-        }
-    }
-
-    /**
-     * Find a node by its id.
+     * Learners of one path normally share an identical snapshot topology, so
+     * a teacher roster of N learners enumerates the routes once instead of N
+     * times; snapshots with a diverging tree get their own cache entry.
      *
-     * @param int $id
-     * @param array $nodes
-     * @return array
+     * @param object $relationnodes Decoded path_user snapshot.
+     * @return array List of routes (lists of node ids); empty when the tree is unusable.
      */
-    public static function findnodebyid($id, $nodes) {
-        global $data;
-        foreach ($nodes as $node) {
-            $node = (array)$node;
-            if ($node['id'] === $id) {
-                return $node;
-            }
+    protected static function get_route_candidates($relationnodes): array {
+        static $memo = [];
+        if (
+            !isset($relationnodes->tree->nodes)
+            || !is_array($relationnodes->tree->nodes)
+            || empty($relationnodes->tree->nodes)
+        ) {
+            return [];
         }
-        return null;
+        $projection = [];
+        foreach ($relationnodes->tree->nodes as $node) {
+            $projection[] = [
+                $node->id ?? '',
+                $node->parentCourse ?? [],
+                $node->childCourse ?? [],
+            ];
+        }
+        $key = md5(json_encode($projection));
+        if (!array_key_exists($key, $memo)) {
+            $memo[$key] = node_completion::get_possible_paths($relationnodes->tree->nodes);
+        }
+        return $memo[$key];
     }
 
     /**
@@ -662,13 +716,15 @@ class learning_paths {
             }
             // Reflect the CURRENT learning-path-wide settings (feedback/info toggles) rather than the
             // frozen per-user snapshot, so toggling them takes effect for already-subscribed students (#474).
-            $mastersettings = json_decode($masterlp->json, true)['settings'] ?? null;
-            if ($mastersettings !== null) {
-                $decoded = json_decode($record->json, true);
-                if (is_array($decoded)) {
+            $masterjson = json_decode($masterlp->json, true);
+            $mastersettings = $masterjson['settings'] ?? null;
+            $decoded = json_decode($record->json, true);
+            if (is_array($decoded)) {
+                if ($mastersettings !== null) {
                     $decoded['settings'] = $mastersettings;
-                    $record->json = json_encode($decoded);
                 }
+                self::overlay_master_display_fields($decoded, $masterjson);
+                $record->json = json_encode($decoded);
             }
             // Re-render the feedback/info strings in the CURRENT (viewer's) language so they follow
             // a language switch instead of the language the recompute happened to run in (#493).
@@ -729,6 +785,44 @@ class learning_paths {
             $node = self::checknodeprogression($node, $userid);
         }
         return json_encode($json);
+    }
+
+    /**
+     * Overlay display-only node texts from the master learning path onto a
+     * per-user snapshot tree.
+     *
+     * The snapshot copies the tree at subscription time, so a node description
+     * (or per-course text of a stack) the editor adds LATER never reaches
+     * already-subscribed students (GitHub #484). These fields carry no
+     * progress/verdict state, so the master is authoritative for them - the
+     * same rule the settings toggles already follow (#474).
+     *
+     * @param array $decoded The decoded per-user snapshot json (modified in place).
+     * @param array|null $masterjson The decoded master learning-path json.
+     * @return void
+     */
+    public static function overlay_master_display_fields(array &$decoded, ?array $masterjson): void {
+        $masternodes = [];
+        foreach (($masterjson['tree']['nodes'] ?? []) as $masternode) {
+            if (isset($masternode['id'])) {
+                $masternodes[$masternode['id']] = $masternode['data'] ?? [];
+            }
+        }
+        if (!$masternodes || empty($decoded['tree']['nodes']) || !is_array($decoded['tree']['nodes'])) {
+            return;
+        }
+        $displayfields = ['fullname', 'description', 'estimate_duration', 'course_node_id_description'];
+        foreach ($decoded['tree']['nodes'] as $i => $snapshotnode) {
+            $nodeid = $snapshotnode['id'] ?? null;
+            if ($nodeid === null || !isset($masternodes[$nodeid])) {
+                continue;
+            }
+            foreach ($displayfields as $field) {
+                if (array_key_exists($field, $masternodes[$nodeid])) {
+                    $decoded['tree']['nodes'][$i]['data'][$field] = $masternodes[$nodeid][$field];
+                }
+            }
+        }
     }
 
     /**
@@ -1156,13 +1250,18 @@ class learning_paths {
                 $createdby = (int) ($path['createdby'] ?? 0);
                 unset($path['createdby']);
                 $owner = ['name' => '', 'email' => ''];
+                $ownerless = true;
                 if ($createdby) {
                     if (!isset($usercache[$createdby])) {
-                        // Select all name fields so fullname() has everything it may format.
-                        $fields = 'id, email, ' . implode(', ', \core_user\fields::get_name_fields());
+                        // Select all name fields so fullname() has everything it may format;
+                        // deleted for the ownerless flag (#571).
+                        $fields = 'id, email, deleted, ' . implode(', ', \core_user\fields::get_name_fields());
                         $usercache[$createdby] = $DB->get_record('user', ['id' => $createdby], $fields);
                     }
-                    if ($usercache[$createdby]) {
+                    // A vanished owner shows no stale name; the flag drives the
+                    // "ownerless" warning for Admin/Adele Manager (#571).
+                    $ownerless = ownership::is_vanished($usercache[$createdby]);
+                    if (!$ownerless) {
                         $owner = [
                             'name' => fullname($usercache[$createdby]),
                             'email' => $usercache[$createdby]->email,
@@ -1170,6 +1269,7 @@ class learning_paths {
                     }
                 }
                 $path['owner'] = $owner;
+                $path['ownerless'] = $ownerless;
                 $editors = [];
                 foreach (learning_path_editors::get_editors((int) $path['id']) as $editor) {
                     $editors[] = ['name' => trim(($editor['firstname'] ?? '') . ' ' . ($editor['lastname'] ?? ''))];

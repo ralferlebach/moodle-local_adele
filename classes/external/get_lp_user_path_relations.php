@@ -100,11 +100,9 @@ class get_lp_user_path_relations extends external_api {
         // (TeacherView.vue), so enrolled participants must still pass; this only blocks
         // enumeration of unrelated courses/paths.
         $coursecontext = \context_course::instance($params['courseid']);
-        if (
-            !has_capability('local/adele:teacheredit', $coursecontext)
-                && !learning_paths::check_access()
-                && !is_enrolled($coursecontext, $USER->id)
-        ) {
+        $isprivileged = has_capability('local/adele:teacheredit', $coursecontext)
+            || learning_paths::check_access();
+        if (!$isprivileged && !is_enrolled($coursecontext, $USER->id)) {
             throw new \required_capability_exception(
                 $coursecontext,
                 'local/adele:teacheredit',
@@ -113,7 +111,53 @@ class get_lp_user_path_relations extends external_api {
             );
         }
 
-        return learning_paths::get_learning_user_relations($params);
+        $relations = learning_paths::get_learning_user_relations($params);
+
+        // The mod_adele setting 'Participant results' = 'Only own results' must
+        // hold HERE, not only in the client: the UserList.vue filter still
+        // shipped every participant's name, progress and rank to any enrolled
+        // student's browser (#569). Teachers and path editors keep the full
+        // roster; filtering after ranking keeps the caller's true rank.
+        if (!$isprivileged && isset($relations[0]) && self::only_own_results($context, $params)) {
+            $ownid = (int) $USER->id;
+            $relations = array_values(array_filter(
+                $relations,
+                static function ($relation) use ($ownid) {
+                    return (int) $relation['id'] === $ownid;
+                }
+            ));
+        }
+
+        return $relations;
+    }
+
+    /**
+     * Whether the calling context demands the 'Only own results' filter (#569).
+     *
+     * Called from a mod_adele activity (module context) the instance's own
+     * userlist setting decides; for course-level calls the strictest embedding
+     * of this path in the course wins.
+     *
+     * @param context $context The context the SPA was booted with.
+     * @param array $params Validated parameters (learningpathid, courseid).
+     * @return bool
+     */
+    protected static function only_own_results(context $context, array $params): bool {
+        global $DB;
+        if ($context->contextlevel == CONTEXT_MODULE) {
+            $cm = get_coursemodule_from_id('adele', $context->instanceid);
+            if ($cm) {
+                $userlist = $DB->get_field('adele', 'userlist', ['id' => $cm->instance]);
+                if ($userlist !== false) {
+                    return (int) $userlist == 2;
+                }
+            }
+        }
+        return $DB->record_exists('adele', [
+            'course' => $params['courseid'],
+            'learningpathid' => $params['learningpathid'],
+            'userlist' => 2,
+        ]);
     }
 
     /**
@@ -131,6 +175,9 @@ class get_lp_user_path_relations extends external_api {
                     'progress' => new external_single_structure([
                         'completed_nodes' => new external_value(PARAM_TEXT, 'completed nodes'),
                         'progress' => new external_value(PARAM_FLOAT, 'progress'),
+                        'route_completed' => new external_value(PARAM_INT, 'completed nodes on the best route'),
+                        'route_total' => new external_value(PARAM_INT, 'length of the best route'),
+                        'total_nodes' => new external_value(PARAM_INT, 'total nodes of the path'),
                     ]),
                     'rank' => new external_value(PARAM_INT, 'Ranking'),
                 ])

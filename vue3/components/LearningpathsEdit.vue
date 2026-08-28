@@ -358,15 +358,12 @@ const onChangedTree = (tree) => {
   }
 }
 
-const handleSaveEdit = async (params) => {
-  learningpath.value.json.tree.nodes.forEach((node) => {
-    if (node.id == params.node_id) {
-      node.data.fullname = params.fullname
-      node.data.selected_image = params.selected_image
-      node.data.selected_course_image = params.selected_course_image
-    }
-  })
-
+// The store mutations (updatedNode / updatedCourseNode, committed by the modals
+// before these events fire) are the single writer into the tree. The former
+// duplicate writes here diverged from them: handleSaveEdit dropped description/
+// estimate_duration, and handleSaveEditCourse overwrote the STACK node's own
+// name/description with the edited course's values (GitHub #484).
+const handleSaveEdit = async () => {
   notify({
     title: store.state.strings.title_save,
     text: store.state.strings.description_save,
@@ -374,14 +371,7 @@ const handleSaveEdit = async (params) => {
   })
 }
 
-const handleSaveEditCourse = async (params) => {
-  learningpath.value.json.tree.nodes.forEach((node) => {
-    if (node.id == store.state.node.node_id) {
-      node.data.fullname = params.fullname
-      node.data.description = params.description
-    }
-  })
-
+const handleSaveEditCourse = async () => {
   notify({
     title: store.state.strings.title_save,
     text: store.state.strings.description_save,

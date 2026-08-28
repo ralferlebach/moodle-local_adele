@@ -68,15 +68,40 @@ function toggleClass() {
   emit('change-class');
 }
 
-// Watch for changes of the learning path
-if (store.state.node != undefined && learningpathRestriction.value.json != '') {
-    let restriction = learningpathRestriction.value.json.tree.nodes.filter(node => {
-      return node.id === store.state.node.node_id
-    })
-    const flowchart = loadFlowChart(restriction[0].restriction, store.state.view)
-    setNodes(flowchart.nodes)
-    setEdges(flowchart.edges)
+// (Re-)ingest the edited node's criteria into the canvas. Runs on EVERY mount
+// so reopening the editor always shows the STORED state - the shared vue-flow
+// store otherwise resurrects the previous session's abandoned canvas (#476/#494
+// retests: an edit dropped via "Close" reappeared on reopen and looked
+// persisted although the stored path was untouched).
+function ingestRestriction() {
+  if (store.state.node == undefined
+      || !props.learningpath
+      || props.learningpath.json == ''
+      || !props.learningpath.json.tree) {
+    return
+  }
+  const treenode = props.learningpath.json.tree.nodes.find(node => {
+    return node.id === store.state.node.node_id
+  })
+  if (!treenode) {
+    return
+  }
+  // DEEP COPY: the canvas must never share objects with the stored tree.
+  // vue-flow (and the per-condition value editors via handleValues) mutate
+  // canvas nodes in place; with shared references every edit wrote straight
+  // into the saved learning path, "Save" was ceremonial and "Close" could
+  // not discard - the #476/#494 retest leak.
+  const restrictioncopy = treenode.restriction
+    ? JSON.parse(JSON.stringify(treenode.restriction))
+    : { nodes: [], edges: [] };
+  const flowchart = loadFlowChart(restrictioncopy, store.state.view)
+  setNodes(flowchart.nodes)
+  setEdges(flowchart.edges)
 }
+// Setup-time ingestion: must happen BEFORE the condition-form children mount so
+// their value prefill sees the data (parent onMounted would be too late), and
+// runs again on every reopen (v-if remounts this component).
+ingestRestriction()
 
 // Prepare and save learning path
 const onSave = async () => {
@@ -90,13 +115,24 @@ const onSave = async () => {
       });
   } else{
     //save learning path
+    // Keep the previous tree so a REFUSED save (validation alert) can roll
+    // back: otherwise the rejected criterion lingers in the editor session
+    // and reappears on reopen although it was never saved (#494/#566 retest).
+    const previousnodes = learningpathRestriction.value.json.tree.nodes
     learningpathRestriction.value.json.tree.nodes = learningpathRestriction.value.json.tree.nodes.map(element_node => {
         if (element_node.id === store.state.node.node_id) {
           return { ...element_node, restriction: restriction };
         }
         return element_node;
     });
-    const learningpathID = await store.dispatch('saveLearningpath', learningpathRestriction.value)
+    let learningpathID
+    try {
+      learningpathID = await store.dispatch('saveLearningpath', learningpathRestriction.value)
+    } catch {
+      // saveLearningpath already showed the validation alert.
+      learningpathRestriction.value.json.tree.nodes = previousnodes
+      return
+    }
     router.push('/learningpaths/edit/' + learningpathID);
     onCancelConfirmation(true);
     notify({
@@ -131,7 +167,12 @@ const onCancel = () => {
       store.state.node &&
       element_node.id === store.state.node.node_id
     ) {
-        if (JSON.stringify(restriction.nodes) == JSON.stringify(element_node.restriction.nodes)) {
+        if (
+          element_node.restriction &&
+          JSON.stringify(restriction.nodes) == JSON.stringify(element_node.restriction.nodes)
+        ) {
+          onCancelConfirmation(false)
+        } else if (!element_node.restriction && restriction.nodes.length == 0) {
           onCancelConfirmation(false)
         } else {
           showCancelConfirmation.value = !showCancelConfirmation.value

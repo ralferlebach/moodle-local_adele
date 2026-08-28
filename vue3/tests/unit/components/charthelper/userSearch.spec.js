@@ -55,6 +55,7 @@ describe('userSearch.vue', () => {
       ]),
       createLpEditUsers: jest.fn(),
       removeLpEditUsers: jest.fn(),
+      setLpOwner: jest.fn().mockResolvedValue({ success: true }),
     };
 
     store = createStore({
@@ -188,3 +189,114 @@ describe('userSearch.vue', () => {
 
   });
 });
+
+describe('userSearch.vue owner transfer (#488)', () => {
+  const buildStore = (view, ownerid = 99) => createStore({
+    state: {
+      learningPathID: 1,
+      view,
+      learningpath: { ownerid, ownername: 'Owen Owner', ownerless: false },
+      strings: {
+        setowner_button: 'Make owner',
+        setowner_confirm: 'Hand this learning path to:',
+        setowner_current: 'Current owner',
+        owner_label: 'Owner:',
+      },
+    },
+    actions: {
+      getFoundUsers: jest.fn().mockResolvedValue({ list: [], warnings: '' }),
+      getLpEditUsers: jest.fn().mockResolvedValue([{ id: 2, firstname: 'Jane', lastname: 'Smith' }]),
+      createLpEditUsers: jest.fn(),
+      removeLpEditUsers: jest.fn(),
+      setLpOwner,
+    },
+  });
+  let setLpOwner;
+
+  beforeEach(() => {
+    setLpOwner = jest.fn().mockResolvedValue({ success: true });
+  });
+
+  const doMount = async (view, ownerid = 99) => {
+    const wrapper = mount(userSearch, { global: { plugins: [buildStore(view, ownerid)] } });
+    await wrapper.vm.$nextTick();
+    await flushPromises();
+    return wrapper;
+  };
+
+  it('shows the make-owner button for the Adele Manager only', async () => {
+    const manager = await doMount('manager');
+    expect(manager.find('.setowner-btn').exists()).toBe(true);
+    const assistant = await doMount('assistant');
+    expect(assistant.find('.setowner-btn').exists()).toBe(false);
+  });
+
+  it('dispatches setLpOwner after confirmation', async () => {
+    window.confirm = jest.fn(() => true);
+    const wrapper = await doMount('manager');
+    await wrapper.find('.setowner-btn').trigger('click');
+    expect(setLpOwner).toHaveBeenCalledWith(
+      expect.anything(),
+      { lpid: 1, userid: 2 }
+    );
+  });
+
+  it('does nothing when the confirmation is declined', async () => {
+    window.confirm = jest.fn(() => false);
+    const wrapper = await doMount('manager');
+    await wrapper.find('.setowner-btn').trigger('click');
+    expect(setLpOwner).not.toHaveBeenCalled();
+  });
+});
+
+describe('userSearch.vue owner indication (#488)', () => {
+  const buildStore = (view, ownerid) => createStore({
+    state: {
+      learningPathID: 1,
+      view,
+      learningpath: { ownerid, ownername: 'Jane Smith', ownerless: false },
+      strings: {
+        setowner_button: 'Make owner',
+        setowner_current: 'Current owner',
+        owner_label: 'Owner:',
+      },
+    },
+    actions: {
+      getFoundUsers: jest.fn().mockResolvedValue({ list: [], warnings: '' }),
+      getLpEditUsers: jest.fn().mockResolvedValue([
+        { id: 2, firstname: 'Jane', lastname: 'Smith' },
+        { id: 3, firstname: 'Jack', lastname: 'White' },
+      ]),
+      createLpEditUsers: jest.fn(),
+      removeLpEditUsers: jest.fn(),
+      setLpOwner: jest.fn().mockResolvedValue({ success: true }),
+    },
+  });
+
+  const doMount = async (view, ownerid) => {
+    const wrapper = mount(userSearch, { global: { plugins: [buildStore(view, ownerid)] } });
+    await wrapper.vm.$nextTick();
+    await flushPromises();
+    return wrapper;
+  };
+
+  it('marks the current owner with a golden crown (indicator, no button) for everyone', async () => {
+    const wrapper = await doMount('teacheredit', 2);
+    expect(wrapper.find('.owner-crown').exists()).toBe(true);
+    expect(wrapper.find('.setowner-btn').exists()).toBe(false);
+  });
+
+  it('shows grey action crowns to the manager on non-owner editors only', async () => {
+    const wrapper = await doMount('manager', 2);
+    const cards = wrapper.findAll('.card-user');
+    expect(cards.length).toBe(2);
+    expect(wrapper.findAll('.owner-crown').length).toBe(1);
+    expect(wrapper.findAll('.setowner-btn').length).toBe(1);
+  });
+
+  it('shows the owner name next to the selection heading', async () => {
+    const wrapper = await doMount('teacheredit', 2);
+    expect(wrapper.find('.owner-label').text()).toContain('Jane Smith');
+  });
+});
+

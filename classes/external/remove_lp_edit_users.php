@@ -28,18 +28,13 @@ declare(strict_types=1);
 namespace local_adele\external;
 
 use context;
-use external_api;
-use external_function_parameters;
-use external_value;
-use external_single_structure;
+use core_external\external_api;
+use core_external\external_function_parameters;
+use core_external\external_single_structure;
+use core_external\external_value;
 use local_adele\learning_path_editors;
 use local_adele\learning_paths;
 use required_capability_exception;
-
-defined('MOODLE_INTERNAL') || die();
-
-require_once($CFG->libdir . '/externallib.php');
-require_once($CFG->dirroot . '/local/adele/lib.php');
 
 /**
  * External Service for local adele.
@@ -78,11 +73,28 @@ class remove_lp_edit_users extends external_api {
             'userid' => $userid,
         ]);
 
+        global $DB, $USER;
         require_login();
         $context = context::instance_by_id($params['contextid']);
         self::validate_context($context);
         // Removing a named person from this path requires being an editor of THAT path (#458).
         learning_paths::require_lp_editor_access($params['lpid'], $context);
+        // Removing ANOTHER editor is reserved for the path owner and the Adele
+        // Manager; a plain editor may only remove themselves (#571 sidequest).
+        if ((int) $params['userid'] !== (int) $USER->id) {
+            $ownerid = (int) $DB->get_field('local_adele_learning_paths', 'createdby', ['id' => $params['lpid']]);
+            if (
+                $ownerid !== (int) $USER->id
+                && !has_capability('local/adele:canmanage', \context_system::instance())
+            ) {
+                throw new required_capability_exception(
+                    \context_system::instance(),
+                    'local/adele:canmanage',
+                    'nopermissions',
+                    ''
+                );
+            }
+        }
 
         return learning_path_editors::remove_editors($params['lpid'], $params['userid']);
     }

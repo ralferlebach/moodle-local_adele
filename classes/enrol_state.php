@@ -169,76 +169,14 @@ class enrol_state {
     }
 
     /**
-     * Keep the host-course index in sync with one mod_adele activity.
-     *
-     * Called from mod_adele's adele_add_instance()/adele_update_instance()
-     * lifecycle hooks.
-     *
-     * NO LONGER AUTHORITATIVE. The index used to be the read side for
-     * enrol_adele, so that no plugin outside mod_adele had to know the
-     * {adele} schema. It could not carry hostenrolmentmode, which the
-     * host-course sweep needs, so {@see get_host_embeddings()} and
-     * {@see get_host_entitlement()} now read {adele} through
-     * mod_adele\local\host_policy instead. The table is kept written and in
-     * place for one release so a rollback stays possible; nothing reads it
-     * any more. Its removal is a separate schema decision.
-     *
-     * @param int $adeleinstanceid mod_adele's own adele.id for this activity.
-     * @param int $learningpathid The learning path this activity embeds.
-     * @param int $courseid The host course this activity lives in.
-     * @param string|null $participantslist mod_adele's raw comma-separated
-     *     options string (e.g. '2,3'), or null/empty for "no host access".
-     * @return void
-     */
-    public static function sync_host_course_index(
-        int $adeleinstanceid,
-        int $learningpathid,
-        int $courseid,
-        ?string $participantslist
-    ): void {
-        global $DB;
-
-        $options = array_map('trim', explode(',', (string) $participantslist));
-        $record = (object) [
-            'adeleinstanceid' => $adeleinstanceid,
-            'learningpathid' => $learningpathid,
-            'courseid' => $courseid,
-            'participantoption1' => in_array('1', $options, true) ? 1 : 0,
-            'participantoption2' => in_array('2', $options, true) ? 1 : 0,
-            'participantoption3' => in_array('3', $options, true) ? 1 : 0,
-            'timemodified' => time(),
-        ];
-
-        $existing = $DB->get_record('local_adele_host_courses', ['adeleinstanceid' => $adeleinstanceid]);
-        if ($existing) {
-            $record->id = $existing->id;
-            $DB->update_record('local_adele_host_courses', $record);
-        } else {
-            $DB->insert_record('local_adele_host_courses', $record);
-        }
-    }
-
-    /**
-     * Remove one mod_adele activity's row from the host-course index.
-     *
-     * Called from mod_adele's adele_delete_instance() lifecycle hook.
-     *
-     * @param int $adeleinstanceid mod_adele's own adele.id for the deleted activity.
-     * @return void
-     */
-    public static function remove_host_course_index(int $adeleinstanceid): void {
-        global $DB;
-        $DB->delete_records('local_adele_host_courses', ['adeleinstanceid' => $adeleinstanceid]);
-    }
-
-    /**
      * Which host courses embed a learning path, and via which options.
      *
-     * Reads mod_adele's own {adele} table through {@see host_policy}, which
-     * owns the semantics of participantslist and hostenrolmentmode. This
-     * plugin already declares a dependency on mod_adele, so the call
-     * introduces no new coupling; enrol_adele reaches the same derivation
-     * through here without ever touching {adele} itself.
+     * Reads mod_adele's own {adele} table through
+     * mod_adele\local\host_policy, which owns the semantics of
+     * participantslist and hostenrolmentmode. This plugin already declares a
+     * dependency on mod_adele, so the call introduces no new coupling;
+     * enrol_adele reaches the same derivation through here without ever
+     * touching {adele} itself.
      *
      * @param int $learningpathid The learning path id.
      * @return array Rows: courseid, option1/2/3 (bool each), mode (string).

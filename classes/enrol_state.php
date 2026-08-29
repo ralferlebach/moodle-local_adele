@@ -227,6 +227,28 @@ class enrol_state {
     }
 
     /**
+     * Every user an embedding could entitle, including those ADELE has never
+     * seen before.
+     *
+     * Needed so enrol_adele's sweep can heal a WIDENED subscription option,
+     * not only a narrowed one. See mod_adele\local\host_policy for why the
+     * other candidate populations cannot contain these users.
+     *
+     * @param int $learningpathid The learning path id.
+     * @param int $hostcourseid The host course id.
+     * @return int[] Candidate user ids.
+     */
+    public static function get_host_candidate_userids(int $learningpathid, int $hostcourseid): array {
+        if (!self::host_policy_available()) {
+            return [];
+        }
+        if (!method_exists('\\mod_adele\\local\\host_policy', 'get_candidate_userids')) {
+            return [];
+        }
+        return \mod_adele\local\host_policy::get_candidate_userids($learningpathid, $hostcourseid);
+    }
+
+    /**
      * Whether one user is entitled to host-course access for one embedding,
      * and in which visibility mode.
      *

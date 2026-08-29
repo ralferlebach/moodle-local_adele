@@ -243,6 +243,19 @@ class enrol_state {
             return [];
         }
         if (!method_exists('\\mod_adele\\local\\host_policy', 'get_candidate_userids')) {
+            // Loudly, not quietly. An empty list here is indistinguishable
+            // from "nobody is a candidate", so a mod_adele that is merely too
+            // old would silently produce a WRONG answer rather than no answer
+            // — which is how a version skew during deployment turns into a
+            // single mysterious failure somewhere far away instead of a
+            // message naming its cause.
+            debugging(
+                'local_adele: the installed mod_adele predates ' .
+                'host_policy::get_candidate_userids(). Host course entitlements ' .
+                'cannot be derived for users without an existing subscription ' .
+                'until both plugins are upgraded.',
+                DEBUG_NORMAL
+            );
             return [];
         }
         return \mod_adele\local\host_policy::get_candidate_userids($learningpathid, $hostcourseid);

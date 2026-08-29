@@ -1,11 +1,11 @@
-moodle-local_adele
+Adaptive e-Learning Paths (moodle-local_adele)
 ==================
 
 [![Moodle Plugin CI](https://github.com/ralferlebach/moodle-local_adele/actions/workflows/moodle-plugin-ci.yml/badge.svg?branch=development)](https://github.com/ralferlebach/moodle-local_adele/actions?query=workflow%3A%22Moodle+Plugin+CI%22+branch%3Adevelopment)
 
-ADELE - Adaptive eLearning Paths - lets you build learning paths from independent Moodle courses: a graph of nodes, each with its own completion and access rules, edited graphically and evaluated per learner.
+AdeLe - Adaptive eLearning Paths - lets you build learning paths from independent Moodle courses: a graph of nodes, each with its own completion and access rules, edited graphically and evaluated per learner.
 
-ADELE is not a single plugin but a set of three that work as one system. They are developed together and declare each other as dependencies, so they can only be installed and updated as a set.
+AdeLe is not a single plugin but a set of three that work as one system. They are developed together and declare each other as dependencies, so they can only be installed and updated as a set.
 
 * **local_adele** is the learning path itself: the graphical editor, the node structure, the completion and restriction logic, and the Vue 3 frontend.
 * **mod_adele** is the in-course entry point: it embeds a learning path in an ordinary course and decides which of that course's participants the path applies to.
@@ -19,16 +19,16 @@ Because the responsibilities are split this way, no rule exists twice: the learn
 Requirements
 ------------
 
-This plugin requires Moodle 4.5+
+This plugin requires Moodle 4.5
 
-It also requires the other ADELE plugins. All three are developed together and must be installed in matching versions:
+It also requires the other AdeLe plugins. All three are developed together and must be installed in matching versions:
 
-* **mod_adele (ADELE activity)** - required dependency, declared in version.php\
-  https://github.com/ralferlebach/moodle-mod_adele
-* **enrol_adele (ADELE enrolment)** - required dependency, declared in version.php\
-  https://github.com/ralferlebach/moodle-enrol_adele
+* **mod_adele (AdeLe activity)** - required dependency, declared in version.php\
+  https://github.com/Wunderbyte-GmbH/moodle-mod_adele
+* **enrol_adele (AdeLe enrolment)** - required dependency, declared in version.php\
+  https://github.com/Wunderbyte-GmbH/moodle-enrol_adele
 
-Optionally, **local_catquiz** can be used as a completion condition for computerized adaptive testing. That integration is guarded, so the plugin works without it.
+Optionally, **local_catquiz** can be used as a completion condition for computerized adaptive testing. That integration is guarded, so the plugin works without it. Additionally, you might consider to also install **local_instantcoursecompletion** for a faster system response to course completions. (https://marketplace.moodle.com/plugins/local_instantcoursecompletion)
 
 
 Motivation for this plugin
@@ -36,7 +36,7 @@ Motivation for this plugin
 
 Moodle can sequence activities inside a course, but a curriculum rarely fits into one. Prerequisites, alternative routes and "finish either of these two before that one" span courses, and expressing them through course-level restrictions means encoding the same rule in several places, where it drifts apart.
 
-ADELE moves that structure into one object. A learning path is a graph whose nodes point at courses; each node carries its own conditions for being accessible and for being complete. The graph is edited visually, evaluated per learner, and everything downstream - what a learner sees, which courses they may enter - follows from it.
+AdeLe moves that structure into one object. A learning path is a graph whose nodes point at courses; each node carries its own conditions for being accessible and for being complete. The graph is edited visually, evaluated per learner, and everything downstream - what a learner sees, which courses they may enter - follows from it.
 
 
 Installation
@@ -51,10 +51,10 @@ See http://docs.moodle.org/en/Installing_plugins for details on installing Moodl
 Usage & Settings
 ----------------
 
-After installing the plugin, learning paths are managed at Site administration -> Plugins -> Local plugins -> ADELE, and edited through the graphical editor.
+After installing the plugin, learning paths are managed at Site administration -> Plugins -> Local plugins -> AdeLe, and edited through the graphical editor.
 
 To configure the plugin and its behaviour, please visit:
-Site administration -> Plugins -> Local plugins -> ADELE
+Site administration -> Plugins -> Local plugins -> AdeLe
 
 There, you find settings for:
 
@@ -114,7 +114,7 @@ Plugin repositories
 This plugin is not published in the Moodle plugins repository.
 
 The latest development version can be found on Github:
-https://github.com/ralferlebach/moodle-local_adele
+https://github.com/Wunderbyte-GmbH/moodle-local_adele
 
 
 Bug and problem reports / Support requests
@@ -175,14 +175,12 @@ Maintainers
 -----------
 
 The plugin is maintained by\
-Wunderbyte GmbH\
-Ralf Erlebach
+Wunderbyte GmbH
 
 Copyright
 ---------
 
 The copyright of this plugin is held by\
-Wunderbyte GmbH\
-Ralf Erlebach
+Wunderbyte GmbH 
 
 Individual copyrights of individual developers are tracked in PHPDoc comments and Git commits.

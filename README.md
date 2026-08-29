@@ -1,7 +1,7 @@
 Adaptive e-Learning Paths (moodle-local_adele)
 ==================
 
-[![Moodle Plugin CI](https://github.com/ralferlebach/moodle-local_adele/actions/workflows/moodle-plugin-ci.yml/badge.svg?branch=development)](https://github.com/ralferlebach/moodle-local_adele/actions?query=workflow%3A%22Moodle+Plugin+CI%22+branch%3Adevelopment)
+[![Moodle Plugin CI](https://github.com/Wunderbyte-GmbH/moodle-local_adele/actions/workflows/moodle-plugin-ci.yml/badge.svg)](https://github.com/Wunderbyte-GmbH/moodle-local_adele/actions?query=workflow%3A%22Moodle+Plugin+CI%22)
 
 AdeLe - Adaptive eLearning Paths - lets you build learning paths from independent Moodle courses: a graph of nodes, each with its own completion and access rules, edited graphically and evaluated per learner.
 

@@ -23,6 +23,11 @@ tests/playwright/ export-ignore
 # Load-test plans and fixtures: manually triggered tooling, not part of a
 # release either.
 tests/load/      export-ignore
+# Vue3 sources: the plugin ships the compiled bundle in amd/build/, which
+# is what Moodle loads at runtime. The source tree, its lockfile and its
+# Jest setup are build tooling. Verified: no PHP or Mustache file
+# references vue3/ at runtime.
+vue3/           export-ignore
 docs/          export-ignore
 tools/         export-ignore
 Makefile       export-ignore

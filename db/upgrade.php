@@ -449,5 +449,21 @@ function xmldb_local_adele_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2026072403, 'local', 'adele');
     }
 
+    // Drop the host-course index again. It was introduced in 2026072403 so
+    // that enrol_adele would not have to read mod_adele's {adele} table, but
+    // it could not carry hostenrolmentmode, which the host-course sweep
+    // needs. The derivation now lives in mod_adele\local\host_policy and
+    // reads {adele} directly, so this table holds nothing that is not
+    // already there - and a mirror that nothing reads is a mirror that
+    // silently goes stale. No data is lost: every column was a copy.
+    if ($oldversion < 2026082800) {
+        $table = new xmldb_table('local_adele_host_courses');
+        if ($dbman->table_exists($table)) {
+            $dbman->drop_table($table);
+        }
+
+        upgrade_plugin_savepoint(true, 2026082800, 'local', 'adele');
+    }
+
     return true;
 }

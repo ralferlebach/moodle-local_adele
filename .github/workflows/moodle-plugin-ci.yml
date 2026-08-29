@@ -25,8 +25,8 @@ jobs:
       # assertDebuggingCalled() into every affected test.
       extra_plugin_runners: |
         moodle-plugin-ci add-plugin --branch MOODLE_405_DEV Wunderbyte-GmbH/moodle-local_wunderbyte_table
-        moodle-plugin-ci add-plugin --branch master Wunderbyte-GmbH/moodle-mod_adele
-        moodle-plugin-ci add-plugin --branch main Wunderbyte-GmbH/moodle-enrol_adele
+        moodle-plugin-ci add-plugin --branch development ralferlebach/moodle-mod_adele
+        moodle-plugin-ci add-plugin --branch development ralferlebach/moodle-enrol_adele
         # --- catquiz ecosystem temporarily disabled in CI ---
         # The adaptive-catquiz-v3 branch of local_catquiz declares a 'catquizcentralhub'
         # subplugin type whose directory is missing, so Moodle's component scan throws
@@ -147,8 +147,8 @@ jobs:
       # Command to install more dependencies
       extra_plugin_runners: |
         moodle-plugin-ci add-plugin --branch MOODLE_405_DEV Wunderbyte-GmbH/moodle-local_wunderbyte_table
-        moodle-plugin-ci add-plugin --branch master Wunderbyte-GmbH/moodle-mod_adele
-        moodle-plugin-ci add-plugin --branch main Wunderbyte-GmbH/moodle-enrol_adele
+        moodle-plugin-ci add-plugin --branch development ralferlebach/moodle-mod_adele
+        moodle-plugin-ci add-plugin --branch development ralferlebach/moodle-enrol_adele
         # --- catquiz ecosystem temporarily disabled in CI ---
         # The adaptive-catquiz-v3 branch of local_catquiz declares a 'catquizcentralhub'
         # subplugin type whose directory is missing, so Moodle's component scan throws

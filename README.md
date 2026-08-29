@@ -1,56 +1,188 @@
-# AdeLe - Adaptive eLearning Paths (backend plugin) #
+moodle-local_adele
+==================
 
-Adele is a Moodle local plugin for building and operating adaptive **learning paths** in moodle. 
+[![Moodle Plugin CI](https://github.com/ralferlebach/moodle-local_adele/actions/workflows/moodle-plugin-ci.yml/badge.svg?branch=development)](https://github.com/ralferlebach/moodle-local_adele/actions?query=workflow%3A%22Moodle+Plugin+CI%22+branch%3Adevelopment)
 
-The plugin provides a graphical interface for defining path structures of independent Moodle courses, assigning users to learning paths, configuring node completion and access restrictions, and reacting to Moodle events such as course completion, quiz attempts, enrolments, and path updates.
+ADELE - Adaptive eLearning Paths - lets you build learning paths from independent Moodle courses: a graph of nodes, each with its own completion and access rules, edited graphically and evaluated per learner.
 
-The plugin further introduces corresponding roles and capabilities in Moodle. For using the adele functionality in moodle, you also need to install **mod_adele** as the front end course activity. It also supports the **local_catquiz** plugin for computerized adaptive testing (CAT).
+ADELE is not a single plugin but a set of three that work as one system. They are developed together and declare each other as dependencies, so they can only be installed and updated as a set.
 
-## Key features ##
+* **local_adele** is the learning path itself: the graphical editor, the node structure, the completion and restriction logic, and the Vue 3 frontend.
+* **mod_adele** is the in-course entry point: it embeds a learning path in an ordinary course and decides which of that course's participants the path applies to.
+* **enrol_adele** is the enrolment layer: it turns the learning path state into actual course enrolments and role assignments, and reconciles them.
 
-- Create and maintain learning paths with a dedicated graphical editor.
-- Automatically ssign users to learning paths and track user–path relations.
-- Configure **completion logic** and **restriction logic** for nodes.
-- Filter the pool of selectable courses by role-based visibility, tags, categories, and restriction types.
-- Integrate with Moodle quiz events and adaptive quiz / catquiz-related events.
-- Control enrolment behavior, including which role is assigned through a learning path and whether an additional “assistant” role is granted.
-- Use a Vue 3 frontend with Vue Router, Vuex, notifications, and Vue Flow-based graph tooling.
+This README documents **local_adele** - the first bullet point above. The other two plugins are documented in their own repositories.
 
-## Installing via uploaded ZIP file ##
+Because the responsibilities are split this way, no rule exists twice: the learning path is defined here, embedded by mod_adele, and every enrolment it causes is owned by enrol_adele. That is also why a partial installation does not work - a missing sibling means a missing part of the mechanism.
 
-1. Log in to your Moodle site as an admin and go to _Site administration >
-   Plugins > Install plugins_.
-2. Upload the ZIP file with the plugin code. You should only be prompted to add
-   extra details if your plugin type is not automatically detected.
-3. Check the plugin validation report and finish the installation.
 
-## Installing manually ##
+Requirements
+------------
 
-The plugin can be also installed by putting the contents of this directory to
+This plugin requires Moodle 4.5+
 
-    {your/moodle/dirroot}/local/adele
+It also requires the other ADELE plugins. All three are developed together and must be installed in matching versions:
 
-Afterwards, log in to your Moodle site as an admin and go to _Site administration >
-Notifications_ to complete the installation.
+* **mod_adele (ADELE activity)** - required dependency, declared in version.php\
+  https://github.com/ralferlebach/moodle-mod_adele
+* **enrol_adele (ADELE enrolment)** - required dependency, declared in version.php\
+  https://github.com/ralferlebach/moodle-enrol_adele
 
-Alternatively, you can run
+Optionally, **local_catquiz** can be used as a completion condition for computerized adaptive testing. That integration is guarded, so the plugin works without it.
 
-    $ php admin/cli/upgrade.php
 
-to complete the installation from the command line.
+Motivation for this plugin
+--------------------------
 
-## License ##
+Moodle can sequence activities inside a course, but a curriculum rarely fits into one. Prerequisites, alternative routes and "finish either of these two before that one" span courses, and expressing them through course-level restrictions means encoding the same rule in several places, where it drifts apart.
 
-2026 Wunderbyte GmbH <info@wunderbyte.at>
+ADELE moves that structure into one object. A learning path is a graph whose nodes point at courses; each node carries its own conditions for being accessible and for being complete. The graph is edited visually, evaluated per learner, and everything downstream - what a learner sees, which courses they may enter - follows from it.
 
-This program is free software: you can redistribute it and/or modify it under
-the terms of the GNU General Public License as published by the Free Software
-Foundation, either version 3 of the License, or (at your option) any later
-version.
 
-This program is distributed in the hope that it will be useful, but WITHOUT ANY
-WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
-PARTICULAR PURPOSE.  See the GNU General Public License for more details.
+Installation
+------------
 
-You should have received a copy of the GNU General Public License along with
-this program.  If not, see <https://www.gnu.org/licenses/>.
+Install the plugin like any other plugin to folder
+/local/adele
+
+See http://docs.moodle.org/en/Installing_plugins for details on installing Moodle plugins
+
+
+Usage & Settings
+----------------
+
+After installing the plugin, learning paths are managed at Site administration -> Plugins -> Local plugins -> ADELE, and edited through the graphical editor.
+
+To configure the plugin and its behaviour, please visit:
+Site administration -> Plugins -> Local plugins -> ADELE
+
+There, you find settings for:
+
+* **Course pool** - which courses may be selected as nodes, filtered by tags, categories and role-based visibility.
+* **Restriction and completion types** - which condition types are offered in the editor.
+* **Enrolment behaviour** - which role a learning path assigns, and whether an additional assistant role is granted.
+
+A learning path is made visible to learners by adding the **mod_adele** activity to a course. Which participants of that course the path applies to is decided there, not here.
+
+
+Capabilities
+------------
+
+This plugin introduces these additional capabilities:
+
+* **local/adele:view** - see learning paths.
+* **local/adele:edit** - create and edit learning paths.
+* **local/adele:teacheredit** - edit the learning paths one is assigned to as a teacher.
+* **local/adele:canmanage** - manage learning paths across the site.
+* **local/adele:assist** - act as a learning path assistant.
+
+
+Scheduled Tasks
+---------------
+
+This plugin also introduces these additional scheduled tasks:
+
+* **\local_adele\task\check_lp_ownership** - Checks and repairs the ownership of learning paths.\ By default, the task is enabled.
+
+Learner state is recomputed in response to Moodle events - course completion, quiz attempts, enrolments, path updates - rather than on a schedule, so a change is visible immediately.
+
+
+How this plugin works / Pitfalls
+--------------------------------
+
+A learning path is stored as a JSON graph: nodes with the courses they point at, edges between them, and per-node conditions. For each subscribed learner a second record holds their state through that graph - which node is accessible, which is completed, plus any manual overrides a teacher has set.
+
+That per-learner record is the only copy of the learner's progress. It is written when they are enrolled into a course that hosts the path, updated by the recompute pipeline, and removed by enrol_adele when no embedding carries them any more - deferred, and only after a re-check.
+
+**Pitfall:** subscription happens on enrolment into the **host** course, never into a node course. Matching any course referenced anywhere in the graph used to cause spurious subscriptions and a cascade of unrelated auto-enrolments.
+
+**Pitfall:** the frontend is a Vue 3 application compiled into `amd/build/`. The compiled bundle is what Moodle loads and what is shipped; the `vue3/` source tree is build tooling and is not part of a release archive. After changing the frontend, the bundle has to be rebuilt and committed - Moodle does not build it.
+
+**Pitfall:** the Vue components access language strings dynamically through the store, so static analysis cannot tell reliably which strings are unused. Treat any such list with suspicion.
+
+
+Theme support
+-------------
+
+This plugin is developed and tested on Moodle Core's Boost theme.
+It should also work with Boost child themes, including Moodle Core's Classic theme. However, we can't support any other theme than Boost.
+
+
+Plugin repositories
+-------------------
+
+This plugin is not published in the Moodle plugins repository.
+
+The latest development version can be found on Github:
+https://github.com/ralferlebach/moodle-local_adele
+
+
+Bug and problem reports / Support requests
+------------------------------------------
+
+This plugin is carefully developed and thoroughly tested, but bugs and problems can always appear.
+
+Please report bugs and problems on Github:
+https://github.com/Wunderbyte-GmbH/moodle_local_adele/issues
+
+We will do our best to solve your problems, but please note that due to limited resources we can't always provide per-case support.
+
+
+Feature proposals
+-----------------
+
+Due to limited resources, the functionality of this plugin is primarily implemented for our own local needs and published as-is to the community. We are aware that members of the community will have other needs and would love to see them solved by this plugin.
+
+Please issue feature proposals on Github:
+https://github.com/Wunderbyte-GmbH/moodle_local_adele/issues
+
+Please create pull requests on Github:
+https://github.com/Wunderbyte-GmbH/moodle_local_adele/pulls
+
+We are always interested to read about your feature proposals or even get a pull request from you, but please accept that we can handle your issues only as feature _proposals_ and not as feature _requests_.
+
+
+Moodle release support
+----------------------
+
+Due to limited resources, this plugin is only maintained for the most recent major release of Moodle as well as the most recent LTS release of Moodle. Bugfixes are backported to the LTS release. However, new features and improvements are not necessarily backported to the LTS release.
+
+Apart from these maintained releases, previous versions of this plugin which work in legacy major releases of Moodle are still available as-is without any further updates in the Moodle Plugins repository.
+
+There may be several weeks after a new major release of Moodle has been published until we can do a compatibility check and fix problems if necessary. If you encounter problems with a new major release of Moodle - or can confirm that this plugin still works with a new major release - please let us know on Github.
+
+This plugin is designed to be compatible with all currently supported versions of Moodle, leveraging its latest APIs. However, if you are using a legacy version of Moodle, we kindly advise against installing or using this plugin. Instead, we strongly recommend updating your Moodle instance to a supported version to ensure security and compliance with current technological standards. Thank you for your understanding.
+
+
+Translating this plugin
+-----------------------
+
+This Moodle plugin is provided with English and German language packs only. Translations into other languages must be managed through AMOS (https://lang.moodle.org), where they will become part of Moodle's official language pack.
+
+As the plugin creator, we continue to maintain the German translation. For all other languages, we kindly ask you to contribute your translations directly in AMOS. These contributions will be reviewed by Moodle's official language pack maintainers before being included in the official repository.
+
+Thank you for supporting the global Moodle community!
+
+
+Right-to-left support
+---------------------
+
+This plugin has not been tested with Moodle's support for right-to-left (RTL) languages.
+If you want to use this plugin with a RTL language and it doesn't work as-is, you are free to send us a pull request on Github with modifications.
+
+
+Maintainers
+-----------
+
+The plugin is maintained by\
+Wunderbyte GmbH\
+Ralf Erlebach
+
+Copyright
+---------
+
+The copyright of this plugin is held by\
+Wunderbyte GmbH\
+Ralf Erlebach
+
+Individual copyrights of individual developers are tracked in PHPDoc comments and Git commits.

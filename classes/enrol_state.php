@@ -169,89 +169,30 @@ class enrol_state {
     }
 
     /**
-     * Keep the host-course index in sync with one mod_adele activity.
-     *
-     * Called from mod_adele's adele_add_instance()/adele_update_instance()
-     * lifecycle hooks. This is the write side of the index; enrol_adele reads
-     * it via get_host_embeddings() below instead of querying mod_adele's own
-     * {adele} table and participantslist format directly. mod_adele already
-     * declares a dependency on local_adele, so calling in here introduces no
-     * new dependency direction.
-     *
-     * @param int $adeleinstanceid mod_adele's own adele.id for this activity.
-     * @param int $learningpathid The learning path this activity embeds.
-     * @param int $courseid The host course this activity lives in.
-     * @param string|null $participantslist mod_adele's raw comma-separated
-     *     options string (e.g. '2,3'), or null/empty for "no host access".
-     * @return void
-     */
-    public static function sync_host_course_index(
-        int $adeleinstanceid,
-        int $learningpathid,
-        int $courseid,
-        ?string $participantslist
-    ): void {
-        global $DB;
-
-        $options = array_map('trim', explode(',', (string) $participantslist));
-        $record = (object) [
-            'adeleinstanceid' => $adeleinstanceid,
-            'learningpathid' => $learningpathid,
-            'courseid' => $courseid,
-            'participantoption1' => in_array('1', $options, true) ? 1 : 0,
-            'participantoption2' => in_array('2', $options, true) ? 1 : 0,
-            'participantoption3' => in_array('3', $options, true) ? 1 : 0,
-            'timemodified' => time(),
-        ];
-
-        $existing = $DB->get_record('local_adele_host_courses', ['adeleinstanceid' => $adeleinstanceid]);
-        if ($existing) {
-            $record->id = $existing->id;
-            $DB->update_record('local_adele_host_courses', $record);
-        } else {
-            $DB->insert_record('local_adele_host_courses', $record);
-        }
-    }
-
-    /**
-     * Remove one mod_adele activity's row from the host-course index.
-     *
-     * Called from mod_adele's adele_delete_instance() lifecycle hook.
-     *
-     * @param int $adeleinstanceid mod_adele's own adele.id for the deleted activity.
-     * @return void
-     */
-    public static function remove_host_course_index(int $adeleinstanceid): void {
-        global $DB;
-        $DB->delete_records('local_adele_host_courses', ['adeleinstanceid' => $adeleinstanceid]);
-    }
-
-    /**
      * Which host courses embed a learning path, and via which options.
      *
-     * The read side enrol_adele uses instead of querying mod_adele's own
-     * {adele} table directly. Returns already-normalised booleans rather than
-     * mod_adele's raw participantslist string, so enrol_adele does not need to
-     * know that format.
+     * Reads mod_adele's own {adele} table through
+     * mod_adele\local\host_policy, which owns the semantics of
+     * participantslist and hostenrolmentmode. This plugin already declares a
+     * dependency on mod_adele, so the call introduces no new coupling;
+     * enrol_adele reaches the same derivation through here without ever
+     * touching {adele} itself.
      *
      * @param int $learningpathid The learning path id.
-     * @return array Rows keyed by id: courseid, option1/2/3 (bool each).
+     * @return array Rows: courseid, option1/2/3 (bool each), mode (string).
      */
     public static function get_host_embeddings(int $learningpathid): array {
-        global $DB;
-        $rows = $DB->get_records(
-            'local_adele_host_courses',
-            ['learningpathid' => $learningpathid],
-            '',
-            'id, courseid, participantoption1, participantoption2, participantoption3'
-        );
+        if (!self::host_policy_available()) {
+            return [];
+        }
         $result = [];
-        foreach ($rows as $row) {
+        foreach (\mod_adele\local\host_policy::get_embeddings($learningpathid) as $embedding) {
             $result[] = [
-                'courseid' => (int) $row->courseid,
-                'option1' => (bool) $row->participantoption1,
-                'option2' => (bool) $row->participantoption2,
-                'option3' => (bool) $row->participantoption3,
+                'courseid' => (int) $embedding['courseid'],
+                'option1' => (bool) $embedding['option1'],
+                'option2' => (bool) $embedding['option2'],
+                'option3' => (bool) $embedding['option3'],
+                'mode' => (string) $embedding['mode'],
             ];
         }
         return $result;
@@ -260,20 +201,112 @@ class enrol_state {
     /**
      * Which learning paths have a host-course embedding in the given course.
      *
-     * Lets enrol_adele's user_enrolment_deleted observer find affected
-     * learning paths without reading mod_adele's {adele} table directly.
-     *
      * @param int $courseid The host course id.
      * @return int[] Distinct learning path ids.
      */
     public static function get_learningpaths_embedded_in_course(int $courseid): array {
-        global $DB;
-        $ids = $DB->get_fieldset_select(
-            'local_adele_host_courses',
-            'DISTINCT learningpathid',
-            'courseid = :courseid',
-            ['courseid' => $courseid]
+        if (!self::host_policy_available()) {
+            return [];
+        }
+        return \mod_adele\local\host_policy::get_learningpaths_embedded_in_course($courseid);
+    }
+
+    /**
+     * Every learning path embedded anywhere with subscription option 2 or 3.
+     *
+     * The entry point for enrol_adele's host-course sweep: only these
+     * learning paths can own host-course enrolments at all.
+     *
+     * @return int[] Distinct learning path ids.
+     */
+    public static function get_learningpaths_with_host_embeddings(): array {
+        if (!self::host_policy_available()) {
+            return [];
+        }
+        return \mod_adele\local\host_policy::get_learningpaths_with_host_embeddings();
+    }
+
+    /**
+     * Every user an embedding could entitle, including those ADELE has never
+     * seen before.
+     *
+     * Needed so enrol_adele's sweep can heal a WIDENED subscription option,
+     * not only a narrowed one. See mod_adele\local\host_policy for why the
+     * other candidate populations cannot contain these users.
+     *
+     * @param int $learningpathid The learning path id.
+     * @param int $hostcourseid The host course id.
+     * @return int[] Candidate user ids.
+     */
+    public static function get_host_candidate_userids(int $learningpathid, int $hostcourseid): array {
+        if (!self::host_policy_available()) {
+            return [];
+        }
+        if (!method_exists('\\mod_adele\\local\\host_policy', 'get_candidate_userids')) {
+            // Loudly, not quietly. An empty list here is indistinguishable
+            // from "nobody is a candidate", so a mod_adele that is merely too
+            // old would silently produce a WRONG answer rather than no answer
+            // — which is how a version skew during deployment turns into a
+            // single mysterious failure somewhere far away instead of a
+            // message naming its cause.
+            debugging(
+                'local_adele: the installed mod_adele predates ' .
+                'host_policy::get_candidate_userids(). Host course entitlements ' .
+                'cannot be derived for users without an existing subscription ' .
+                'until both plugins are upgraded.',
+                DEBUG_NORMAL
+            );
+            return [];
+        }
+        return \mod_adele\local\host_policy::get_candidate_userids($learningpathid, $hostcourseid);
+    }
+
+    /**
+     * Whether one user is entitled to host-course access for one embedding,
+     * and in which visibility mode.
+     *
+     * The counterpart of {@see get_entitled_courseids()} for host courses.
+     * Unlike that method, the derivation is not this plugin's own: it belongs
+     * to mod_adele, which owns the subscription options. This method only
+     * routes the question there, so that enrol_adele's nightly sweep and
+     * mod_adele's live observer answer it with identical code.
+     *
+     * Returns null — deliberately not [false, ...] — when mod_adele is not
+     * available. "I cannot tell" and "not entitled" must not collapse into
+     * one answer: a caller acting on false would revoke access from every
+     * user the moment mod_adele is uninstalled or mid-upgrade.
+     *
+     * @param int $learningpathid The learning path id.
+     * @param int $hostcourseid The host course id.
+     * @param int $userid The user id.
+     * @return array|null [bool $entitled, string $mode], or null if unknown.
+     */
+    public static function get_host_entitlement(int $learningpathid, int $hostcourseid, int $userid): ?array {
+        if (!self::host_policy_available()) {
+            return null;
+        }
+        return \mod_adele\local\host_policy::get_entitlement($learningpathid, $hostcourseid, $userid);
+    }
+
+    /**
+     * Whether mod_adele's host policy can be reached.
+     *
+     * mod_adele is a declared dependency, so a missing class means a broken
+     * or partially upgraded installation rather than a supported
+     * configuration — hence the debugging() notice.
+     *
+     * @return bool
+     */
+    private static function host_policy_available(): bool {
+        if (class_exists('\mod_adele\local\host_policy')) {
+            return true;
+        }
+        debugging(
+            'local_adele: mod_adele\\local\\host_policy is not available. ' .
+            'Host course entitlements cannot be derived until mod_adele is ' .
+            'installed and upgraded.',
+            DEBUG_NORMAL
         );
-        return array_map('intval', $ids);
+        return false;
     }
 }

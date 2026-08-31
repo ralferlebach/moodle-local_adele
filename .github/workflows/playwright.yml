@@ -184,7 +184,13 @@ jobs:
             tail -50 /tmp/moodle-server.log
             exit 1
           fi
-          npm test
+          # The run output is teed into a file so it ends up in the failure
+          # bundle. Without it the artefact contains only a server log, which
+          # says which pages were requested but never which test failed or
+          # why — diagnosing a CI failure then needs the job log, which is not
+          # part of the artefact at all.
+          set -o pipefail
+          npm test 2>&1 | tee /tmp/playwright-run.log
 
       - name: Show the tail of the server log on failure
         if: failure()
@@ -193,28 +199,36 @@ jobs:
       # Failures only, and without videos: Playwright keeps a directory per
       # test, so a failed run's evidence is a small subset of a report that
       # otherwise runs to tens of megabytes.
-      - name: Collect the failed tests only
+      - name: Collect the failure evidence
         if: failure()
         run: |
-          src="moodle/$PLUGIN_PATH/tests/playwright/test-results"
+          src="moodle/$PLUGIN_PATH/tests/playwright"
           dest="$RUNNER_TEMP/playwright-failures"
           rm -rf "$dest"; mkdir -p "$dest"
-          found=0
-          # error-context.md is written for failures only, so its presence
-          # marks the directory.
-          while IFS= read -r ctx; do
-            cp -a "$(dirname "$ctx")" "$dest/"
-            found=1
-          done < <(find "$src" -name error-context.md 2>/dev/null)
-          if [ "$found" = "1" ]; then
-            find "$dest" -name '*.webm' -delete
-            echo "Fehlerhafte Tests eingesammelt:"; ls -1 "$dest"
-          else
-            echo "Keine Fehlerverzeichnisse gefunden."
+
+          # The run output first: it names the failing test and the assertion,
+          # which nothing else in this bundle does. An earlier version
+          # collected only directories containing error-context.md, and when
+          # Playwright wrote none the artefact held nothing but a server log —
+          # enough to see which pages were requested, not enough to diagnose.
+          if [ -s /tmp/playwright-run.log ]; then
+            cp /tmp/playwright-run.log "$dest/playwright-run.log"
           fi
+
+          # Then everything Playwright produced, minus the videos, which are
+          # what makes a full report large.
+          if [ -d "$src/test-results" ]; then
+            cp -a "$src/test-results" "$dest/test-results"
+          fi
+          if [ -d "$src/playwright-report" ]; then
+            cp -a "$src/playwright-report" "$dest/playwright-report"
+          fi
+          find "$dest" -name '*.webm' -delete 2>/dev/null || true
+
           if [ -s /tmp/moodle-server.log ]; then
             gzip -c /tmp/moodle-server.log > "$dest/moodle-server.log.gz"
           fi
+          echo "Eingesammelt:"; ls -1 "$dest"
 
       - name: Upload failures only
         if: failure()

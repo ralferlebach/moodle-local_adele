@@ -32,29 +32,39 @@ import { env, loginAs } from '../support/env';
  */
 function learningPathNavEntry(page: Page) {
   const nav = page.locator('.secondary-navigation, nav.moremenu').first();
-  return nav.getByRole('link', { name: 'Lernpfade', exact: true });
+  // Both spellings, because the label follows the site language and the test
+  // must not silently pass just because the interface is not German.
+  return nav.getByRole('link', { name: /^(Lernpfade|Learning paths)$/ });
+}
+
+/**
+ * Open the fixture course and wait for its navigation to be there.
+ *
+ * Both halves matter. Asserting the ABSENCE of a navigation entry on a page
+ * that never loaded, or whose navigation has not rendered yet, would pass
+ * for the wrong reason — the most common way an absence test becomes
+ * worthless. The course is identified by its URL and its body id rather than
+ * by a heading, because the heading is the course name and would tie the test
+ * to the fixture's wording.
+ *
+ * @param page The page to use.
+ */
+async function expectCourseNavigation(page: Page): Promise<void> {
+  await page.goto(env.navCourseUrl);
+  await expect(page.locator('body#page-course-view-topics, body[id^="page-course-view"]')).toHaveCount(1);
+  await expect(page.locator('.secondary-navigation, nav.moremenu').first()).toBeVisible();
 }
 
 test.describe('ADELE-PW-458 — course navigation', () => {
   test('A: a teacher with editing rights sees no "Lernpfade" entry', async ({ page }) => {
     await loginAs(page, env.collaboratorUsername, env.fixturePassword);
-    await page.goto(env.navCourseUrl);
-
-    // The course itself must open normally; asserting the absence of
-    // something on a page that failed to load would prove nothing.
-    await expect(page.getByRole('heading', { name: 'PW Kurs Navigation 458' })).toBeVisible();
-    await expect(page.locator('.secondary-navigation, nav.moremenu').first()).toBeVisible();
-
+    await expectCourseNavigation(page);
     await expect(learningPathNavEntry(page)).toHaveCount(0);
   });
 
   test('B: a teacher without editing rights sees no "Lernpfade" entry', async ({ page }) => {
     await loginAs(page, env.t0Username, env.fixturePassword);
-    await page.goto(env.navCourseUrl);
-
-    await expect(page.getByRole('heading', { name: 'PW Kurs Navigation 458' })).toBeVisible();
-    await expect(page.locator('.secondary-navigation, nav.moremenu').first()).toBeVisible();
-
+    await expectCourseNavigation(page);
     await expect(learningPathNavEntry(page)).toHaveCount(0);
   });
 });

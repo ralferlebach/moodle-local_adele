@@ -25,6 +25,21 @@ export const env = {
   get adminPassword() { return required('ADELE_ADMIN_PASSWORD'); },
   get learningPathName() { return required('ADELE_LP_NAME'); },
   get learningPathId() { return required('ADELE_LP_ID'); },
+
+  // Fixture users and objects for the regression specs. All identifiers are
+  // fixed, never randomised: several assertions are about the exact title.
+  get fixturePassword() { return required('ADELE_FIXTURE_PASSWORD'); },
+  get managerUsername() { return required('ADELE_MANAGER_USERNAME'); },
+  get assistantUsername() { return required('ADELE_ASSISTANT_USERNAME'); },
+  get visiblePathTitle() { return required('ADELE_VISIBLE_PATH_TITLE'); },
+  get invisiblePathTitle() { return required('ADELE_INVISIBLE_PATH_TITLE'); },
+  get visiblePathId() { return required('ADELE_VISIBLE_PATH_ID'); },
+  get invisiblePathId() { return required('ADELE_INVISIBLE_PATH_ID'); },
+  get visiblePathBTitle() { return required('ADELE_VISIBLE_PATH_B_TITLE'); },
+  get invisiblePathBTitle() { return required('ADELE_INVISIBLE_PATH_B_TITLE'); },
+  get collaboratorUsername() { return required('ADELE_COLLABORATOR_USERNAME'); },
+  get t0Username() { return required('ADELE_T0_USERNAME'); },
+  get navCourseUrl() { return required('ADELE_NAV_COURSE_URL'); },
 };
 
 /**
@@ -44,7 +59,23 @@ export const env = {
  * Moodle's login form remains covered by core's own tests.
  */
 export async function loginAsAdmin(page: Page): Promise<void> {
+  await loginAs(page, env.adminUser, env.adminPassword);
+}
+
+/**
+ * Authenticate the browser context as an arbitrary user.
+ *
+ * Each call starts from a clean cookie jar. A test that switches user must
+ * not inherit the previous session: Moodle would keep serving the old one and
+ * the assertion would silently describe the wrong person.
+ *
+ * @param page The page whose context is authenticated.
+ * @param username The Moodle username.
+ * @param password The password.
+ */
+export async function loginAs(page: Page, username: string, password: string): Promise<void> {
   const api = page.context().request;
+  await page.context().clearCookies();
 
   const form = await api.get('/login/index.php');
   const token = /name="logintoken" value="([^"]+)"/.exec(await form.text())?.[1];
@@ -56,8 +87,8 @@ export async function loginAsAdmin(page: Page): Promise<void> {
     form: {
       anchor: '',
       logintoken: token,
-      username: env.adminUser,
-      password: env.adminPassword,
+      username,
+      password,
     },
   });
 
@@ -65,6 +96,6 @@ export async function loginAsAdmin(page: Page): Promise<void> {
   // comes back to it with an error, so the final URL is the reliable signal.
   const landed = response.url();
   if (landed.includes('/login/index.php')) {
-    throw new Error(`Login rejected for user "${env.adminUser}". Moodle stayed on ${landed}.`);
+    throw new Error(`Login rejected for user "${username}". Moodle stayed on ${landed}.`);
   }
 }

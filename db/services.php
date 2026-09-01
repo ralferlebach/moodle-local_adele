@@ -165,7 +165,10 @@ $functions = [
       'description' => 'Set new image',
       'type' => 'write',
       'ajax' => true,
-      'capabilities' => 'local/adele:canmanage',
+      // Editor-level on purpose (#459): the service gates per path via
+      // require_lp_editor_access. Reverted to canmanage once by a merge
+      // resolution - pinned by a test since.
+      'capabilities' => 'local/adele:edit',
     ],
     'local_adele_update_user_path_relation' => [
       'classname' => 'local_adele\external\update_user_path_relation',

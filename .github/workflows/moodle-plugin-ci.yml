@@ -1,6 +1,6 @@
 name: Moodle Plugin CI
 
-on: [push, pull_request]
+"on": [push, pull_request]
 
 jobs:
   moodle500to501:
@@ -23,6 +23,17 @@ jobs:
       # "fully deployed ADELE ecosystem" case instead, avoiding that
       # debugging() path entirely rather than retrofitting
       # assertDebuggingCalled() into every affected test.
+      # Companion plugins come from the Wunderbyte upstream, deliberately.
+      # Note the inconsistent naming that this has to match exactly:
+      # local uses an underscore (moodle_local_adele) on branch "main",
+      # mod uses a hyphen on branch "master", enrol a hyphen on "main".
+      #
+      # PREREQUISITE: this only works once the corresponding changes are
+      # merged upstream. version.php declares hard dependencies on specific
+      # sibling versions, so an upstream that is behind makes Moodle refuse
+      # to install with "Dependencies check failed" - before a single test
+      # runs. If that happens, the branches here are ahead of upstream, not
+      # the code broken.
       extra_plugin_runners: |
         moodle-plugin-ci add-plugin --branch MOODLE_405_DEV Wunderbyte-GmbH/moodle-local_wunderbyte_table
         moodle-plugin-ci add-plugin --branch master Wunderbyte-GmbH/moodle-mod_adele
@@ -126,9 +137,16 @@ jobs:
           if grep -q '"test":' package.json; then
             echo "Running npm test"
             export NODE_OPTIONS="--max-old-space-size=4096"
-            npm test -- --ci --coverage || echo "Tests failed but continuing"
+            # NOT "|| echo ... continuing". Jest ran here from the start, but
+            # its exit code was swallowed, so a red Vue3 suite left the job
+            # green and the 50 spec files under vue3/tests/unit/ guarded
+            # nothing. Failing here is the point of running them at all.
+            npm test -- --ci --coverage
           else
-            echo "No test script found in package.json. Skipping tests."
+            # A missing test script is a broken checkout, not a valid state:
+            # vue3/package.json has always defined one.
+            echo "No test script found in vue3/package.json."
+            exit 1
           fi
 
           cd ../..
@@ -145,6 +163,17 @@ jobs:
       min_php: '8.1'  # Optional: Set minimum PHP version
 
       # Command to install more dependencies
+      # Companion plugins come from the Wunderbyte upstream, deliberately.
+      # Note the inconsistent naming that this has to match exactly:
+      # local uses an underscore (moodle_local_adele) on branch "main",
+      # mod uses a hyphen on branch "master", enrol a hyphen on "main".
+      #
+      # PREREQUISITE: this only works once the corresponding changes are
+      # merged upstream. version.php declares hard dependencies on specific
+      # sibling versions, so an upstream that is behind makes Moodle refuse
+      # to install with "Dependencies check failed" - before a single test
+      # runs. If that happens, the branches here are ahead of upstream, not
+      # the code broken.
       extra_plugin_runners: |
         moodle-plugin-ci add-plugin --branch MOODLE_405_DEV Wunderbyte-GmbH/moodle-local_wunderbyte_table
         moodle-plugin-ci add-plugin --branch master Wunderbyte-GmbH/moodle-mod_adele
@@ -249,9 +278,16 @@ jobs:
           if grep -q '"test":' package.json; then
             echo "Running npm test"
             export NODE_OPTIONS="--max-old-space-size=4096"
-            npm test -- --ci --coverage || echo "Tests failed but continuing"
+            # NOT "|| echo ... continuing". Jest ran here from the start, but
+            # its exit code was swallowed, so a red Vue3 suite left the job
+            # green and the 50 spec files under vue3/tests/unit/ guarded
+            # nothing. Failing here is the point of running them at all.
+            npm test -- --ci --coverage
           else
-            echo "No test script found in package.json. Skipping tests."
+            # A missing test script is a broken checkout, not a valid state:
+            # vue3/package.json has always defined one.
+            echo "No test script found in vue3/package.json."
+            exit 1
           fi
 
           cd ../..

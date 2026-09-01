@@ -134,7 +134,6 @@ $DB->insert_record('local_adele_path_user', (object) [
 //
 // Everything here is SETUP, never the effect under test: the specs assert
 // what the interface renders, not what this script wrote.
-// ---------------------------------------------------------------------------
 
 $fixturepassword = 'Playwright!23';
 
@@ -181,7 +180,7 @@ foreach ([['adelemanager', $manager], ['adeleassistant', $assistant]] as [$short
     }
 }
 
-// #472: two learning paths owned by the MANAGER, never by the assistant.
+// Issue #472: two learning paths owned by the MANAGER, never by the assistant.
 // One visible, one not. The specs assert that the assistant sees exactly the
 // visible one, with and without being listed as an editor.
 $visibletitle = 'Assistant sichtbar';
@@ -208,7 +207,7 @@ foreach ([[$visibletitle, 1], [$invisibletitle, 0]] as [$title, $visible]) {
     ]);
 }
 
-// #472 variant B: a SECOND pair of paths, identical except that the assistant
+// Issue #472 variant B: a SECOND pair of paths, identical except that the assistant
 // is a registered editor of both. Separate fixtures rather than one pair
 // mutated between the two tests: variant A must be provably free of an editor
 // assignment, and a shared pair would make the two variants depend on
@@ -242,7 +241,7 @@ foreach ([[$visiblebtitle, 1], [$invisiblebtitle, 0]] as [$title, $visible]) {
 // sees it for an entirely different reason, which would make the visibility
 // assertion meaningless.
 
-// #458: a course with a teacher who may edit and one who may not. Neither
+// Issue #458: a course with a teacher who may edit and one who may not. Neither
 // gets an ADELE system role — that is the point of the test.
 $navcourse = $DB->get_record('course', ['shortname' => 'PWNAV458']);
 if (!$navcourse) {

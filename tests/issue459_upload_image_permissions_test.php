@@ -190,4 +190,20 @@ final class issue459_upload_image_permissions_test extends advanced_testcase {
         $result = set_new_image::execute(context_system::instance()->id, $lpid, self::PNG);
         $this->assertSame('success', $result['status']);
     }
+
+    /**
+     * The service DECLARATION must match the editor-level gate. It was
+     * silently reverted to canmanage once by a merge resolution - pin it.
+     *
+     * @return void
+     */
+    public function test_service_declaration_matches_the_editor_gate(): void {
+        $functions = [];
+        require(__DIR__ . '/../db/services.php');
+        $this->assertSame(
+            'local/adele:edit',
+            $functions['local_adele_upload_lp_image']['capabilities'],
+            'upload_lp_image is gated per-path at editor level (#459); the declaration must say so.'
+        );
+    }
 }

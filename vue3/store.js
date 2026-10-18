@@ -194,6 +194,8 @@ export function createAppStore() {
         state() {
             return {
                 view: 'defaultView',
+                // Refresh and auto-focus of an open path (mod_adele #26, #27).
+                pathviewsettings: null,
                 // False in a read-only teacher's view (mod_adele #39).
                 canedit: true,
                 user: null,

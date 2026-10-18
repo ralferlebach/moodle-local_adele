@@ -136,11 +136,21 @@ final class issue484_node_description_master_merge_test extends advanced_testcas
             $data['estimate_duration'] ?? null,
             'The estimated duration must follow the master path.'
         );
+        // The master's texts per course; beside them the course's own short
+        // and full name, which the view adds for every course (mod_adele #17).
+        $percourse = array_map(
+            fn($texts) => array_diff_key($texts, ['coursefullname' => 1, 'shortname' => 1]),
+            $data['course_node_id_description'] ?? []
+        );
         $this->assertSame(
             $master['course_node_id_description'],
-            $data['course_node_id_description'] ?? null,
+            $percourse,
             'Per-course texts (stack courses) must follow the master path.'
         );
+        foreach ($data['course_node_id_description'] as $texts) {
+            $this->assertArrayHasKey('shortname', $texts);
+            $this->assertArrayHasKey('coursefullname', $texts);
+        }
         $this->assertSame(
             $master['fullname'],
             $data['fullname'] ?? null,

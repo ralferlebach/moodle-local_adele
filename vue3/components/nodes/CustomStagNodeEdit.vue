@@ -34,6 +34,7 @@ import CourseCarousel from '../nodes_items/CourseCarousel.vue'
 import CourseCompletion from '../nodes_items/CourseCompletion.vue'
 import ProgressBar from '../nodes_items/ProgressBar.vue'
 import ExpandedCourses from '../nodes_items/ExpandedCourses.vue'
+import { stackControls, stackToggleId } from '../../composables/nodesHelper/expandedCourse'
 import NodeInformation from '../nodes_items/NodeInformation.vue'
 import truncatedText from '../../composables/nodesHelper/truncatedText'
 import MasterConditions from '../nodes_items/MasterConditions.vue';
@@ -166,6 +167,27 @@ const enableButton = () => {
   isBlocked.value = false
 };
 
+// The expand button of the stack: its state, what it controls, and Escape
+// folds the stack from its button or from one of its panels; the button then
+// keeps / takes the keyboard focus (#17, TP-08).
+const toggleButton = ref(null)
+const toggleId = computed(() => stackToggleId(props.data.node_id))
+const toggleControls = computed(() =>
+  courseExpanded.value ? stackControls(props.data.node_id, props.data.course_node_id) : undefined
+)
+const toggleLabel = computed(() =>
+  (courseExpanded.value ? store.state.strings.collapse_courses : store.state.strings.expand_courses)
+  + ': ' + (props.data.fullname || store.state.strings.nodes_collection)
+)
+const collapseCourses = () => {
+  if (courseExpanded.value && !isBlocked.value) {
+    expandCourses()
+  }
+  if (toggleButton.value && toggleButton.value.focus) {
+    toggleButton.value.focus({ preventScroll: true })
+  }
+}
+
 
 const parentStyle = {
   borderColor: store.state.strings.DEEP_SKY_BLUE,
@@ -173,6 +195,11 @@ const parentStyle = {
 };
 
 const expandCourses = () => {
+  // While the panels fold in or out the button rests - marked, not disabled:
+  // a disabled button would drop the keyboard focus (TP-08).
+  if (isBlocked.value) {
+    return
+  }
   courseExpanded.value = !courseExpanded.value
   // Remember the expand state so it survives a canvas remount (#485).
   expandedStacks[props.data.node_id] = courseExpanded.value
@@ -237,12 +264,23 @@ const expandCourses = () => {
           <div class="overlay">
             <button
               v-if="active"
+              :id="toggleId"
+              ref="toggleButton"
+              type="button"
               class="icon-link"
               :title="courseExpanded ? store.state.strings.collapse_courses : store.state.strings.expand_courses"
-              :disabled="isBlocked"
+              :aria-label="toggleLabel"
+              :aria-expanded="courseExpanded ? 'true' : 'false'"
+              :aria-controls="toggleControls"
+              :data-testid="'stack-toggle-' + data.node_id"
+              :aria-disabled="isBlocked ? 'true' : undefined"
               @click.stop="expandCourses"
+              @keydown.esc.stop.prevent="collapseCourses"
             >
-              <i :class="['fa', courseExpanded ? 'fa-minus-circle' : 'fa-plus-circle']" />
+              <i
+                :class="['fa', courseExpanded ? 'fa-minus-circle' : 'fa-plus-circle']"
+                aria-hidden="true"
+              />
             </button>
             <button
               v-else
@@ -278,6 +316,7 @@ const expandCourses = () => {
           <ExpandedCourses
             :data="data"
             @doneFolding="enableButton"
+            @collapse="collapseCourses"
           />
         </div>
         <MasterConditions
@@ -375,6 +414,13 @@ const expandCourses = () => {
 }
 .icon-link:hover {
   color: lightgray; /* Hover effect */
+}
+/* A visible focus on the dark overlay (TP-08). */
+.icon-link:focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 6px #0f6cbf;
+  border-radius: 4px;
 }
 
 .inactive-node{

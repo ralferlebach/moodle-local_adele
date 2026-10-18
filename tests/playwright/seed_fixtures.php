@@ -2109,6 +2109,151 @@ if ($s37path) {
     }
 }
 
+// S26: refresh and auto-focus of an open path (mod_adele #26, #27). A path
+// of its own, "E2E26 Linear" (a copy of "Linear A1": T01 -> T02 -> T03), so
+// the chains never touch the reference path: deleting an embedding of a path
+// withdraws the subscriptions no embedding carries, and the reference
+// learners are carried by none (measured 2026-10-18 - an embedding of
+// "Linear A1" in E2E26 took student01 off the path on the next seed).
+// fx_26_learner is on it through E2E26, nothing done yet.
+$s26 = null;
+if (!empty($imported['Linear A1'])) {
+    $s26base = json_decode((string) $DB->get_field('local_adele_learning_paths', 'json', ['id' => $imported['Linear A1']]), true);
+    // Only "the predecessor is completed" opens the next node: Linear A1 also
+    // has a time window on nodes 2 and 3 whose end lies in the past (March
+    // 2026), so completing T01 would open nothing - and the learner's
+    // auto-focus has nothing new to show (measured 2026-10-18).
+    foreach ($s26base['tree']['nodes'] as &$s26node) {
+        if (empty($s26node['restriction']['nodes'])) {
+            continue;
+        }
+        $timed = array_column(array_filter(
+            $s26node['restriction']['nodes'],
+            fn($c) => ($c['data']['label'] ?? '') === 'timed'
+        ), 'id');
+        $s26node['restriction']['nodes'] = array_values(array_filter(
+            $s26node['restriction']['nodes'],
+            fn($c) => !in_array($c['id'] ?? '', $timed, true)
+        ));
+        foreach ($s26node['restriction']['nodes'] as &$s26condition) {
+            if (isset($s26condition['childCondition'])) {
+                $s26condition['childCondition'] = array_values(array_diff((array) $s26condition['childCondition'], $timed));
+            }
+        }
+        unset($s26condition);
+        if (!empty($s26node['restriction']['edges'])) {
+            $s26node['restriction']['edges'] = array_values(array_filter(
+                $s26node['restriction']['edges'],
+                fn($e) => !in_array($e['source'] ?? '', $timed, true) && !in_array($e['target'] ?? '', $timed, true)
+            ));
+        }
+    }
+    unset($s26node);
+    [$s26path, $s26learner] = local_adele_fixture_store_path(
+        'E2E26 Linear',
+        $s26base,
+        'fx_26_learner',
+        'Refresh Learner',
+        $fixturepassword
+    );
+    $s26host = local_adele_fixture_host_course('E2E26', 'E2E 26 Pfad', $s26path, $s26learner, (int) $options['category'], 2);
+    // A teacher of E2E26 who looks at the learner's path (teacher view of
+    // mod_adele #27); no editor of the path.
+    $s26teacher = local_adele_fixture_person('fx_26_teacher', 'Refresh Teacher', $fixturepassword);
+    $s26manual = $DB->get_record('enrol', ['courseid' => $s26host->id, 'enrol' => 'manual'], '*', IGNORE_MULTIPLE);
+    if ($s26manual) {
+        enrol_get_plugin('manual')->enrol_user(
+            $s26manual,
+            $s26teacher->id,
+            (int) $DB->get_field('role', 'id', ['shortname' => 'editingteacher'])
+        );
+    }
+    $s26cm = (int) get_coursemodule_from_instance(
+        'adele',
+        $DB->get_field('adele', 'id', ['course' => $s26host->id, 'name' => 'E2E 26 Pfad']),
+        $s26host->id
+    )->id;
+    $s26nodes = [];
+    foreach ($s26base['tree']['nodes'] ?? [] as $node) {
+        if (!empty($node['data']['course_node_id'])) {
+            $s26nodes[$node['id']] = (int) ((array) $node['data']['course_node_id'])[0];
+        }
+    }
+    $s26 = ['host' => $s26host, 'learner' => $s26learner, 'path' => $s26path, 'nodes' => $s26nodes,
+        'teacher' => $s26teacher, 'cm' => $s26cm];
+}
+
+// S27P: two next nodes at once (mod_adele #27, Testfall 4). The S26 path
+// with its third node moved beside the second: both wait only for node 1,
+// so finishing T01 opens T02 and T03 together. "E2E27 Parallel" of its own,
+// fx_27p_learner on it through E2E27P.
+$s27p = null;
+if ($s26) {
+    $s27json = $s26base;
+    foreach ($s27json['tree']['nodes'] as &$s27node) {
+        if ($s27node['id'] === 'dndnode_1') {
+            $s27node['childCourse'] = ['dndnode_2', 'dndnode_3'];
+        }
+        if ($s27node['id'] === 'dndnode_2') {
+            $s27node['childCourse'] = [];
+        }
+        if ($s27node['id'] === 'dndnode_3') {
+            $s27node['parentCourse'] = ['dndnode_1'];
+            foreach ($s27node['restriction']['nodes'] as &$s27condition) {
+                if (($s27condition['data']['label'] ?? '') === 'parent_courses') {
+                    $s27condition['data']['value']['courses_id'] = ['dndnode_1'];
+                }
+            }
+            unset($s27condition);
+        }
+    }
+    unset($s27node);
+    foreach ($s27json['tree']['edges'] as &$s27edge) {
+        if ($s27edge['source'] === 'dndnode_2' && $s27edge['target'] === 'dndnode_3') {
+            $s27edge['source'] = 'dndnode_1';
+            $s27edge['id'] = 'dndnode_3dndnode_1';
+        }
+    }
+    unset($s27edge);
+    [$s27path, $s27learner] = local_adele_fixture_store_path(
+        'E2E27 Parallel',
+        $s27json,
+        'fx_27p_learner',
+        'Parallel Learner',
+        $fixturepassword
+    );
+    $s27host = local_adele_fixture_host_course('E2E27P', 'E2E 27 Parallel', $s27path, $s27learner, (int) $options['category'], 2);
+    $s27cm = (int) get_coursemodule_from_instance(
+        'adele',
+        $DB->get_field('adele', 'id', ['course' => $s27host->id, 'name' => 'E2E 27 Parallel']),
+        $s27host->id
+    )->id;
+    $s27p = ['cm' => $s27cm, 'learner' => $s27learner];
+}
+
+// S11: the first learning path in a brand-new course (mod_adele #11). The
+// chain creates that course itself on every run; what an earlier run left
+// behind goes here. Its paths are copies of "Linear A1" of their own, embedded
+// nowhere else.
+foreach ($DB->get_records_select('course', $DB->sql_like('shortname', ':p'), ['p' => 'E2E11-%'], '', 'id') as $old) {
+    delete_course($old->id, false);
+}
+foreach (['E2E11 Erster Pfad', 'E2E11 Zweiter Pfad'] as $s11name) {
+    if (!empty($imported['Linear A1'])) {
+        $s11json = $DB->get_field('local_adele_learning_paths', 'json', ['id' => $imported['Linear A1']]);
+        $s11existing = $DB->get_record('local_adele_learning_paths', ['name' => $s11name]);
+        $s11record = (object) ['name' => $s11name, 'description' => 'E2E fixture (mod_adele #11).', 'json' => $s11json,
+            'timemodified' => time(), 'createdby' => get_admin()->id, 'visibility' => 1];
+        if ($s11existing) {
+            $s11record->id = $s11existing->id;
+            $DB->update_record('local_adele_learning_paths', $s11record);
+        } else {
+            $s11record->timecreated = time();
+            $DB->insert_record('local_adele_learning_paths', $s11record);
+        }
+    }
+}
+
 // KZ: course access in the teacher view of mod_adele (issue "Kurszugriff in
 // der Lehrendenansicht"). "Verzweigt, gestapelt B1" - node 1 is a stack of
 // three courses - embedded into E2EKZ, with an editing teacher, a teacher
@@ -2167,12 +2312,12 @@ if (!empty($imported['Verzweigt, gestapelt B1'])) {
         // The person responsible for the second course of the stack - the one
         // a request for access goes to (local_adele #600, TP2): an editing
         // teacher there, nowhere else; no requests from earlier runs.
-        // The editing teacher may edit the path (so the activity form offers
-        // it), yet has no authority in T02: the policies' "without authority".
-        $kzeditor = $kzpeople['TEACHER'][0];
-        if (!$DB->record_exists('local_adele_lp_editors', ['userid' => $kzeditor->id, 'learningpathid' => $kzpath])) {
-            $DB->insert_record('local_adele_lp_editors', (object) ['userid' => $kzeditor->id, 'learningpathid' => $kzpath]);
-        }
+        // The editing teacher has no authority in T02: the policies' "without
+        // authority".
+        // The editing teacher of E2EKZ is no editor of the path: they save the
+        // activity's form all the same (mod_adele #43). An editor row an
+        // earlier seed added for the workaround goes.
+        $DB->delete_records('local_adele_lp_editors', ['userid' => $kzpeople['TEACHER'][0]->id, 'learningpathid' => $kzpath]);
         $kzowner = local_adele_fixture_person('fx_kz_owner', 'Access Owner', $fixturepassword);
         $kzenrol((int) $kzstack[1], $kzowner, 'editingteacher');
         $DB->delete_records('notifications', ['useridto' => $kzowner->id]);
@@ -2184,6 +2329,44 @@ if (!empty($imported['Verzweigt, gestapelt B1'])) {
         $kz = ['host' => $kzhost, 'cm' => $kzcm, 'stack' => array_slice($kzstack, 0, 3), 'people' => $kzpeople,
             'learner' => $kzlearner, 'path' => $kzpath, 'owner' => $kzowner];
     }
+}
+
+// S17: the same stack in the swapped order (mod_adele #17, re-audit TP-05).
+// A copy of "Verzweigt, gestapelt B1" of its own, "E2E17 Vertauscht", whose
+// stacked starting node holds its first two courses the other way round;
+// fx_17_learner is on it through E2E17. The panels must carry the same course
+// identity as in the original order (KZ).
+$s17 = null;
+if (!empty($kz) && !empty($imported['Verzweigt, gestapelt B1'])) {
+    $s17json = json_decode((string) $DB->get_field('local_adele_learning_paths', 'json', ['id' => $kz['path']]), true);
+    foreach ($s17json['tree']['nodes'] as &$s17node) {
+        if (($s17node['id'] ?? '') === 'dndnode_1') {
+            $s17ids = array_values((array) $s17node['data']['course_node_id']);
+            [$s17ids[0], $s17ids[1]] = [$s17ids[1], $s17ids[0]];
+            $s17node['data']['course_node_id'] = $s17ids;
+        }
+    }
+    unset($s17node);
+    [$s17path, $s17learner] = local_adele_fixture_store_path(
+        'E2E17 Vertauscht',
+        $s17json,
+        'fx_17_learner',
+        'Stack Learner',
+        $fixturepassword
+    );
+    $s17host = local_adele_fixture_host_course('E2E17', 'E2E 17 Stapel', $s17path, $s17learner, (int) $options['category'], 1);
+    $s17cm = (int) get_coursemodule_from_instance(
+        'adele',
+        $DB->get_field('adele', 'id', ['course' => $s17host->id, 'name' => 'E2E 17 Stapel']),
+        $s17host->id
+    )->id;
+    $s17order = [];
+    foreach ($s17json['tree']['nodes'] as $node) {
+        if (($node['id'] ?? '') === 'dndnode_1') {
+            $s17order = array_map('intval', (array) $node['data']['course_node_id']);
+        }
+    }
+    $s17 = ['cm' => $s17cm, 'learner' => $s17learner, 'order' => $s17order];
 }
 
 // Z: each path in a host course of its own, the activity completing when the
@@ -2412,6 +2595,24 @@ if ($s37) {
     printf("export ADELE_FIXTURE_S37_PATH_A='%d'\n", $s37['patha']);
     printf("export ADELE_FIXTURE_S37_PATH_B='%d'\n", $s37['pathb']);
     printf("export ADELE_FIXTURE_S37_T01='%d'\n", $s37['t01']);
+}
+if ($s26) {
+    printf("export ADELE_FIXTURE_S26_HOST='%d'\n", $s26['host']->id);
+    printf("export ADELE_FIXTURE_S26_LEARNER='%s'\n", $s26['learner']->username);
+    printf("export ADELE_FIXTURE_S26_PATH='%d'\n", $s26['path']);
+    printf("export ADELE_FIXTURE_S26_NODES='%s'\n", json_encode($s26['nodes']));
+    printf("export ADELE_FIXTURE_S26_TEACHER='%s'\n", $s26['teacher']->username);
+    printf("export ADELE_FIXTURE_S26_LEARNER_ID='%d'\n", $s26['learner']->id);
+    printf("export ADELE_FIXTURE_S26_CM='%d'\n", $s26['cm']);
+}
+if ($s27p) {
+    printf("export ADELE_FIXTURE_S27P_CM='%d'\n", $s27p['cm']);
+    printf("export ADELE_FIXTURE_S27P_LEARNER='%s'\n", $s27p['learner']->username);
+}
+if ($s17) {
+    printf("export ADELE_FIXTURE_S17_CM='%d'\n", $s17['cm']);
+    printf("export ADELE_FIXTURE_S17_LEARNER='%s'\n", $s17['learner']->username);
+    printf("export ADELE_FIXTURE_S17_ORDER='%s'\n", json_encode($s17['order']));
 }
 if ($s20) {
     printf("export ADELE_FIXTURE_S20_HOST_ANY='%d'\n", $s20['hosts']['any']->id);

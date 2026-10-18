@@ -180,7 +180,7 @@
 
   <script setup>
   // Import needed libraries
-import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router'
 import { useStore } from 'vuex';
 import { VueFlow, useVueFlow, Panel } from '@vue-flow/core'
@@ -197,6 +197,13 @@ import onWheel from '../../composables/flowHelper/onWheel';
 import ExpandedCourses from '../nodes_items/ExpandedCourses.vue';
 import moodleStorage from 'core/localstorage';
 import { viewportKey, saveViewport, loadViewport } from '../../composables/flowHelper/viewportStorage';
+import { notify } from '@kyvg/vue3-notification';
+import { parsePathViewSettings } from '../../composables/flowHelper/pathViewSettings';
+import { useUserPathRefresh } from '../../composables/useUserPathRefresh';
+import {
+  autofocusMode, autofocusRole, compareUserPathStates, focusNodes, resolveAutofocusTarget,
+} from '../../composables/flowHelper/autofocus';
+import { rememberFocus, restoreFocusWhenReady } from '../../composables/flowHelper/keyboardFocus';
 
 // Load Router
 const router = useRouter()
@@ -207,7 +214,7 @@ const store = useStore()
 
 const {
   addNodes, removeNodes, findNode,
-  zoomTo, viewport, setCenter, fitView, setViewport
+  zoomTo, viewport, setCenter, fitView, setViewport, onMoveStart, onMoveEnd
 } = useVueFlow()
 
 // Bumping this key remounts the whole VueFlow canvas - used by the async in-tab refresh to
@@ -259,63 +266,136 @@ const statusSignature = (lp) => {
   }).join('|')
 }
 
-// Async in-tab refresh (#485): when the student returns to this browser tab (having e.g.
-// finished a course in another tab), silently re-fetch their path. If a node's status
-// changed, reassign user_learningpath (the existing watch re-renders via setFlowchart, the
-// same path a page load takes) and remount the VueFlow canvas via flowKey so the re-render
-// is clean - a wholesale in-place nodes update corrupts VueFlow's state (stack expand,
-// clickability). The viewport is then restored so the student keeps their place. Scoped to
-// the student's own read-only view so it can never clobber a teacher's unsaved edits.
-let refreshInFlight = false
-let refreshTimeout = null
-const refreshPath = () => {
-  if (store.state.view !== 'student' || props.user_learningpath_parent) {
+// Refresh of the open path (#485, mod_adele #26) and auto-focus after a real
+// change (mod_adele #27). The site's settings decide how (focus only, polling
+// while active, polling in the background, or nothing); useUserPathRefresh
+// keeps one request at a time and removes its listeners and timers on
+// unmount. A refresh only reads the stored state. If a node's state changed,
+// user_learningpath is reassigned (the watch re-renders through
+// setFlowchart, as a page load does) and the canvas remounts via flowKey -
+// a wholesale in-place nodes update corrupts VueFlow's state (stack expand,
+// clickability). Then the view either moves to the change (auto-focus, by
+// the role's mode) or keeps the person's place. A teacher's view refreshes
+// too, but never while they are working in it (a dialog, a field, a drag or
+// zoom), so nothing they are doing is interrupted.
+const pathViewSettings = computed(() => store.state.pathviewsettings || parsePathViewSettings(null))
+const focusRole = () => autofocusRole({
+  view: store.state.view,
+  currentUser: store.state.user,
+  pathUser: store.state.view === 'student' ? store.state.user : route.params.userId,
+})
+let moving = false
+let lastFocusedSignature = null
+const interactionBusy = () => {
+  if (moving) {
+    return true
+  }
+  if (document.querySelector('.modal.show')) {
+    return true
+  }
+  const active = document.activeElement
+  return !!(active && flowContainer.value && flowContainer.value.contains(active) &&
+    ['INPUT', 'SELECT', 'TEXTAREA'].includes(active.tagName))
+}
+onMoveStart(() => {
+  moving = true
+})
+onMoveEnd(() => {
+  moving = false
+})
+const refreshParams = () => (store.state.view === 'student'
+  ? { learningpathId: store.state.learningPathID, userId: store.state.user }
+  : route.params)
+const onRefreshResult = async (fresh, reason) => {
+  if (fresh && fresh.json && fresh.json.tree &&
+      statusSignature(fresh) !== statusSignature(user_learningpath.value)) {
+    const previous = user_learningpath.value
+    const busy = interactionBusy()
+    // Capture the exact current viewport so the remount below can restore it precisely,
+    // independent of the debounced localStorage save.
+    const savedviewport = (viewport.value && typeof viewport.value.zoom === 'number')
+      ? { x: viewport.value.x, y: viewport.value.y, zoom: viewport.value.zoom }
+      : null
+    const changes = compareUserPathStates(previous, fresh)
+    const signature = statusSignature(fresh)
+    const target = (!busy && signature !== lastFocusedSignature)
+      ? resolveAutofocusTarget({
+        mode: autofocusMode(pathViewSettings.value, focusRole()),
+        changes,
+        currentPath: fresh,
+      })
+      : []
+    // The keyboard focus stays where it was: the canvas is rebuilt, the
+    // focused element gets its successor's focus back (mod_adele #27).
+    const keyboard = rememberFocus(flowContainer.value)
+    user_learningpath.value = fresh
+    await nextTick()
+    flowKey.value++
+    await nextTick()
+    setTimeout(() => {
+      restoreFocusWhenReady(() => flowContainer.value, keyboard)
+      if (target.length) {
+        lastFocusedSignature = signature
+        // The remounted canvas measures its nodes a moment later; a fit
+        // before that has no sizes to fit.
+        whenMeasured(target, () => focusNodes(target, fitView))
+      } else if (savedviewport) {
+        setViewport(savedviewport, { duration: 0 })
+      } else {
+        fitView({ padding: 0.2, duration: 0 })
+      }
+    }, 300)
+  }
+  // The progress/ranking list on the same page follows a return to the page
+  // (#568) - other participants' progress changes even when the own state
+  // did not. A poll reads the own path only (mod_adele #26).
+  if (reason === 'focus' && store.state.view === 'student') {
+    await store.dispatch('fetchUserPathRelations')
+  }
+}
+/**
+ * Run once the given nodes have their size on the canvas (at most 3 s).
+ *
+ * @param {string[]} ids
+ * @param {Function} done
+ */
+const whenMeasured = (ids, done) => {
+  const started = Date.now()
+  const check = () => {
+    const measured = ids.every((id) => {
+      const node = findNode(id)
+      return node && node.dimensions && node.dimensions.width > 0
+    })
+    if (measured || Date.now() - started > 3000) {
+      done()
+    } else {
+      setTimeout(check, 100)
+    }
+  }
+  check()
+}
+let pathRefresh = null
+const startRefresh = () => {
+  if (pathRefresh) {
     return
   }
-  clearTimeout(refreshTimeout)
-  refreshTimeout = setTimeout(async () => {
-    if (refreshInFlight) {
-      return
-    }
-    refreshInFlight = true
-    try {
-      const fresh = await store.dispatch('fetchUserPathRelation', {
-        learningpathId: store.state.learningPathID,
-        userId: store.state.user,
-      })
-      if (fresh && fresh.json && fresh.json.tree &&
-          statusSignature(fresh) !== statusSignature(user_learningpath.value)) {
-        // Capture the exact current viewport so the remount below can restore it precisely,
-        // independent of the debounced localStorage save.
-        const savedviewport = (viewport.value && typeof viewport.value.zoom === 'number')
-          ? { x: viewport.value.x, y: viewport.value.y, zoom: viewport.value.zoom }
-          : null
-        user_learningpath.value = fresh
-        await nextTick()
-        // Remount the canvas cleanly with the fresh data, then keep the student's place.
-        flowKey.value++
-        await nextTick()
-        setTimeout(() => {
-          if (savedviewport) {
-            setViewport(savedviewport, { duration: 0 })
-          } else {
-            fitView({ padding: 0.2, duration: 0 })
-          }
-        }, 300)
+  pathRefresh = useUserPathRefresh({
+    fetch: () => store.dispatch('fetchUserPathRelation', refreshParams()),
+    onResult: onRefreshResult,
+    settings: pathViewSettings.value,
+    isBusy: interactionBusy,
+    onPersistentError: () => notify({
+      type: 'warn',
+      title: store.state.strings.path_refresh_failed,
+    }),
+    log: (message, error) => {
+      if (window.M && window.M.cfg && window.M.cfg.developerdebug) {
+        // eslint-disable-next-line no-console
+        console.debug(message, error)
       }
-      // The progress/ranking list on the same page must follow the refresh
-      // too - unconditionally, because OTHER participants' progress changes
-      // even when the student's own status signature did not (#568).
-      await store.dispatch('fetchUserPathRelations')
-    } finally {
-      refreshInFlight = false
-    }
-  }, 300)
-}
-const onVisibilityChange = () => {
-  if (document.visibilityState === 'visible') {
-    refreshPath()
-  }
+    },
+  })
+  pathRefresh.start()
 }
 
 // Persist the student's viewport (pan + zoom) per learning-path + user, so a genuine
@@ -385,7 +465,10 @@ onMounted( async () => {
   if (!store.state.availablecourses) {
     store.dispatch('fetchAvailablecourses')
   }
-  if(!props.user_learningpath_parent){
+  // The parent (StudentView) has loaded the path already: one load, not two.
+  // The prop was read under another name (user_learningpath_parent) before,
+  // so every student view loaded the path twice (mod_adele #32).
+  if(!props.userlearningpathparent){
     let params = []
     if (store.state.view == 'student') {
       params = {
@@ -400,7 +483,7 @@ onMounted( async () => {
     }
     user_learningpath.value  = await store.dispatch('fetchUserPathRelation', params)
   } else {
-    user_learningpath.value = props.user_learningpath_parent
+    user_learningpath.value = props.userlearningpathparent
   }
   if(user_learningpath.value){
     setFlowchart()
@@ -417,10 +500,8 @@ onMounted( async () => {
     resizeObserver = new ResizeObserver(onContainerResize)
     resizeObserver.observe(flowContainer.value)
   }
-  // Refresh the path in place when the student returns to the tab (#485).
-  document.addEventListener('visibilitychange', onVisibilityChange)
-  window.addEventListener('focus', refreshPath)
-  window.addEventListener('pageshow', refreshPath)
+  // Keep the path current by the site's settings - after the one first load (#485, mod_adele #26).
+  startRefresh()
   if (store.state.user == store.state.lpuserpathrelation.user_id) {
     await store.dispatch('updateUserPathRelation', {
       lpuserpathid: store.state.lpuserpathrelation.id,
@@ -434,11 +515,11 @@ onUnmounted(() => {
     resizeObserver = null
   }
   clearTimeout(fitTimeout)
-  clearTimeout(refreshTimeout)
   clearTimeout(saveViewportTimeout)
-  document.removeEventListener('visibilitychange', onVisibilityChange)
-  window.removeEventListener('focus', refreshPath)
-  window.removeEventListener('pageshow', refreshPath)
+  if (pathRefresh) {
+    pathRefresh.stop()
+    pathRefresh = null
+  }
 })
 
 const handleZoomLock = (node) => {

@@ -29,6 +29,7 @@ import Notifications from '@kyvg/vue3-notification'
 import { createAppRouter } from './router/router'
 import tooltipDirective from './directives/tooltip';
 import A11yLiveRegion from './components/A11yLiveRegion.vue';
+import { parsePathViewSettings } from './composables/flowHelper/pathViewSettings';
 
 
 // Enables the Composition API
@@ -86,6 +87,8 @@ function init() {
             const quizSettingValue = localAdeleAppElement.getAttribute('quizsetting');
             store.state.quizsetting = quizSettingValue;
             store.state.wwwroot = localAdeleAppElement.getAttribute('wwwroot');
+            // Refresh and auto-focus of an open path, site-wide (mod_adele #26, #27).
+            store.state.pathviewsettings = parsePathViewSettings(localAdeleAppElement.getAttribute('pathviewsettings'));
             const editablepathsValue = localAdeleAppElement.getAttribute('editablepaths');
             store.state.editablepaths = JSON.parse(editablepathsValue);
             store.state.version = canUseNewFaIconsnewVersion(localAdeleAppElement.getAttribute('version'));

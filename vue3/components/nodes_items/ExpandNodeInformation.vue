@@ -26,6 +26,7 @@
   import { computed, ref, watch } from 'vue';
   import { useStore } from 'vuex';
   import * as nodeColors from '../../config/nodeColors';
+  import { expandedCoursePanelId, expandedCourseTitle } from '../../composables/nodesHelper/expandedCourse';
 
   const props = defineProps({
     courses: {
@@ -54,13 +55,32 @@
   // The i symbol is a button with a name and a state, so that the card opens
   // without a mouse (#591); Escape closes. Its click bubbles to the container,
   // which toggles - the card itself stays clickable as before.
-  const closeCard = () => {
-    showCard.value = false
+  // Escape closes an open card - and only then is it used up; with the card
+  // closed it goes on and folds the stack (#17, TP-08).
+  const closeCard = (event) => {
+    if (showCard.value) {
+      showCard.value = false
+      if (event) {
+        event.stopPropagation()
+        event.preventDefault()
+      }
+    }
   }
-  const cardId = computed(() => 'adele-course-information-' + props.courses.id)
+  // One id per panel: stack and course (#17) - `courses` is a list, its `id`
+  // was undefined, so every panel's card had the same id.
+  const panelKey = computed(() =>
+    expandedCoursePanelId(
+      props.data?.node_id ?? 'node',
+      props.data?.course_id ?? props.courses?.id ?? props.courses?.[0]?.id?.[0] ?? 'course'
+    )
+  )
+  const cardId = computed(() => panelKey.value + '-information')
   const toggleLabel = computed(() => {
     const what = store.state.strings.a11y_node_information || ''
-    const course = props.courses[0] && (props.courses[0].givenname || props.courses[0].fullname)
+    // The course's name also where the store's course list does not hold it
+    // (a learner's filtered list, #457).
+    const course = (props.courses[0] && (props.courses[0].givenname || props.courses[0].fullname))
+      || expandedCourseTitle(props.data, props.data?.course_id, store.state.availablecourses)
     return course ? what + ': ' + course : what
   })
   // Keep original card background
@@ -101,7 +121,7 @@
 <template>
   <div
     class="icon-container "
-    :class="{ 'card-hover': showCard, [courses.id + '_node_info_listener']: true}"
+    :class="{ 'card-hover': showCard, [panelKey + '_node_info_listener']: true}"
     @click="toggleCard()"
     @keydown.esc="closeCard"
   >

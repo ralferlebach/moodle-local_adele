@@ -136,11 +136,12 @@ describe('#591 the information card of a course in a stack', () => {
     expect(button.element.tagName).toBe('BUTTON');
     expect(button.attributes('aria-label')).toBe('Access and completion criteria: Testkurs 02');
     expect(button.attributes('aria-expanded')).toBe('false');
-    expect(button.attributes('aria-controls')).toBe('adele-course-information-42');
+    // The id carries stack and course, so no two panels share it (#17).
+    expect(button.attributes('aria-controls')).toBe('adele-expanded-course-node-42-information');
 
     await button.trigger('click');
     expect(button.attributes('aria-expanded')).toBe('true');
-    expect(wrapper.find('.additional-card').attributes('id')).toBe('adele-course-information-42');
+    expect(wrapper.find('.additional-card').attributes('id')).toBe('adele-expanded-course-node-42-information');
   });
 
   it('is closed by Escape', async () => {

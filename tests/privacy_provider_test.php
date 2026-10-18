@@ -331,4 +331,74 @@ final class privacy_provider_test extends provider_testcase {
         $this->assertFalse($this->host_enrolled('other'));
         $this->assert_nothing_dangles();
     }
+
+    /**
+     * Several learning paths and role assignments (re-audit TP-06): the
+     * learner and the creator on a second path too, deleted in bulk - every
+     * participation of the learner goes on both paths, with every ADELE
+     * enrolment and the role assignments enrol_adele made; the other
+     * learner's participations on both paths stay; a manual enrolment of the
+     * learner in a host course stays; both paths stay; nothing dangles.
+     *
+     * @return void
+     */
+    public function test_several_paths_in_bulk(): void {
+        global $DB;
+        $gen = $this->getDataGenerator();
+        $node2 = $gen->create_course();
+        $host2 = $gen->create_course();
+        $nodes = [['id' => 'dndnode_1', 'type' => 'custom', 'parentCourse' => ['starting_node'],
+            'data' => ['course_node_id' => [(int) $node2->id]]]];
+        $lp2 = (int) $DB->insert_record('local_adele_learning_paths', (object) [
+            'name' => 'Second path', 'description' => '', 'timecreated' => time(), 'timemodified' => time(),
+            'createdby' => $this->people['creator']->id,
+            'json' => json_encode(['tree' => ['nodes' => $nodes, 'edges' => []]]),
+        ]);
+        foreach (['learner', 'other'] as $key) {
+            $gen->enrol_user($this->people[$key]->id, $node2->id, 'student');
+        }
+        // An enrolment of the learner's own in the host course of path 1.
+        $gen->enrol_user($this->people['learner']->id, $this->host->id, 'student', 'manual');
+        $this->setUser($this->people['creator']);
+        $gen->create_module('adele', [
+            'course' => $host2->id, 'learningpathid' => $lp2, 'participantslist' => [3], 'hostenrolmentmode' => 'visible',
+        ]);
+        $this->runAdhocTasks();
+        $this->setAdminUser();
+        $adeleroles = fn(int $userid) => $DB->count_records(
+            'role_assignments',
+            ['userid' => $userid, 'component' => 'enrol_adele']
+        );
+        $paths = fn(int $userid) => $DB->get_fieldset_select('local_adele_path_user', 'learning_path_id', 'user_id = ?', [$userid]);
+        foreach (['learner', 'other'] as $key) {
+            $ids = array_map('intval', $paths((int) $this->people[$key]->id));
+            sort($ids);
+            $this->assertSame([$this->lpid, $lp2], $ids, "$key on both paths");
+            $this->assertGreaterThan(0, $adeleroles((int) $this->people[$key]->id), "$key holds ADELE roles");
+        }
+
+        provider::delete_data_for_users(new approved_userlist(
+            context_system::instance(),
+            'local_adele',
+            [(int) $this->people['creator']->id, (int) $this->people['learner']->id]
+        ));
+
+        $learner = (int) $this->people['learner']->id;
+        $this->assertSame([], $paths($learner), 'No participation of the learner left.');
+        $this->assertSame(0, $adeleroles($learner), 'No role assignment of enrol_adele left for the learner.');
+        $this->assertSame(0, $DB->count_records_sql(
+            "SELECT COUNT(1) FROM {user_enrolments} ue JOIN {enrol} e ON e.id = ue.enrolid
+              WHERE e.enrol = 'adele' AND ue.userid = :u",
+            ['u' => $learner]
+        ), 'No ADELE enrolment of the learner left.');
+        $this->assertTrue(is_enrolled(\context_course::instance($this->host->id), $learner), 'The own enrolment stays.');
+        $other = (int) $this->people['other']->id;
+        $this->assertCount(2, $paths($other), 'The other learner stays on both paths.');
+        $this->assertGreaterThan(0, $adeleroles($other));
+        foreach ([$this->lpid, $lp2] as $lpid) {
+            $this->assertTrue($DB->record_exists('local_adele_learning_paths', ['id' => $lpid]), 'Both paths stay.');
+        }
+        $this->assertSame(0, $DB->count_records('local_adele_path_user', ['createdby' => $this->people['creator']->id]));
+        $this->assert_nothing_dangles();
+    }
 }

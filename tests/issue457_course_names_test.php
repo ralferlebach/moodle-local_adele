@@ -41,6 +41,7 @@ use advanced_testcase;
  * @copyright  2026 Wunderbyte GmbH
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  * @covers \local_adele\learning_paths::attachcoursenames
+ * @covers \local_adele\learning_paths::addnodemanualcondition
  */
 final class issue457_course_names_test extends advanced_testcase {
     /**
@@ -101,5 +102,59 @@ final class issue457_course_names_test extends advanced_testcase {
         learning_paths::attachcoursenames($node, $coursenames);
 
         $this->assertSame('Teacher Override', $node->data->course_node_id_description->{$key}->fullname);
+    }
+
+    /**
+     * The course's own short and full name go beside the given name, also
+     * when a teacher renamed the course in the node (mod_adele #17).
+     *
+     * @return void
+     */
+    public function test_attachcoursenames_adds_short_and_full_name(): void {
+        global $DB;
+        $this->resetAfterTest(true);
+
+        $first = $this->getDataGenerator()->create_course(['fullname' => 'Kurs Eins', 'shortname' => 'K1']);
+        $second = $this->getDataGenerator()->create_course(['fullname' => 'Kurs Eins', 'shortname' => 'K1b']);
+        $coursenames = $DB->get_records_list('course', 'id', [(int) $first->id, (int) $second->id], '', 'id, fullname, shortname');
+        $node = (object) [
+            'data' => (object) [
+                // Order of the stack: second before first.
+                'course_node_id' => [(string) $second->id, (string) $first->id],
+                'course_node_id_description' => (object) [
+                    (string) $first->id => (object) ['fullname' => 'Teacher Override'],
+                ],
+            ],
+        ];
+
+        learning_paths::attachcoursenames($node, $coursenames);
+
+        $desc = $node->data->course_node_id_description;
+        $this->assertSame('Teacher Override', $desc->{(string) $first->id}->fullname);
+        $this->assertSame('Kurs Eins', $desc->{(string) $first->id}->coursefullname);
+        $this->assertSame('K1', $desc->{(string) $first->id}->shortname);
+        $this->assertSame('Kurs Eins', $desc->{(string) $second->id}->fullname);
+        $this->assertSame('K1b', $desc->{(string) $second->id}->shortname, 'Same full name, told apart by the short name.');
+    }
+
+    /**
+     * The view of a path (addnodemanualcondition) carries the short names.
+     *
+     * @return void
+     */
+    public function test_the_path_view_carries_the_short_names(): void {
+        $this->resetAfterTest(true);
+        $course = $this->getDataGenerator()->create_course(['fullname' => 'Stapelkurs', 'shortname' => 'STK']);
+        $json = json_encode([
+            'tree' => ['nodes' => [[
+                'id' => 'dndnode_1',
+                'data' => ['course_node_id' => [(string) $course->id]],
+                'completion' => ['nodes' => []],
+            ]]],
+            'user_path_relation' => (object) [],
+        ]);
+        $out = json_decode(learning_paths::addnodemanualcondition($json, 0), true);
+        $desc = $out['tree']['nodes'][0]['data']['course_node_id_description'][(string) $course->id];
+        $this->assertSame(['fullname' => 'Stapelkurs', 'coursefullname' => 'Stapelkurs', 'shortname' => 'STK'], $desc);
     }
 }

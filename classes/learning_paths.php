@@ -805,7 +805,7 @@ class learning_paths {
             }
         }
         $coursenames = $courseids
-            ? $DB->get_records_list('course', 'id', array_values($courseids), '', 'id, fullname')
+            ? $DB->get_records_list('course', 'id', array_values($courseids), '', 'id, fullname, shortname')
             : [];
 
         foreach ($json->tree->nodes as $node) {
@@ -862,9 +862,11 @@ class learning_paths {
      * Attach resolved course full names to a node's course_node_id_description,
      * so the frontend can label course cards independently of the filtered
      * availablecourses pool (issue #457). Existing (teacher-given) names are kept.
+     * The course's own short and full name go beside it, so a panel of a
+     * stacked node names its course unmistakably (mod_adele #17).
      *
      * @param object $node The decoded learning-path node.
-     * @param array $coursenames Map of courseid => record with ->fullname.
+     * @param array $coursenames Map of courseid => record with ->fullname (and ->shortname).
      * @return void
      */
     public static function attachcoursenames($node, $coursenames) {
@@ -887,6 +889,10 @@ class learning_paths {
                 // Use the raw fullname, matching how get_availablecourses already
                 // exposes course names (c.fullname, PARAM_TEXT, no format_string).
                 $node->data->course_node_id_description->{$key}->fullname = $coursenames[$courseid]->fullname;
+            }
+            $node->data->course_node_id_description->{$key}->coursefullname = $coursenames[$courseid]->fullname;
+            if (isset($coursenames[$courseid]->shortname)) {
+                $node->data->course_node_id_description->{$key}->shortname = $coursenames[$courseid]->shortname;
             }
         }
     }

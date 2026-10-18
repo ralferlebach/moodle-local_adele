@@ -119,6 +119,61 @@ if ($hassiteconfig) {
         )
     );
 
+    // The open learning path view (mod_adele #26, #27): how it refreshes and
+    // where it focuses after a change. Site-wide, handed to the page once.
+    $settings->add(new admin_setting_heading(
+        $componentname . '/pathviewheading',
+        get_string('pathview_heading', $componentname),
+        ''
+    ));
+    $settings->add(new admin_setting_configselect(
+        $componentname . '/pathpollingmode',
+        get_string('pathpollingmode', $componentname),
+        get_string('pathpollingmode_desc', $componentname),
+        \local_adele\path_view_settings::POLLING_ACTIVE,
+        [
+            0 => get_string('pathpollingmode_0', $componentname),
+            1 => get_string('pathpollingmode_1', $componentname),
+            2 => get_string('pathpollingmode_2', $componentname),
+            3 => get_string('pathpollingmode_3', $componentname),
+        ]
+    ));
+    foreach (\local_adele\path_view_settings::BOUNDS as $name => [$default, $min, $max]) {
+        $settings->add(new \local_adele\admin_setting_bounded_int(
+            $componentname . '/' . $name,
+            get_string($name, $componentname),
+            get_string($name . '_desc', $componentname, (object) ['min' => $min, 'max' => $max]),
+            $default,
+            $min,
+            $max
+        ));
+    }
+    $settings->add(new admin_setting_configcheckbox(
+        $componentname . '/pathautofocusenabled',
+        get_string('pathautofocusenabled', $componentname),
+        get_string('pathautofocusenabled_desc', $componentname),
+        1
+    ));
+    $focusmodes = [
+        0 => get_string('pathautofocusmode_0', $componentname),
+        1 => get_string('pathautofocusmode_1', $componentname),
+        2 => get_string('pathautofocusmode_2', $componentname),
+    ];
+    $settings->add(new admin_setting_configselect(
+        $componentname . '/pathautofocusteachermode',
+        get_string('pathautofocusteachermode', $componentname),
+        get_string('pathautofocusteachermode_desc', $componentname),
+        \local_adele\path_view_settings::FOCUS_LASTCHANGE,
+        $focusmodes
+    ));
+    $settings->add(new admin_setting_configselect(
+        $componentname . '/pathautofocuslearnermode',
+        get_string('pathautofocuslearnermode', $componentname),
+        get_string('pathautofocuslearnermode_desc', $componentname),
+        \local_adele\path_view_settings::FOCUS_NEXTOPEN,
+        $focusmodes
+    ));
+
     // Build the list of course-assignable roles (used by the assistant-role
     // trigger setting below).
     $studentroleid = [];

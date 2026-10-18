@@ -289,6 +289,88 @@ class enrol_state {
     }
 
     /**
+     * The one definition of an effective course enrolment of one's own
+     * (mod_adele #30), as SQL over a user_enrolments alias and its enrol
+     * alias: not made by ADELE itself (mod_adele #37), the method enabled,
+     * the enrolment active (not suspended) and inside its time window.
+     *
+     * The site setting mod_adele/sourcesincludesuspended lets suspended
+     * enrolments count as well (the behaviour before #30); the time window
+     * and the method's status always count.
+     *
+     * @param string $ue Alias of {user_enrolments}.
+     * @param string $e Alias of {enrol}.
+     * @return array [string $sql, array $params] with unique named parameters.
+     */
+    public static function effective_enrolment_sql(string $ue = 'ue', string $e = 'e'): array {
+        static $counter = 0;
+        $counter++;
+        $p = 'effenrol' . $counter;
+        $now = \core\di::get(\core\clock::class)->time();
+        $sql = "{$e}.enrol <> 'adele'
+                AND {$e}.status = :{$p}enabled
+                AND ({$ue}.timestart = 0 OR {$ue}.timestart <= :{$p}now1)
+                AND ({$ue}.timeend = 0 OR {$ue}.timeend > :{$p}now2)";
+        $params = [$p . 'enabled' => ENROL_INSTANCE_ENABLED, $p . 'now1' => $now, $p . 'now2' => $now];
+        if (!self::suspended_enrolments_count()) {
+            $sql .= " AND {$ue}.status = :{$p}active";
+            $params[$p . 'active'] = ENROL_USER_ACTIVE;
+        }
+        return [$sql, $params];
+    }
+
+    /**
+     * Whether the site lets suspended enrolments count as a source
+     * (setting of mod_adele, off by default; mod_adele #30).
+     *
+     * @return bool
+     */
+    public static function suspended_enrolments_count(): bool {
+        return !empty(get_config('mod_adele', 'sourcesincludesuspended'));
+    }
+
+    /**
+     * Of the given courses: those in which the user holds an effective
+     * enrolment of their own ({@see effective_enrolment_sql()}).
+     *
+     * @param int $userid The user.
+     * @param int[] $courseids The courses.
+     * @return int[] Course ids.
+     */
+    public static function get_effectively_enrolled_courseids(int $userid, array $courseids): array {
+        global $DB;
+        $courseids = array_values(array_unique(array_map('intval', $courseids)));
+        if (!$courseids) {
+            return [];
+        }
+        [$insql, $inparams] = $DB->get_in_or_equal($courseids, SQL_PARAMS_NAMED, 'effc');
+        [$effsql, $effparams] = self::effective_enrolment_sql();
+        return array_map('intval', $DB->get_fieldset_sql(
+            "SELECT DISTINCT e.courseid
+               FROM {user_enrolments} ue
+               JOIN {enrol} e ON e.id = ue.enrolid
+              WHERE ue.userid = :effuserid
+                    AND {$effsql}
+                    AND e.courseid {$insql}",
+            ['effuserid' => $userid] + $effparams + $inparams
+        ));
+    }
+
+    /**
+     * Whether a user holds an effective enrolment of their own in a course
+     * and takes part in it as a participant - the full test of a
+     * participant source (mod_adele #30, #37; local_adele #587).
+     *
+     * @param int $courseid The course.
+     * @param int $userid The user.
+     * @return bool
+     */
+    public static function is_effective_participant(int $courseid, int $userid): bool {
+        return self::get_effectively_enrolled_courseids($userid, [$courseid])
+            && self::is_participant($courseid, $userid);
+    }
+
+    /**
      * Whether a user takes part in a course AS A PARTICIPANT, by their own
      * right (#587).
      *
@@ -362,18 +444,15 @@ class enrol_state {
             return [];
         }
         [$usersql, $userparams] = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED, 'usr');
-        $now = \core\di::get(\core\clock::class)->time();
+        [$effsql, $effparams] = self::effective_enrolment_sql();
         $ownright = $DB->get_fieldset_sql(
             "SELECT DISTINCT ue.userid
                FROM {user_enrolments} ue
                JOIN {enrol} e ON e.id = ue.enrolid
               WHERE e.courseid = :courseid
-                    AND e.enrol <> 'adele'
-                    AND e.status = :enabled
-                    AND (ue.timestart = 0 OR ue.timestart <= :now1)
-                    AND (ue.timeend = 0 OR ue.timeend > :now2)
+                    AND {$effsql}
                     AND ue.userid {$usersql}",
-            ['courseid' => $courseid, 'enabled' => ENROL_INSTANCE_ENABLED, 'now1' => $now, 'now2' => $now] + $userparams
+            ['courseid' => $courseid] + $effparams + $userparams
         );
         if (!$ownright) {
             return [];

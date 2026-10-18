@@ -1979,6 +1979,67 @@ if ($privacypath && $privacysecond) {
     ];
 }
 
+// S37: an enrolment ADELE made for one path is no source for another path
+// that shares the course (mod_adele #37, sources 2 and 3). "E2E Linear vier
+// Schritte" is embedded into E2E37A for its members; fx_37_learner is a
+// member of E2E37A only, so enrol_adele enrols them into T01 (its starting
+// node) - an enrolment of ADELE's own. E2E37B is empty: the chain embeds
+// "Linear A2" there (starting node T01) with the sources "starting node" and
+// "any course". Back to exactly that on every run: no enrolment of one's own
+// in T01..T04, no activity in E2E37B.
+$s37 = null;
+$s37path = (int) $DB->get_field('local_adele_learning_paths', 'id', ['name' => 'E2E Linear vier Schritte'], IGNORE_MULTIPLE);
+if ($s37path && !empty($imported['Linear A2'])) {
+    $s37learner = local_adele_fixture_person('fx_37_learner', 'Shared Learner', $fixturepassword);
+    $s37json = json_decode((string) $DB->get_field('local_adele_learning_paths', 'json', ['id' => $s37path]), true);
+    foreach ($s37json['tree']['nodes'] ?? [] as $node) {
+        foreach ((array) ($node['data']['course_node_id'] ?? []) as $courseid) {
+            foreach (enrol_get_instances((int) $courseid, false) as $instance) {
+                $plugin = enrol_get_plugin($instance->enrol);
+                if ($plugin && $DB->record_exists('user_enrolments', ['enrolid' => $instance->id, 'userid' => $s37learner->id])) {
+                    $plugin->unenrol_user($instance, $s37learner->id);
+                }
+            }
+        }
+    }
+    $s37b = $DB->get_record('course', ['shortname' => 'E2E37B']);
+    if (!$s37b) {
+        $s37b = create_course((object) [
+            'shortname' => 'E2E37B',
+            'fullname' => 'E2E host course E2E37B',
+            'category' => (int) $options['category'],
+            'summary' => 'Embeds a second path that shares T01 (mod_adele #37). Created by seed_fixtures.php.',
+            'summaryformat' => FORMAT_HTML,
+        ]);
+    }
+    foreach ($DB->get_records('adele', ['course' => $s37b->id]) as $activity) {
+        $cm = get_coursemodule_from_instance('adele', $activity->id, $s37b->id);
+        if ($cm) {
+            course_delete_module($cm->id);
+        }
+    }
+    foreach (enrol_get_instances((int) $s37b->id, false) as $instance) {
+        $plugin = enrol_get_plugin($instance->enrol);
+        if ($plugin && $DB->record_exists('user_enrolments', ['enrolid' => $instance->id, 'userid' => $s37learner->id])) {
+            $plugin->unenrol_user($instance, $s37learner->id);
+        }
+    }
+    $DB->delete_records('local_adele_path_user', [
+        'user_id' => $s37learner->id,
+        'learning_path_id' => (int) $imported['Linear A2'],
+    ]);
+    $s37a = local_adele_fixture_host_course(
+        'E2E37A',
+        'E2E 37 Pfad A',
+        $s37path,
+        $s37learner,
+        (int) $options['category'],
+        1
+    );
+    $s37 = ['a' => $s37a, 'b' => $s37b, 'learner' => $s37learner, 'patha' => $s37path,
+        'pathb' => (int) $imported['Linear A2'], 't01' => (int) $s37json['tree']['nodes'][0]['data']['course_node_id'][0]];
+}
+
 // KZ: course access in the teacher view of mod_adele (issue "Kurszugriff in
 // der Lehrendenansicht"). "Verzweigt, gestapelt B1" - node 1 is a stack of
 // three courses - embedded into E2EKZ, with an editing teacher, a teacher
@@ -2274,6 +2335,15 @@ if ($timepath && $timelearner) {
     printf("export ADELE_FIXTURE_TIMEWINDOW2_START='%d'\n", LOCAL_ADELE_FIXTURE_WINDOW2_START);
 }
 printf("export ADELE_FIXTURE_TEACHER='%s'\n", $teacher->username);
+if ($s37) {
+    printf("export ADELE_FIXTURE_S37_HOST_A='%d'\n", $s37['a']->id);
+    printf("export ADELE_FIXTURE_S37_HOST_B='%d'\n", $s37['b']->id);
+    printf("export ADELE_FIXTURE_S37_LEARNER='%s'\n", $s37['learner']->username);
+    printf("export ADELE_FIXTURE_S37_LEARNER_NAME='%s'\n", fullname($s37['learner']));
+    printf("export ADELE_FIXTURE_S37_PATH_A='%d'\n", $s37['patha']);
+    printf("export ADELE_FIXTURE_S37_PATH_B='%d'\n", $s37['pathb']);
+    printf("export ADELE_FIXTURE_S37_T01='%d'\n", $s37['t01']);
+}
 if ($kz) {
     printf("export ADELE_FIXTURE_KZ_HOST='%d'\n", $kz['host']->id);
     printf("export ADELE_FIXTURE_KZ_CM='%d'\n", $kz['cm']);

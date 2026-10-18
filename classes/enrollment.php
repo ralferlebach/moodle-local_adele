@@ -60,6 +60,11 @@ class enrollment {
         if (!enrol_state::is_participant((int) $params->courseid, (int) $params->relateduserid)) {
             return;
         }
+        // ... and only with an effective enrolment of one's own: a suspended
+        // or not (yet) valid enrolment carries nothing (mod_adele #30).
+        if (!enrol_state::get_effectively_enrolled_courseids((int) $params->relateduserid, [(int) $params->courseid])) {
+            return;
+        }
         $learningpaths = self::buildsqlquerypath($params->courseid);
         if ($learningpaths) {
             foreach ($learningpaths as $learningpath) {
@@ -86,7 +91,7 @@ class enrollment {
         if ((($event->other ?? [])['component'] ?? '') === 'enrol_adele') {
             return;
         }
-        if (!is_enrolled($context, (int) $event->relateduserid)) {
+        if (!enrol_state::get_effectively_enrolled_courseids((int) $event->relateduserid, [(int) $context->instanceid])) {
             return;
         }
         self::enrolled((object) [

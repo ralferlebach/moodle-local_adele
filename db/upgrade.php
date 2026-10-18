@@ -539,5 +539,13 @@ function xmldb_local_adele_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2026100721, 'local', 'adele');
     }
 
+    // The plugin enrol_adele is a required companion; no enrol_manual fallback
+    // any more (decision 2026-10-17, mod_adele #20). The role setting of that
+    // fallback has no use left and goes.
+    if ($oldversion < 2026100734) {
+        unset_config('enroll_as_setting', 'local_adele');
+        upgrade_plugin_savepoint(true, 2026100734, 'local', 'adele');
+    }
+
     return true;
 }

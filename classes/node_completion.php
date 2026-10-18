@@ -83,11 +83,15 @@ class node_completion {
                         json_decode(json_encode($node), true),
                         $event->other['userpath']
                     );
-                    self::enrol_user_group(
-                        $userpath->tree->nodes,
-                        $subscribecourse,
-                        $event->other['userpath']->user_id
-                    );
+                    // A course deleted since it was put into the path has no
+                    // groups and gets no enrolment (#601).
+                    if (learning_path_update::get_course($subscribecourse)) {
+                        self::enrol_user_group(
+                            $userpath->tree->nodes,
+                            $subscribecourse,
+                            $event->other['userpath']->user_id
+                        );
+                    }
                 }
             }
         }

@@ -50,14 +50,21 @@ class learning_path_update {
     public static $courses = [];
 
     /**
-     * Return single course from id
+     * Return single course from id - or null when the course no longer exists.
+     *
+     * A learning path keeps the ids of its node courses; a course deleted
+     * since must not stop the evaluation of the path (#601). Callers treat
+     * null as a course without completion and without progress.
      *
      * @param int $courseid
+     * @return \stdClass|null
      */
     public static function get_course($courseid) {
-        if (!isset(self::$courses[$courseid])) {
-            $course = get_course($courseid);
-            self::$courses[$courseid] = $course;
+        global $DB;
+        if (!array_key_exists($courseid, self::$courses)) {
+            self::$courses[$courseid] = $DB->record_exists('course', ['id' => (int) $courseid])
+                ? get_course($courseid)
+                : null;
         }
         return self::$courses[$courseid];
     }

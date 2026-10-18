@@ -955,7 +955,10 @@ class learning_paths {
         $completioncolumnprogress = [];
         foreach ($node->data->course_node_id as $coursenodeid) {
             $course = learning_path_update::get_course($coursenodeid);
-            $courseprogrressarray[$coursenodeid] = (int) progress::get_course_progress_percentage($course, $userid);
+            // A deleted node course has no progress (#601).
+            $courseprogrressarray[$coursenodeid] = $course
+                ? (int) progress::get_course_progress_percentage($course, $userid)
+                : 0;
         }
         arsort($courseprogrressarray);
         $sortedcourseprogress = array_values($courseprogrressarray);

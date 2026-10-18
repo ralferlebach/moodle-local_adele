@@ -103,6 +103,14 @@ $DB->set_field('user', 'password', hash_internal_user_password($adminpassword), 
 $DB->set_field('tool_usertours_tours', 'enabled', 0);
 \cache::make('tool_usertours', 'tourdata')->purge();
 
+// Teachers' access to the node courses (local_adele #600): back to the
+// shipped state on every run - a chain changes the allowed modes and the
+// default through the administration pages.
+if (get_config('mod_adele', 'version')) {
+    set_config('teachercourseaccessmodes', 'existing_only', 'mod_adele');
+    set_config('teachercourseaccessdefault', 'existing_only', 'mod_adele');
+}
+
 // The fixture accounts come from the backup with unknown passwords.
 $fixturepassword = getenv('ADELE_FIXTURE_PASSWORD') ?: 'Playwright!23';
 

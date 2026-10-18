@@ -28,7 +28,7 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-import { mount } from '@vue/test-utils';
+import { flushPromises, mount } from '@vue/test-utils';
 import TeacherCourseAccess from '../../../../components/nodes_items/TeacherCourseAccess.vue';
 import { makeStore } from '../../fixtures/storeFactory';
 
@@ -205,6 +205,244 @@ describe('TeacherCourseAccess - keyboard and assistive technology', () => {
     wrapper.vm.$store.state.activeNodeId = 'dndnode_1';
     await wrapper.vm.$nextTick();
     expect(mutations.announce).toHaveBeenCalledWith(expect.anything(), '2 of 3 courses of this node are open to you.');
+    wrapper.unmount();
+  });
+});
+
+describe('TeacherCourseAccess - mode "request" (TP2)', () => {
+  const REQ = [
+    { courseid: 11, shortname: 'MAT-101', fullname: 'Mathematics I', nodeids: ['dndnode_1'], status: 'open', url: 'https://example.test/course/view.php?id=11' },
+    { courseid: 12, shortname: 'STAT-P', fullname: 'Statistics', nodeids: ['dndnode_1'], status: 'request' },
+    { courseid: 13, shortname: 'PRAX', fullname: 'Practice II', nodeids: ['dndnode_1'], status: 'request_copy' },
+  ];
+  const TEXTS = {
+    ...STRINGS,
+    teacher_course_request: 'Request access',
+    teacher_course_requestcopy: 'Prepare request',
+    teacher_course_request_label: 'Request access to the course {$a->shortname} – {$a->fullname}',
+    teacher_course_requestcopy_label: 'Prepare a request for access to the course {$a->shortname} – {$a->fullname}',
+    teacher_course_status_request: 'No access – you can ask',
+    teacher_course_status_requestcopy: 'No access – nobody to ask',
+    teacher_course_status_requested: 'Request sent',
+    teacher_request_sent: 'Request for {$a->course} sent to {$a->recipient}.',
+  };
+
+  /**
+   * Mount with request rows and a dialog stub that can report "sent".
+   */
+  function requests() {
+    const mutations = { setActiveNode: jest.fn(), announce: jest.fn() };
+    const store = makeStore({
+      view: 'teacher',
+      activeNodeId: 'dndnode_1',
+      nodeCourseAccess: { loading: false, mode: 'request', courses: REQ },
+      strings: TEXTS,
+    }, { mutations });
+    const wrapper = mount(TeacherCourseAccess, {
+      props: { nodeId: 'dndnode_1', courseIds: [11, 12, 13] },
+      global: {
+        plugins: [store],
+        stubs: { CourseAccessRequestDialog: { name: 'CourseAccessRequestDialog', props: ['course'], template: '<div data-testid="dialog-stub" />' } },
+      },
+      attachTo: document.body,
+    });
+    return { wrapper, mutations };
+  }
+
+  it('each row: its own status and action - link, request, or prepare', () => {
+    const { wrapper } = requests();
+    const rows = wrapper.findAll('li.adele-course-access-row');
+    expect(rows.map((r) => r.find('.adele-course-access-status').text()))
+      .toEqual(['Access', 'No access – you can ask', 'No access – nobody to ask']);
+    expect(rows[0].find('a').exists()).toBe(true);
+    expect(rows[0].find('button').exists()).toBe(false);
+    const ask = rows[1].find('button');
+    expect(ask.attributes('type')).toBe('button');
+    expect(ask.text()).toBe('Request access');
+    expect(ask.attributes('aria-label')).toBe('Request access to the course STAT-P – Statistics');
+    expect(rows[1].find('a').exists()).toBe(false);
+    expect(rows[2].find('button').text()).toBe('Prepare request');
+    expect(rows[2].find('button').attributes('aria-label')).toBe('Prepare a request for access to the course PRAX – Practice II');
+    wrapper.unmount();
+  });
+
+  it('the button opens the dialog for exactly that course; closing gives the focus back to the button', async () => {
+    const { wrapper } = requests();
+    expect(wrapper.find('[data-testid="dialog-stub"]').exists()).toBe(false);
+    const ask = wrapper.find('[data-testid="node-course-request-12"]');
+    ask.element.focus();
+    await ask.trigger('click');
+    const stub = wrapper.findComponent({ name: 'CourseAccessRequestDialog' });
+    expect(stub.props('course').courseid).toBe(12);
+    document.body.focus();
+    stub.vm.$emit('close');
+    await wrapper.vm.$nextTick();
+    await wrapper.vm.$nextTick();
+    expect(wrapper.find('[data-testid="dialog-stub"]').exists()).toBe(false);
+    expect(document.activeElement).toBe(ask.element);
+    wrapper.unmount();
+  });
+
+  it('sent: the row says so and it is announced; the other rows stay as they were', async () => {
+    const { wrapper, mutations } = requests();
+    await wrapper.find('[data-testid="node-course-request-12"]').trigger('click');
+    wrapper.findComponent({ name: 'CourseAccessRequestDialog' }).vm.$emit('sent', 'Olga Owner');
+    await wrapper.vm.$nextTick();
+    const rows = wrapper.findAll('li.adele-course-access-row');
+    expect(rows[1].find('.adele-course-access-status').text()).toBe('Request sent');
+    expect(rows[2].find('.adele-course-access-status').text()).toBe('No access – nobody to ask');
+    expect(mutations.announce).toHaveBeenCalledWith(expect.anything(), 'Request for STAT-P sent to Olga Owner.');
+    wrapper.unmount();
+  });
+});
+
+describe('TeacherCourseAccess - enrolment modes (TP4)', () => {
+  const ROWS = [
+    { courseid: 11, shortname: 'MAT-101', fullname: 'Mathematics I', nodeids: ['dndnode_1'], status: 'enrol', role: 'Non-editing teacher' },
+    { courseid: 12, shortname: 'STAT-P', fullname: 'Statistics', nodeids: ['dndnode_1'], status: 'unavailable', reason: 'The course is hidden.' },
+  ];
+  const TEXTS = {
+    ...STRINGS,
+    teacher_course_enrol_teacher: 'Enrol as non-editing teacher',
+    teacher_course_enrol_label: '{$a->action}: course {$a->shortname} – {$a->fullname}',
+    teacher_course_status_enrol: 'No access – enrolment possible',
+    teacher_course_status_unavailable: 'No access – not available',
+    teacher_enrol_done: 'Enrolled into {$a->course} as {$a->role}.',
+  };
+
+  /**
+   * Mount with enrolment rows; fetchNodeCourseAccess turns MAT-101 open.
+   */
+  function enrolment() {
+    const mutations = {
+      setActiveNode: jest.fn(),
+      announce: jest.fn(),
+      setNodeCourseAccess: (s, v) => { s.nodeCourseAccess = v; },
+    };
+    const actions = {
+      fetchNodeCourseAccess: jest.fn((context) => context.commit('setNodeCourseAccess', {
+        loading: false,
+        mode: 'enrol_teacher',
+        courses: [{ ...ROWS[0], status: 'open', url: 'https://example.test/course/view.php?id=11' }, ROWS[1]],
+      })),
+    };
+    const store = makeStore({
+      view: 'teacher',
+      activeNodeId: 'dndnode_1',
+      nodeCourseAccess: { loading: false, mode: 'enrol_teacher', courses: ROWS },
+      strings: TEXTS,
+    }, { mutations, actions });
+    const wrapper = mount(TeacherCourseAccess, {
+      props: { nodeId: 'dndnode_1', courseIds: [11, 12] },
+      global: {
+        plugins: [store],
+        stubs: { CourseEnrolConfirmDialog: { name: 'CourseEnrolConfirmDialog', props: ['course'], template: '<div data-testid="enrol-stub" />' } },
+      },
+      attachTo: document.body,
+    });
+    return { wrapper, mutations, actions };
+  }
+
+  it('enrol: a button named by mode and course; unavailable: the reason, no button', () => {
+    const { wrapper } = enrolment();
+    const rows = wrapper.findAll('li.adele-course-access-row');
+    expect(rows.map((r) => r.find('.adele-course-access-status').text()))
+      .toEqual(['No access – enrolment possible', 'No access – not available']);
+    const button = rows[0].find('button');
+    expect(button.text()).toBe('Enrol as non-editing teacher');
+    expect(button.attributes('aria-label')).toBe('Enrol as non-editing teacher: course MAT-101 – Mathematics I');
+    expect(rows[1].find('button').exists()).toBe(false);
+    expect(rows[1].find('a').exists()).toBe(false);
+    expect(rows[1].find('[data-testid="node-course-reason-12"]').text()).toBe('The course is hidden.');
+    wrapper.unmount();
+  });
+
+  it('confirmed: asked again, announced, and the focus on the new link', async () => {
+    const { wrapper, mutations, actions } = enrolment();
+    await wrapper.find('[data-testid="node-course-enrol-11"]').trigger('click');
+    const stub = wrapper.findComponent({ name: 'CourseEnrolConfirmDialog' });
+    expect(stub.props('course').courseid).toBe(11);
+    stub.vm.$emit('enrolled', 'Non-editing teacher');
+    await flushPromises();
+    await wrapper.vm.$nextTick();
+    expect(actions.fetchNodeCourseAccess).toHaveBeenCalled();
+    expect(mutations.announce).toHaveBeenCalledWith(expect.anything(), 'Enrolled into MAT-101 as Non-editing teacher.');
+    expect(document.activeElement).toBe(wrapper.find('[data-testid="node-course-11"] a').element);
+    wrapper.unmount();
+  });
+});
+
+describe('TeacherCourseAccess - edges of the enrolment rows', () => {
+  /**
+   * Mount with given rows and mode.
+   *
+   * @param {object[]} courses
+   * @param {string} mode
+   * @param {object} actions
+   */
+  function edge(courses, mode, actions = {}) {
+    const mutations = { setActiveNode: jest.fn(), announce: jest.fn() };
+    const store = makeStore({
+      view: 'teacher',
+      activeNodeId: 'dndnode_1',
+      nodeCourseAccess: { loading: false, mode, courses },
+      strings: { ...STRINGS, teacher_course_enrol_student: 'Enrol as participant' },
+    }, { mutations, actions });
+    const wrapper = mount(TeacherCourseAccess, {
+      props: { nodeId: 'dndnode_1', courseIds: courses.map((c) => c.courseid) },
+      global: {
+        plugins: [store],
+        stubs: {
+          CourseEnrolConfirmDialog: { name: 'CourseEnrolConfirmDialog', props: ['course'], template: '<div data-testid="enrol-stub" />' },
+          CourseAccessRequestDialog: { name: 'CourseAccessRequestDialog', props: ['course'], template: '<div />' },
+        },
+      },
+      attachTo: document.body,
+    });
+    return { wrapper, mutations };
+  }
+
+  it('the label follows the mode; unavailable without a reason: no reason line; open without a URL: no link', () => {
+    const { wrapper } = edge([
+      { courseid: 1, shortname: 'A', fullname: 'Alpha', status: 'enrol', role: 'Teacher' },
+      { courseid: 2, shortname: 'B', fullname: 'Beta', status: 'unavailable' },
+      { courseid: 3, shortname: 'C', fullname: 'Gamma', status: 'open' },
+    ], 'enrol_editingteacher');
+    expect(wrapper.find('[data-testid="node-course-enrol-1"]').text()).toBe('teacher_course_enrol_editingteacher');
+    expect(wrapper.find('[data-testid="node-course-reason-2"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="node-course-3"] a').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('confirmation closed: the focus back on the button; enrolled with no link afterwards: nothing to focus', async () => {
+    const actions = { fetchNodeCourseAccess: jest.fn() };
+    const { wrapper, mutations } = edge([{ courseid: 1, shortname: 'A', fullname: 'Alpha', status: 'enrol', role: 'Student' }], 'enrol_student', actions);
+    const button = wrapper.find('[data-testid="node-course-enrol-1"]');
+    await button.trigger('click');
+    wrapper.findComponent({ name: 'CourseEnrolConfirmDialog' }).vm.$emit('close');
+    await wrapper.vm.$nextTick();
+    await wrapper.vm.$nextTick();
+    expect(document.activeElement).toBe(button.element);
+
+    await button.trigger('click');
+    wrapper.findComponent({ name: 'CourseEnrolConfirmDialog' }).vm.$emit('enrolled', 'Student');
+    await flushPromises();
+    expect(actions.fetchNodeCourseAccess).toHaveBeenCalled();
+    expect(mutations.announce).toHaveBeenCalledWith(expect.anything(), 'teacher_enrol_done');
+    expect(wrapper.find('[data-testid="enrol-stub"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('no answer yet at all: checking, no rows', () => {
+    const mutations = { setActiveNode: jest.fn(), announce: jest.fn() };
+    const store = makeStore({ view: 'teacher', activeNodeId: 'dndnode_1', nodeCourseAccess: null, strings: STRINGS }, { mutations });
+    const wrapper = mount(TeacherCourseAccess, {
+      props: { nodeId: 'dndnode_1', courseIds: [1] },
+      global: { plugins: [store] },
+      attachTo: document.body,
+    });
+    expect(wrapper.find('.adele-course-access-note').attributes('role')).toBe('status');
+    expect(wrapper.findAll('li')).toHaveLength(0);
     wrapper.unmount();
   });
 });

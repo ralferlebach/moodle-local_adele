@@ -1225,8 +1225,12 @@ class learning_paths {
                 SELECT rosterue.userid
                   FROM {user_enrolments} rosterue
                   JOIN {enrol} rostere ON rostere.id = rosterue.enrolid
-                 WHERE rostere.courseid = :rostercourseid AND rostere.enrol = 'adele'";
+                 WHERE rostere.courseid = :rostercourseid AND rostere.enrol = 'adele'
+                       AND COALESCE(rostere.customint2, 0) <> :rosterteacherkind";
         $params['rostercourseid'] = $courseid;
+        // Teachers enrolled through the teacher view (enrol_adele kind 3,
+        // local_adele #600) are no learners of the course.
+        $params['rosterteacherkind'] = 3;
         return [$sql, $params];
     }
 

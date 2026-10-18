@@ -737,10 +737,40 @@ export function createAppStore() {
                     const answer = await ajax('mod_adele_get_node_course_access', {
                         contextid: context.state.contextid,
                     }, true);
-                    context.commit('setNodeCourseAccess', { loading: false, mode: answer.mode, courses: answer.courses });
+                    context.commit('setNodeCourseAccess', {
+                        loading: false,
+                        mode: answer.mode,
+                        source: answer.source,
+                        courses: answer.courses,
+                    });
                 } catch (e) {
                     context.commit('setNodeCourseAccess', { loading: false, error: true, courses: [] });
                 }
+            },
+            // "Request access" (local_adele #600, TP2): the dialog's data for one
+            // course, and the request itself - sent only when the teacher says
+            // so, refused or accepted by the server; the caller shows what came
+            // back, nothing optimistic.
+            async fetchAccessRequest(context, courseid) {
+                return await ajax('mod_adele_get_access_request', {
+                    contextid: context.state.contextid,
+                    courseid: Number(courseid),
+                }, true);
+            },
+            // Enrol oneself into a node course (TP4) - the role is the server's.
+            async enrolInNodeCourse(context, courseid) {
+                return await ajax('mod_adele_enrol_in_node_course', {
+                    contextid: context.state.contextid,
+                    courseid: Number(courseid),
+                }, true);
+            },
+            async sendAccessRequest(context, params) {
+                return await ajax('mod_adele_send_access_request', {
+                    contextid: context.state.contextid,
+                    courseid: Number(params.courseid),
+                    recipientid: Number(params.recipientid),
+                    message: String(params.message),
+                }, true);
             },
             // Transfer the ownership of a learning path (Adele Manager only, #488).
             async setLpOwner(context, params) {

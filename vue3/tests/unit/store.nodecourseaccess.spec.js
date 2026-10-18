@@ -62,6 +62,31 @@ describe('store - node course access', () => {
     expect(store.state.nodeCourseAccess).toEqual({ loading: true, courses: [] });
   });
 
+  it('the request dialog asks mod_adele with module context and course; a refusal reaches the caller, silently', async () => {
+    moodleAjax.call.mockReturnValue([Promise.resolve({ recipients: [] })]);
+    const store = createAppStore();
+    store.state.contextid = 4711;
+    await store.dispatch('fetchAccessRequest', '12');
+    expect(moodleAjax.call).toHaveBeenCalledWith([{ methodname: 'mod_adele_get_access_request', args: { contextid: 4711, courseid: 12 } }]);
+
+    moodleAjax.call.mockReturnValue([Promise.reject(new Error('accessrequest_norecipient'))]);
+    await expect(store.dispatch('sendAccessRequest', { courseid: 12, recipientid: '7', message: 'Hi' }))
+      .rejects.toThrow('accessrequest_norecipient');
+    expect(moodleAjax.call).toHaveBeenLastCalledWith([{
+      methodname: 'mod_adele_send_access_request',
+      args: { contextid: 4711, courseid: 12, recipientid: 7, message: 'Hi' },
+    }]);
+    expect(moodleNotification.exception).not.toHaveBeenCalled();
+  });
+
+  it('enrolling asks mod_adele with module context and course only - no role from the browser', async () => {
+    moodleAjax.call.mockReturnValue([Promise.resolve({ enrolled: true, role: 'Teacher' })]);
+    const store = createAppStore();
+    store.state.contextid = 4711;
+    await store.dispatch('enrolInNodeCourse', '12');
+    expect(moodleAjax.call).toHaveBeenCalledWith([{ methodname: 'mod_adele_enrol_in_node_course', args: { contextid: 4711, courseid: 12 } }]);
+  });
+
   it('the active tile is one at a time, and can be cleared', () => {
     const store = createAppStore();
     store.commit('setActiveNode', 'dndnode_1');

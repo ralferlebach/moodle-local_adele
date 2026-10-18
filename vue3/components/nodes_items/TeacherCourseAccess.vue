@@ -23,7 +23,8 @@
  * node's own order: the course's short name, its full name (always present
  * as text, not only as a tooltip), the access status in words, and - only
  * when the server says the course is open to this person - a link that
- * opens it in a new tab. What is open is decided by mod_adele on the server
+ * opens it in a new tab; with the mode "request", a button that opens the
+ * request dialog (TP2). What is open is decided by mod_adele on the server
  * (mod_adele_get_node_course_access); this component only renders it.
  *
  * @package    local_adele
@@ -33,8 +34,10 @@
  */ -->
 
 <script setup>
-import { computed, nextTick, ref, watch } from 'vue';
+import { computed, nextTick, reactive, ref, watch } from 'vue';
 import { useStore } from 'vuex';
+import CourseAccessRequestDialog from './CourseAccessRequestDialog.vue';
+import CourseEnrolConfirmDialog from './CourseEnrolConfirmDialog.vue';
 
 const store = useStore();
 
@@ -52,6 +55,12 @@ const props = defineProps({
 });
 
 const expanded = ref(true);
+// The course whose request dialog is open, the button that opened it, and
+// the courses a request was sent for in this view (course id => recipient).
+const requestFor = ref(null);
+const enrolFor = ref(null);
+let requestOpener = null;
+const sent = reactive({});
 const toggle = ref(null);
 const section = ref(null);
 
@@ -120,6 +129,143 @@ function openLabel(course) {
 }
 
 /**
+ * The access status of a row, in words.
+ *
+ * @param {object} course
+ * @returns {string}
+ */
+function statusText(course) {
+  if (sent[course.courseid] !== undefined) {
+    return strings.value.teacher_course_status_requested;
+  }
+  return {
+    open: strings.value.teacher_course_status_open,
+    request: strings.value.teacher_course_status_request,
+    request_copy: strings.value.teacher_course_status_requestcopy,
+    enrol: strings.value.teacher_course_status_enrol,
+    unavailable: strings.value.teacher_course_status_unavailable,
+  }[course.status] || strings.value.teacher_course_status_none;
+}
+
+/**
+ * The accessible name of a row's request button.
+ *
+ * @param {object} course
+ * @returns {string}
+ */
+function requestLabel(course) {
+  const key = course.status === 'request' ? 'teacher_course_request_label' : 'teacher_course_requestcopy_label';
+  return fill(strings.value[key], { shortname: course.label, fullname: course.fullname });
+}
+
+/**
+ * The visible label of a row's enrol button: the activity's mode decides.
+ *
+ * @returns {string}
+ */
+function enrolText() {
+  const mode = access.value.mode || '';
+  return strings.value['teacher_course_' + mode] || strings.value.teacher_course_enrol_student;
+}
+
+/**
+ * The accessible name of a row's enrol button.
+ *
+ * @param {object} course
+ * @returns {string}
+ */
+function enrolLabel(course) {
+  return fill(strings.value.teacher_course_enrol_label, {
+    action: enrolText(),
+    shortname: course.label,
+    fullname: course.fullname,
+  });
+}
+
+/**
+ * Open the enrolment confirmation of a row.
+ *
+ * @param {object} course
+ * @param {Event} event
+ */
+function openEnrol(course, event) {
+  requestOpener = event && event.currentTarget ? event.currentTarget : null;
+  enrolFor.value = course;
+}
+
+/**
+ * Close the enrolment confirmation; the focus goes back to its button.
+ */
+function closeEnrol() {
+  enrolFor.value = null;
+  nextTick(() => {
+    if (requestOpener && document.body.contains(requestOpener)) {
+      requestOpener.focus();
+    }
+  });
+}
+
+/**
+ * Enrolled: ask the server again what is open now, say so, and put the
+ * focus on the course's new link.
+ *
+ * @param {string} role
+ */
+async function onEnrolled(role) {
+  const course = enrolFor.value;
+  enrolFor.value = null;
+  if (!course) {
+    return;
+  }
+  await store.dispatch('fetchNodeCourseAccess');
+  store.commit('announce', fill(strings.value.teacher_enrol_done, { course: course.label, role }));
+  await nextTick();
+  const link = section.value
+    ? section.value.querySelector(`[data-testid="node-course-${Number(course.courseid)}"] a`)
+    : null;
+  if (link) {
+    link.focus();
+  }
+}
+
+/**
+ * Open the request dialog of a row.
+ *
+ * @param {object} course
+ * @param {Event} event
+ */
+function openRequest(course, event) {
+  requestOpener = event && event.currentTarget ? event.currentTarget : null;
+  requestFor.value = course;
+}
+
+/**
+ * Close the request dialog; the focus goes back to its button.
+ */
+function closeRequest() {
+  requestFor.value = null;
+  nextTick(() => {
+    if (requestOpener && document.body.contains(requestOpener)) {
+      requestOpener.focus();
+    }
+  });
+}
+
+/**
+ * The server accepted the request: say so, in the row and aloud.
+ *
+ * @param {string} recipient
+ */
+function onSent(recipient) {
+  const course = requestFor.value;
+  if (course) {
+    sent[course.courseid] = recipient;
+    store.commit('announce', fill(strings.value.teacher_request_sent, { recipient, course: course.label }));
+  }
+  closeRequest();
+}
+
+/**
  * Close the course actions and give the focus back to the tile.
  */
 function close() {
@@ -146,7 +292,7 @@ watch(() => [shown.value, access.value.loading], ([now, loading]) => {
   }
 });
 
-defineExpose({ close, rows });
+defineExpose({ close, rows, requestFor, enrolFor });
 </script>
 
 <template>
@@ -217,7 +363,7 @@ defineExpose({ close, rows });
             :title="course.fullname"
           >{{ course.label }}</span>
           <span class="adele-course-access-status">
-            {{ course.status === 'open' ? strings.teacher_course_status_open : strings.teacher_course_status_none }}
+            {{ statusText(course) }}
           </span>
           <a
             v-if="course.status === 'open' && course.url"
@@ -234,6 +380,28 @@ defineExpose({ close, rows });
             />
             {{ strings.teacher_course_open }}
           </a>
+          <button
+            v-else-if="course.status === 'request' || course.status === 'request_copy'"
+            type="button"
+            class="btn btn-sm btn-outline-primary adele-course-access-request"
+            :aria-label="requestLabel(course)"
+            :aria-describedby="'adele-course-full-' + safeId + '-' + course.courseid"
+            :data-testid="'node-course-request-' + course.courseid"
+            @click="openRequest(course, $event)"
+          >
+            {{ course.status === 'request' ? strings.teacher_course_request : strings.teacher_course_requestcopy }}
+          </button>
+          <button
+            v-else-if="course.status === 'enrol'"
+            type="button"
+            class="btn btn-sm btn-outline-primary adele-course-access-request"
+            :aria-label="enrolLabel(course)"
+            :aria-describedby="'adele-course-full-' + safeId + '-' + course.courseid"
+            :data-testid="'node-course-enrol-' + course.courseid"
+            @click="openEnrol(course, $event)"
+          >
+            {{ enrolText() }}
+          </button>
         </div>
         <div
           :id="'adele-course-full-' + safeId + '-' + course.courseid"
@@ -241,8 +409,27 @@ defineExpose({ close, rows });
         >
           {{ course.fullname }}
         </div>
+        <div
+          v-if="course.status === 'unavailable' && course.reason"
+          class="adele-course-access-full"
+          :data-testid="'node-course-reason-' + course.courseid"
+        >
+          {{ course.reason }}
+        </div>
       </li>
     </ul>
+    <CourseAccessRequestDialog
+      v-if="requestFor"
+      :course="requestFor"
+      @close="closeRequest"
+      @sent="onSent"
+    />
+    <CourseEnrolConfirmDialog
+      v-if="enrolFor"
+      :course="enrolFor"
+      @close="closeEnrol"
+      @enrolled="onEnrolled"
+    />
   </section>
 </template>
 
@@ -301,7 +488,8 @@ defineExpose({ close, rows });
   border-radius: 0.25rem;
   padding: 0 0.3rem;
 }
-.adele-course-access-open {
+.adele-course-access-open,
+.adele-course-access-request {
   margin-left: auto;
 }
 .adele-course-access-full {
@@ -309,7 +497,8 @@ defineExpose({ close, rows });
   color: #343a40;
 }
 .adele-course-access-toggle:focus-visible,
-.adele-course-access-open:focus-visible {
+.adele-course-access-open:focus-visible,
+.adele-course-access-request:focus-visible {
   outline: 3px solid #0f6cbf;
   outline-offset: 2px;
 }

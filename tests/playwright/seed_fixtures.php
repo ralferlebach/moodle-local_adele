@@ -109,6 +109,20 @@ $DB->set_field('tool_usertours_tours', 'enabled', 0);
 if (get_config('mod_adele', 'version')) {
     set_config('teachercourseaccessmodes', 'existing_only', 'mod_adele');
     set_config('teachercourseaccessdefault', 'existing_only', 'mod_adele');
+    set_config('teachercourseaccessrequestrecipients', 'enrolers', 'mod_adele');
+    set_config('teachercourseaccessrequestfallback', '', 'mod_adele');
+    set_config('teachercourseaccesspolicy', 2, 'mod_adele');
+    $kzarchetypes = ['enrol_student' => 'student', 'enrol_teacher' => 'teacher', 'enrol_editingteacher' => 'editingteacher'];
+    foreach ($kzarchetypes as $kzmode => $kzarchetype) {
+        $kzroles = get_archetype_roles($kzarchetype);
+        set_config('teachercourseaccessrole_' . $kzmode, (int) reset($kzroles)->id, 'mod_adele');
+    }
+    if ($DB->get_manager()->table_exists('enrol_adele_teacher_grants')) {
+        // No teacher enrolments from an earlier run (enrol_adele, local_adele #600).
+        foreach ($DB->get_records('enrol_adele_teacher_grants') as $grant) {
+            \enrol_adele\local\teacher_grants::remove(['id' => $grant->id]);
+        }
+    }
 }
 
 // The fixture accounts come from the backup with unknown passwords.
@@ -2020,13 +2034,25 @@ if (!empty($imported['Verzweigt, gestapelt B1'])) {
                 }
             }
         }
+        // The person responsible for the second course of the stack - the one
+        // a request for access goes to (local_adele #600, TP2): an editing
+        // teacher there, nowhere else; no requests from earlier runs.
+        // The editing teacher may edit the path (so the activity form offers
+        // it), yet has no authority in T02: the policies' "without authority".
+        $kzeditor = $kzpeople['TEACHER'][0];
+        if (!$DB->record_exists('local_adele_lp_editors', ['userid' => $kzeditor->id, 'learningpathid' => $kzpath])) {
+            $DB->insert_record('local_adele_lp_editors', (object) ['userid' => $kzeditor->id, 'learningpathid' => $kzpath]);
+        }
+        $kzowner = local_adele_fixture_person('fx_kz_owner', 'Access Owner', $fixturepassword);
+        $kzenrol((int) $kzstack[1], $kzowner, 'editingteacher');
+        $DB->delete_records('notifications', ['useridto' => $kzowner->id]);
         $kzcm = (int) get_coursemodule_from_instance(
             'adele',
             $DB->get_field('adele', 'id', ['course' => $kzhost->id, 'name' => 'E2E KZ Kurszugriff']),
             $kzhost->id
         )->id;
         $kz = ['host' => $kzhost, 'cm' => $kzcm, 'stack' => array_slice($kzstack, 0, 3), 'people' => $kzpeople,
-            'learner' => $kzlearner, 'path' => $kzpath];
+            'learner' => $kzlearner, 'path' => $kzpath, 'owner' => $kzowner];
     }
 }
 
@@ -2257,6 +2283,9 @@ if ($kz) {
         printf("export ADELE_FIXTURE_KZ_%s='%s'\n", $key, $person->username);
     }
     printf("export ADELE_FIXTURE_KZ_LEARNER='%s'\n", $kz['learner']->username);
+    printf("export ADELE_FIXTURE_KZ_LEARNER_ID='%d'\n", $kz['learner']->id);
+    printf("export ADELE_FIXTURE_KZ_OWNER='%s'\n", $kz['owner']->username);
+    printf("export ADELE_FIXTURE_KZ_OWNER_ID='%d'\n", $kz['owner']->id);
     foreach ($kz['stack'] as $position => $courseid) {
         $course = get_course($courseid);
         printf("export ADELE_FIXTURE_KZ_COURSE_%d='%d'\n", $position + 1, $courseid);

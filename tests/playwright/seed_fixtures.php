@@ -2040,6 +2040,75 @@ if ($s37path && !empty($imported['Linear A2'])) {
         'pathb' => (int) $imported['Linear A2'], 't01' => (int) $s37json['tree']['nodes'][0]['data']['course_node_id'][0]];
 }
 
+// S20: node-course enrolments after the activity was saved (mod_adele #20).
+// "E2E Linear vier Schritte" (starting node T01, later nodes T02..T04) is to
+// be embedded by the chain itself into the empty courses E2E20 (source "any
+// course") and E2E20S (source "starting node"). fx_20_any and fx_20_start
+// are in no course of the path and in neither host course; the chain enrols
+// them only after saving. Back to exactly that on every run, deferred
+// removals of an earlier run included.
+$s20 = null;
+if ($s37path) {
+    $s20json = json_decode((string) $DB->get_field('local_adele_learning_paths', 'json', ['id' => $s37path]), true);
+    $s20start = 0;
+    $s20later = 0;
+    $s20courses = [];
+    foreach ($s20json['tree']['nodes'] ?? [] as $node) {
+        $ids = array_map('intval', (array) ($node['data']['course_node_id'] ?? []));
+        $s20courses = array_merge($s20courses, $ids);
+        if (in_array('starting_node', (array) ($node['parentCourse'] ?? []), true)) {
+            $s20start = $s20start ?: (int) ($ids[0] ?? 0);
+        } else if (!$s20later && $ids) {
+            $s20later = (int) end($ids);
+        }
+    }
+    $s20people = [
+        'any' => local_adele_fixture_person('fx_20_any', 'Later Joiner', $fixturepassword),
+        'start' => local_adele_fixture_person('fx_20_start', 'Start Joiner', $fixturepassword),
+    ];
+    $s20hosts = [];
+    foreach (['any' => 'E2E20', 'start' => 'E2E20S'] as $key => $shortname) {
+        $host = $DB->get_record('course', ['shortname' => $shortname]);
+        if (!$host) {
+            $host = create_course((object) [
+                'shortname' => $shortname,
+                'fullname' => "E2E host course $shortname",
+                'category' => (int) $options['category'],
+                'summary' => 'The chain embeds a path here and enrols people afterwards (mod_adele #20). '
+                    . 'Created by seed_fixtures.php.',
+                'summaryformat' => FORMAT_HTML,
+            ]);
+        }
+        foreach ($DB->get_records('adele', ['course' => $host->id]) as $activity) {
+            $cm = get_coursemodule_from_instance('adele', $activity->id, $host->id);
+            if ($cm) {
+                course_delete_module($cm->id);
+            }
+        }
+        $s20hosts[$key] = $host;
+    }
+    foreach ($s20people as $person) {
+        foreach (array_merge(array_unique($s20courses), [(int) $s20hosts['any']->id, (int) $s20hosts['start']->id]) as $courseid) {
+            foreach (enrol_get_instances($courseid, false) as $instance) {
+                $plugin = enrol_get_plugin($instance->enrol);
+                if ($plugin && $DB->record_exists('user_enrolments', ['enrolid' => $instance->id, 'userid' => $person->id])) {
+                    $plugin->unenrol_user($instance, $person->id);
+                }
+            }
+        }
+        $DB->delete_records('local_adele_path_user', ['user_id' => $person->id, 'learning_path_id' => $s37path]);
+        $DB->delete_records_select(
+            'task_adhoc',
+            'classname = ? AND ' . $DB->sql_like('customdata', '?'),
+            ['\\enrol_adele\\task\\remove_user_path_adhoc', '%"userid":' . (int) $person->id . '}%']
+        );
+    }
+    if ($s20start && $s20later) {
+        $s20 = ['hosts' => $s20hosts, 'people' => $s20people, 'path' => $s37path,
+            'start' => $s20start, 'later' => $s20later];
+    }
+}
+
 // KZ: course access in the teacher view of mod_adele (issue "Kurszugriff in
 // der Lehrendenansicht"). "Verzweigt, gestapelt B1" - node 1 is a stack of
 // three courses - embedded into E2EKZ, with an editing teacher, a teacher
@@ -2343,6 +2412,17 @@ if ($s37) {
     printf("export ADELE_FIXTURE_S37_PATH_A='%d'\n", $s37['patha']);
     printf("export ADELE_FIXTURE_S37_PATH_B='%d'\n", $s37['pathb']);
     printf("export ADELE_FIXTURE_S37_T01='%d'\n", $s37['t01']);
+}
+if ($s20) {
+    printf("export ADELE_FIXTURE_S20_HOST_ANY='%d'\n", $s20['hosts']['any']->id);
+    printf("export ADELE_FIXTURE_S20_HOST_START='%d'\n", $s20['hosts']['start']->id);
+    printf("export ADELE_FIXTURE_S20_PATH='%d'\n", $s20['path']);
+    printf("export ADELE_FIXTURE_S20_START_COURSE='%d'\n", $s20['start']);
+    printf("export ADELE_FIXTURE_S20_LATER_COURSE='%d'\n", $s20['later']);
+    foreach ($s20['people'] as $key => $person) {
+        printf("export ADELE_FIXTURE_S20_%s='%s'\n", strtoupper($key), $person->username);
+        printf("export ADELE_FIXTURE_S20_%s_NAME='%s'\n", strtoupper($key), fullname($person));
+    }
 }
 if ($kz) {
     printf("export ADELE_FIXTURE_KZ_HOST='%d'\n", $kz['host']->id);

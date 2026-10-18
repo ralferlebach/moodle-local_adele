@@ -343,6 +343,23 @@ const onDrag = ($event) => {
 
 const onNodeClickCall = (event) => {
   zoomstep.value = onNodeClick(event, setCenter, store )
+  activateForTeacher(event.node.id)
+}
+
+/**
+ * Teacher view of mod_adele: the activated tile shows its courses (issue
+ * "Kurszugriff in der Lehrendenansicht"). The access is asked anew on every
+ * activation - a course the teacher has lost access to meanwhile must not be
+ * offered from an old answer.
+ *
+ * @param {string} nodeid The vue-flow node id.
+ */
+function activateForTeacher(nodeid) {
+  if (store.state.view !== 'teacher' || !nodeid || nodeid === 'starting_node' || nodeid.startsWith('dropzone')) {
+    return
+  }
+  store.commit('setActiveNode', nodeid)
+  store.dispatch('fetchNodeCourseAccess')
 }
 
 // Prevent default event if node has been dropped
@@ -452,6 +469,22 @@ function insertFromDialog(choice) {
  * @param {KeyboardEvent} event The keydown on the canvas.
  */
 function onCanvasKeydown(event) {
+  // Teacher view: Enter or Space on a focused tile activates it, like a
+  // click - only on the tile itself, not on a control inside it.
+  if (
+    store.state.view === 'teacher' &&
+    (event.key === 'Enter' || event.key === ' ') &&
+    document.activeElement &&
+    document.activeElement.classList.contains('vue-flow__node')
+  ) {
+    const id = document.activeElement.getAttribute('data-id')
+    const node = id ? findNode(id) : null
+    if (node) {
+      event.preventDefault()
+      onNodeClickCall({ node })
+    }
+    return
+  }
   if (event.key !== 'Delete') {
     return
   }

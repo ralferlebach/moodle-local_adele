@@ -29,6 +29,7 @@ import absUrl from '../../composables/absUrl';
 import { useStore } from 'vuex';
 import ExpandNodeInformation from '../nodes_items/ExpandNodeInformation.vue';
 import * as nodeColors from '../../config/nodeColors';
+import TeacherCourseAccess from '../nodes_items/TeacherCourseAccess.vue';
 
 // Load Store
 const store = useStore();
@@ -178,6 +179,10 @@ onMounted(() => {
             </div>
           </div>
         </div>
+        <TeacherCourseAccess
+          :node-id="`${data.node_id}_expanded_courses_${data.course_id}`"
+          :course-ids="[data.course_id]"
+        />
       </div>
     </div>
   </transition>

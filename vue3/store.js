@@ -235,6 +235,12 @@ export function createAppStore() {
                 // Text of the accessibility live region (#575 B4). Written by
                 // announce(), read by A11yLiveRegion.vue, never rendered visibly.
                 announcement: '',
+                // Teacher view of mod_adele: the tile whose courses are shown
+                // (issue "Kurszugriff in der Lehrendenansicht"), and the
+                // server's answer for the courses of this embedding - null
+                // while not asked, { loading } while asking.
+                activeNodeId: null,
+                nodeCourseAccess: null,
             };
         },
         getters: {
@@ -248,6 +254,12 @@ export function createAppStore() {
             },
             setFocusUser(state, id) {
                 state.focususer = id;
+            },
+            setActiveNode(state, nodeid) {
+                state.activeNodeId = nodeid || null;
+            },
+            setNodeCourseAccess(state, access) {
+                state.nodeCourseAccess = access;
             },
             setUserlistCollapsed(state, collapsed) {
                 state.userlistcollapsed = collapsed;
@@ -714,6 +726,21 @@ export function createAppStore() {
                 lpid: params.lpid,
                 userid: params.userid,
               });
+            },
+            // The node courses of this embedding and whether the teacher can
+            // open each - asked anew on every activation of a tile, so a
+            // withdrawn access is not shown from an old answer. Decided on the
+            // server (mod_adele); a refusal leaves no course listed as open.
+            async fetchNodeCourseAccess(context) {
+                context.commit('setNodeCourseAccess', { loading: true, courses: [] });
+                try {
+                    const answer = await ajax('mod_adele_get_node_course_access', {
+                        contextid: context.state.contextid,
+                    }, true);
+                    context.commit('setNodeCourseAccess', { loading: false, mode: answer.mode, courses: answer.courses });
+                } catch (e) {
+                    context.commit('setNodeCourseAccess', { loading: false, error: true, courses: [] });
+                }
             },
             // Transfer the ownership of a learning path (Adele Manager only, #488).
             async setLpOwner(context, params) {

@@ -36,6 +36,7 @@ import CourseCompletion from '../nodes_items/CourseCompletion.vue';
 import ExpandedCourses from '../nodes_items/ExpandedCourses.vue';
 import truncatedText from '../../composables/nodesHelper/truncatedText';
 import { useNodeStatus } from '../../composables/useNodeStatus';
+import TeacherCourseAccess from '../nodes_items/TeacherCourseAccess.vue';
 
 const courses = computed(() => {
   if (
@@ -443,6 +444,10 @@ const deleteCondition = () => {
           </div>
         </div>
       </div>
+      <TeacherCourseAccess
+        :node-id="data.node_id"
+        :course-ids="data.course_node_id || []"
+      />
       <div class="card-footer">
 
         <CourseCarousel

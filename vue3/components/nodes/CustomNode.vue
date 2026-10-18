@@ -33,6 +33,7 @@ import ProgressBar from '../nodes_items/ProgressBar.vue';
 import UserInformation from '../nodes_items/UserInformation.vue';
 import truncatedText from '../../composables/nodesHelper/truncatedText';
 import { useNodeStatus } from '../../composables/useNodeStatus';
+import TeacherCourseAccess from '../nodes_items/TeacherCourseAccess.vue';
 
 
 // Load Store
@@ -360,6 +361,10 @@ const zoomOnParent = () => {
           </div>
         </div>
       </div>
+      <TeacherCourseAccess
+        :node-id="data.node_id"
+        :course-ids="data.course_node_id || []"
+      />
       <div
         v-if="!editorview && data"
         class="card-footer"

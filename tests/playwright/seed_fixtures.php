@@ -1957,6 +1957,71 @@ if ($privacypath && $privacysecond) {
     ];
 }
 
+// KZ: course access in the teacher view of mod_adele (issue "Kurszugriff in
+// der Lehrendenansicht"). "Verzweigt, gestapelt B1" - node 1 is a stack of
+// three courses - embedded into E2EKZ, with an editing teacher, a teacher
+// without editing rights and a learner. Both teachers are in the first and
+// the third course of the stack (as teachers), in the second not at all.
+// Back to exactly that on every run: a chain takes one of the enrolments away.
+$kz = null;
+if (!empty($imported['Verzweigt, gestapelt B1'])) {
+    $kzpath = (int) $imported['Verzweigt, gestapelt B1'];
+    $kzjson = json_decode((string) $DB->get_field('local_adele_learning_paths', 'json', ['id' => $kzpath]), true);
+    $kzstack = [];
+    foreach ($kzjson['tree']['nodes'] ?? [] as $node) {
+        if (($node['id'] ?? '') === 'dndnode_1') {
+            $kzstack = array_map('intval', (array) ($node['data']['course_node_id'] ?? []));
+        }
+    }
+    if (count($kzstack) >= 3) {
+        $kzpeople = [
+            'TEACHER' => [local_adele_fixture_person('fx_kz_teacher', 'Access Teacher', $fixturepassword), 'editingteacher'],
+            'TUTOR' => [local_adele_fixture_person('fx_kz_tutor', 'Access Tutor', $fixturepassword), 'teacher'],
+        ];
+        $kzlearner = local_adele_fixture_person('fx_kz_learner', 'Access Learner', $fixturepassword);
+        $kzhost = local_adele_fixture_host_course(
+            'E2EKZ',
+            'E2E KZ Kurszugriff',
+            $kzpath,
+            $kzlearner,
+            (int) $options['category'],
+            1
+        );
+        $kzmanual = enrol_get_plugin('manual');
+        $kzenrol = static function (int $courseid, stdClass $person, string $role) use ($DB, $kzmanual): void {
+            $instance = $DB->get_record('enrol', ['courseid' => $courseid, 'enrol' => 'manual'], '*', IGNORE_MULTIPLE);
+            $roleid = (int) $DB->get_field('role', 'id', ['shortname' => $role]);
+            if ($kzmanual && $instance && $roleid) {
+                $kzmanual->enrol_user($instance, $person->id, $roleid, 0, 0, ENROL_USER_ACTIVE);
+            }
+        };
+        foreach ($kzpeople as [$person, $role]) {
+            $kzenrol((int) $kzhost->id, $person, $role);
+            foreach ($kzstack as $position => $courseid) {
+                if ($position === 1) {
+                    // Not in the second course of the stack - by any method.
+                    foreach (enrol_get_instances($courseid, false) as $instance) {
+                        $plugin = enrol_get_plugin($instance->enrol);
+                        $enrolled = $DB->record_exists('user_enrolments', ['enrolid' => $instance->id, 'userid' => $person->id]);
+                        if ($plugin && $enrolled) {
+                            $plugin->unenrol_user($instance, $person->id);
+                        }
+                    }
+                } else if ($position < 3) {
+                    $kzenrol($courseid, $person, 'teacher');
+                }
+            }
+        }
+        $kzcm = (int) get_coursemodule_from_instance(
+            'adele',
+            $DB->get_field('adele', 'id', ['course' => $kzhost->id, 'name' => 'E2E KZ Kurszugriff']),
+            $kzhost->id
+        )->id;
+        $kz = ['host' => $kzhost, 'cm' => $kzcm, 'stack' => array_slice($kzstack, 0, 3), 'people' => $kzpeople,
+            'learner' => $kzlearner, 'path' => $kzpath];
+    }
+}
+
 // Z: each path in a host course of its own, the activity completing when the
 // learning path is finished.
 foreach ($finalpaths as $key => [$pathid, $learner]) {
@@ -2175,6 +2240,22 @@ if ($timepath && $timelearner) {
     printf("export ADELE_FIXTURE_TIMEWINDOW2_START='%d'\n", LOCAL_ADELE_FIXTURE_WINDOW2_START);
 }
 printf("export ADELE_FIXTURE_TEACHER='%s'\n", $teacher->username);
+if ($kz) {
+    printf("export ADELE_FIXTURE_KZ_HOST='%d'\n", $kz['host']->id);
+    printf("export ADELE_FIXTURE_KZ_CM='%d'\n", $kz['cm']);
+    printf("export ADELE_FIXTURE_KZ_PATH='%d'\n", $kz['path']);
+    printf("export ADELE_FIXTURE_KZ_CM_CONTEXT='%d'\n", context_module::instance($kz['cm'])->id);
+    foreach ($kz['people'] as $key => [$person]) {
+        printf("export ADELE_FIXTURE_KZ_%s='%s'\n", $key, $person->username);
+    }
+    printf("export ADELE_FIXTURE_KZ_LEARNER='%s'\n", $kz['learner']->username);
+    foreach ($kz['stack'] as $position => $courseid) {
+        $course = get_course($courseid);
+        printf("export ADELE_FIXTURE_KZ_COURSE_%d='%d'\n", $position + 1, $courseid);
+        printf("export ADELE_FIXTURE_KZ_COURSE_%d_SHORT='%s'\n", $position + 1, $course->shortname);
+        printf("export ADELE_FIXTURE_KZ_COURSE_%d_FULL='%s'\n", $position + 1, $course->fullname);
+    }
+}
 printf("export ADELE_FIXTURE_TEACHER_NAME='%s'\n", fullname($teacher));
 foreach (
     [

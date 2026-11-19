@@ -185,6 +185,7 @@ import { notify } from "@kyvg/vue3-notification"
 import shiftNodesDown from '../../composables/shiftNodesDown'
 import setStartingNode from '../../composables/setStartingNode';
 import addCustomEdge from '../../composables/addCustomEdge';
+import { hasEdge } from '../../composables/flowHelper/normalizeEdges';
 import removeDropzones from '../../composables/removeDropzones';
 import addAutoCompletions from '../../composables/conditions/addAutoCompletions'
 import addStagCompletions from '../../composables/conditions/addStagCompletions'
@@ -383,8 +384,14 @@ if (params.source !== store.state.startnode) {
  params.source = store.state.startnode;
 }
 
-addEdges(addCustomEdge( params.target, params.source));
-emit('add-edge', addCustomEdge( params.target, params.source));
+// One edge per connection (local_adele #603): connecting two nodes that are
+// connected already adds nothing - neither to the graph nor to the path.
+const newEdge = addCustomEdge(params.target, params.source)
+if (hasEdge(edges.value, newEdge)) {
+  return
+}
+addEdges(newEdge);
+emit('add-edge', addCustomEdge(params.target, params.source));
 
 props.learningpath.json.tree =
 recalculateParentChild(props.learningpath.json.tree, 'parentCourse', 'childCourse', 'starting_node')
@@ -658,14 +665,24 @@ function insertCourseNode(type, data) {
         }
         addNodes([newNode])
       }
-      // Add the new edge
-      addEdges(addCustomEdge(source, target));
+      // Add the new edge - once (local_adele #603).
+      const droppedEdge = addCustomEdge(source, target)
+      if (!hasEdge(edges.value, droppedEdge)) {
+        addEdges(droppedEdge);
+      }
     } else if (!intersectedNode.value.dropzone.id.includes('_or')) {
       // Add Completion addAutoAndCompletions.
       newNode = addAutoCompletions(newNode, store)
       addNodes([newNode])
       if (addConditions.newEdges) {
-        addEdges(addConditions.newEdges)
+        // Only connections the graph does not have yet (local_adele #603).
+        const fresh = []
+        addConditions.newEdges.forEach((edge) => {
+          if (!hasEdge(edges.value, edge) && !hasEdge(fresh, edge)) {
+            fresh.push(edge)
+          }
+        })
+        addEdges(fresh)
       }
     }
     let tree = toObject()

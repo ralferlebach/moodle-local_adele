@@ -204,6 +204,7 @@ import {
   autofocusMode, autofocusRole, compareUserPathStates, focusNodes, resolveAutofocusTarget,
 } from '../../composables/flowHelper/autofocus';
 import { rememberFocus, restoreFocusWhenReady } from '../../composables/flowHelper/keyboardFocus';
+import { uniqueEdges } from '../../composables/flowHelper/normalizeEdges';
 
 // Load Router
 const router = useRouter()
@@ -227,6 +228,23 @@ const flowKey = ref(0)
 const flowContainer = ref(null)
 let resizeObserver = null
 let fitTimeout = null
+
+// The delayed steps of this view (fit, focus, drawing) run only while it is
+// mounted, and a step of an earlier refresh does nothing once a later refresh
+// has come (re-audit 2026100736, B: late callbacks after unmount, remounts).
+let alive = true
+const timers = new Set()
+const later = (fn, ms) => {
+  const timer = setTimeout(() => {
+    timers.delete(timer)
+    if (alive) {
+      fn()
+    }
+  }, ms)
+  timers.add(timer)
+  return timer
+}
+let refreshGeneration = 0
 const refitToView = () => {
   clearTimeout(fitTimeout)
   fitTimeout = setTimeout(() => {
@@ -328,17 +346,26 @@ const onRefreshResult = async (fresh, reason) => {
     // The keyboard focus stays where it was: the canvas is rebuilt, the
     // focused element gets its successor's focus back (mod_adele #27).
     const keyboard = rememberFocus(flowContainer.value)
+    const generation = ++refreshGeneration
+    const current = () => alive && generation === refreshGeneration
     user_learningpath.value = fresh
     await nextTick()
     flowKey.value++
     await nextTick()
-    setTimeout(() => {
-      restoreFocusWhenReady(() => flowContainer.value, keyboard)
+    later(() => {
+      if (!current()) {
+        return
+      }
+      restoreFocusWhenReady(() => flowContainer.value, keyboard, document, current)
       if (target.length) {
         lastFocusedSignature = signature
         // The remounted canvas measures its nodes a moment later; a fit
         // before that has no sizes to fit.
-        whenMeasured(target, () => focusNodes(target, fitView))
+        whenMeasured(target, () => {
+          if (current()) {
+            focusNodes(target, fitView)
+          }
+        })
       } else if (savedviewport) {
         setViewport(savedviewport, { duration: 0 })
       } else {
@@ -369,7 +396,7 @@ const whenMeasured = (ids, done) => {
     if (measured || Date.now() - started > 3000) {
       done()
     } else {
-      setTimeout(check, 100)
+      later(check, 100)
     }
   }
   check()
@@ -487,7 +514,7 @@ onMounted( async () => {
   }
   if(user_learningpath.value){
     setFlowchart()
-    setTimeout(() => {
+    later(() => {
       nextTick().then(() => {
         // Restore the student's last viewport if we have one, otherwise fit the whole
         // path so every node is reachable (#480/#485).
@@ -510,6 +537,9 @@ onMounted( async () => {
 })
 
 onUnmounted(() => {
+  alive = false
+  timers.forEach((timer) => clearTimeout(timer))
+  timers.clear()
   if (resizeObserver) {
     resizeObserver.disconnect()
     resizeObserver = null
@@ -546,14 +576,15 @@ watch(() => user_learningpath.value, () => {
 function setFlowchart() {
   const flowchart = user_learningpath.value.json
   nodes.value = flowchart.tree.nodes;
-  edges.value = flowchart.tree.edges;
+  // One edge per connection (local_adele #603).
+  edges.value = uniqueEdges(flowchart.tree.edges);
 
   edges.value.forEach((edge) => {
     edge.deletable = false
     edge.type = 'custom'
   })
 
-  setTimeout(() => {
+  later(() => {
     drawModules(user_learningpath.value, addNodes, removeNodes, findNode)
   }, 100);
 }

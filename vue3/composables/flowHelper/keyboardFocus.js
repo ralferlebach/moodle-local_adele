@@ -111,14 +111,19 @@ export function restoreFocus(container, remembered, doc = document) {
  * @param {Function} getContainer () => the container (it may be re-rendered).
  * @param {object|null} remembered rememberFocus() result.
  * @param {Document} doc
+ * @param {Function} wanted () => whether the focus is still to be given back
+ *     (false once the view is gone or a later refresh has come).
  * @returns {void}
  */
-export function restoreFocusWhenReady(getContainer, remembered, doc = document) {
+export function restoreFocusWhenReady(getContainer, remembered, doc = document, wanted = () => true) {
   if (!remembered) {
     return;
   }
   let tries = 0;
   const attempt = () => {
+    if (!wanted()) {
+      return;
+    }
     const container = getContainer();
     const active = doc.activeElement;
     if (container && active && active !== doc.body && !container.contains(active)) {

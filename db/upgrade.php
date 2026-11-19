@@ -547,5 +547,17 @@ function xmldb_local_adele_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2026100734, 'local', 'adele');
     }
 
+    // One edge per connection (local_adele #603): stored learning paths lose
+    // copies of a connection, an edge whose id another connection holds gets
+    // a free one; the paths of the people on them lose copies only. Counted
+    // and reported; a second run finds nothing. A preview without writing:
+    // php local/adele/cli/repair_path_edges.php.
+    if ($oldversion < 2026101800) {
+        \local_adele\path_edges::repair_stored(false, function (string $line): void {
+            mtrace('local_adele: ' . $line);
+        });
+        upgrade_plugin_savepoint(true, 2026101800, 'local', 'adele');
+    }
+
     return true;
 }

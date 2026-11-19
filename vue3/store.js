@@ -27,6 +27,7 @@ import { createStore } from 'vuex';
 import moodleAjax from 'core/ajax';
 import moodleStorage from 'core/localstorage';
 import Notification from 'core/notification';
+import { withUniqueEdges } from './composables/flowHelper/normalizeEdges';
 
 // Criteria that need a manual selection: label => the data.value field that must be set.
 // An empty selection leaks its placeholder / is unsatisfiable, so it must not be saved
@@ -585,7 +586,7 @@ export function createAppStore() {
                       name: payload.name,
                       description: payload.description,
                       image: payload.image,
-                      json: JSON.stringify(payload.json),
+                      json: JSON.stringify(withUniqueEdges(payload.json)),
                       contextid: context.state.contextid,
                     }, true);
                 } catch (error) {

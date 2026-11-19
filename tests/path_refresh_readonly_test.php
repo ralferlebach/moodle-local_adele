@@ -38,6 +38,11 @@ final class path_refresh_readonly_test extends advanced_testcase {
      * A refresh reads the stored state only: no write, no event, no queued
      * task - so polling triggers no recalculation and no enrolment.
      *
+     * Coverage named at the method as well: the attribute between the class
+     * docblock and the class hides the class-level tag from the code checker
+     * (moodle.PHPUnit.TestCaseCovers, CI 2026-10-18).
+     *
+     * @covers \local_adele\external\get_lp_user_path_relation
      * @return void
      */
     public function test_a_refresh_reads_only(): void {

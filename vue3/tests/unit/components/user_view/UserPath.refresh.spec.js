@@ -293,4 +293,45 @@ describe('UserPath.vue - refresh and auto-focus', () => {
     expect(mockFlow.fitView).not.toHaveBeenCalled();
     wrapper.unmount();
   });
+
+  const settings = { pollingmode: 0, pollinginterval: 3000, pollingdebounce: 300, autofocusenabled: 1,
+    autofocusteachermode: 1, autofocuslearnermode: 2 };
+  const focusCalls = () => mockFlow.fitView.mock.calls.filter((c) => c[0] && c[0].nodes).map((c) => c[0].nodes);
+
+  it('gone before its delayed step: a refresh moves nothing after unmount (re-audit 2026100736, B)', async () => {
+    const before = path({ dndnode_1: 'accessible', dndnode_2: 'not_accessible' });
+    const wrapper = await mountView({ parent: before, settings });
+    jest.advanceTimersByTime(1000);
+    await flushPromises();
+    mockFlow.fitView.mockClear();
+    mockFlow.setViewport.mockClear();
+    const drawn = require('../../../../composables/nodesHelper/drawModules').default;
+    drawn.mockClear();
+    await wrapper.vm.onRefreshResult(path({ dndnode_1: 'completed', dndnode_2: 'accessible' }), 'poll');
+    wrapper.unmount();
+    jest.advanceTimersByTime(10000);
+    await flushPromises();
+    expect(mockFlow.fitView).not.toHaveBeenCalled();
+    expect(mockFlow.setViewport).not.toHaveBeenCalled();
+    expect(drawn).not.toHaveBeenCalled();
+    expect(jest.getTimerCount()).toBe(0);
+  });
+
+  it('two refreshes in quick succession: only the later one moves the view, once', async () => {
+    const wrapper = await mountView({
+      parent: path({ dndnode_1: 'accessible', dndnode_2: 'not_accessible', dndnode_3: 'not_accessible' }),
+      settings,
+    });
+    jest.advanceTimersByTime(1000);
+    await flushPromises();
+    mockFlow.fitView.mockClear();
+    await wrapper.vm.onRefreshResult(path({ dndnode_1: 'completed', dndnode_2: 'accessible', dndnode_3: 'not_accessible' }), 'poll');
+    await wrapper.vm.onRefreshResult(path({ dndnode_1: 'completed', dndnode_2: 'completed', dndnode_3: 'accessible' }), 'poll');
+    jest.advanceTimersByTime(400);
+    await flushPromises();
+    jest.advanceTimersByTime(400);
+    await flushPromises();
+    expect(focusCalls()).toEqual([['dndnode_3']]);
+    wrapper.unmount();
+  });
 });

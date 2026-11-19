@@ -156,9 +156,12 @@ describe.each(Object.entries(nodes))('%s: the expand button', (_, make) => {
     const elsewhere = document.createElement('button');
     document.body.appendChild(elsewhere);
     elsewhere.focus();
+    const focus = jest.spyOn(b.element, 'focus');
     panels.escape();
     await wrapper.vm.$nextTick();
     expect(b.attributes('aria-expanded')).toBe('false');
     expect(document.activeElement).toBe(b.element);
+    // The focus moved by a key is to be shown (Firefox, CI 2026-10-18).
+    expect(focus).toHaveBeenCalledWith({ preventScroll: true, focusVisible: true });
   });
 });

@@ -23,6 +23,7 @@
  */ -->
 
 <script setup>
+import { uniqueEdges } from '../../composables/flowHelper/normalizeEdges';
 // Import needed libraries
 import { Panel, useVueFlow } from '@vue-flow/core'
 import { useStore } from 'vuex';
@@ -100,6 +101,8 @@ watch(() => props.learningpath, (newValue) => {
       })
     }
     setNodes(newValue.json.tree.nodes)
+    // A stored path may hold an edge twice (local_adele #603): drawn once.
+    newValue.json.tree.edges = uniqueEdges(newValue.json.tree.edges)
     setEdges(newValue.json.tree.edges)
   }else{
     setNodes([])

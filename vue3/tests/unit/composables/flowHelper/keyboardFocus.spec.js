@@ -109,4 +109,20 @@ describe('keyboardFocus', () => {
     expect(jest.getTimerCount()).toBe(0);
     jest.useRealTimers();
   });
+
+  it('no longer wanted (view gone, a later refresh): no focus given, no further tries', () => {
+    jest.useFakeTimers();
+    let wanted = true;
+    let container = document.createElement('div');
+    document.body.appendChild(container);
+    restoreFocusWhenReady(() => container, { testid: 'feedback-2' }, document, () => wanted);
+    jest.advanceTimersByTime(200);
+    wanted = false;
+    container.remove();
+    container = canvas();
+    jest.advanceTimersByTime(500);
+    expect(document.activeElement).toBe(document.body);
+    expect(jest.getTimerCount()).toBe(0);
+    jest.useRealTimers();
+  });
 });

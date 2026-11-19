@@ -46,6 +46,7 @@
 </template>
 
 <script setup>
+import { uniqueEdges } from '../../../composables/flowHelper/normalizeEdges';
 import { onMounted, ref } from 'vue'
 import { useStore } from 'vuex'
 import { VueFlow, useVueFlow } from '@vue-flow/core'
@@ -73,7 +74,8 @@ const emit = defineEmits([
 // Set flowchart
 function setFlowchart() {
   nodes.value = store.state.lpuserpathrelation.json.tree.nodes
-  edges.value = store.state.lpuserpathrelation.json.tree.edges
+  // One edge per connection (local_adele #603).
+  edges.value = uniqueEdges(store.state.lpuserpathrelation.json.tree.edges)
   edges.value.forEach((edge) => {
     edge.deletable = false
     edge.type = 'smoothstep'

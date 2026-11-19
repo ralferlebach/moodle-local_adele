@@ -72,7 +72,8 @@ class learning_paths {
         $data->description = $params['description'];
         $data->image = $params['image'];
         $data->timemodified = \core\di::get(\core\clock::class)->time();
-        $data->json = $params['json'];
+        // One edge per connection, whatever the client sent (local_adele #603).
+        [$data->json] = path_edges::normalize_json($params['json']);
         $id = 0;
         if ($params['learningpathid'] == 0) {
             $data->timecreated = \core\di::get(\core\clock::class)->time();
@@ -198,7 +199,7 @@ class learning_paths {
         global $DB;
         $data = new stdClass();
         $data->id = $params['id'];
-        $data->json = $params['json'];
+        [$data->json] = path_edges::normalize_json($params['json']);
         $data->createdby = '100';
         $data->timemodified = \core\di::get(\core\clock::class)->time();
         return $DB->update_record('local_adele_learning_paths', $data);
@@ -290,6 +291,9 @@ class learning_paths {
         );
         $learningpath = self::get_image_paths($learningpath);
         $learningpath = (array) $learningpath;
+        // Drawn with one edge per connection, also before the path is saved
+        // again (local_adele #603).
+        [$learningpath['json']] = path_edges::normalize_json($learningpath['json'] ?? null);
         // Owner info for the editors panel: golden crown + "Owner:" label (#488),
         // orphaned marker when the owner vanished (#571).
         $ownerid = (int) ($learningpath['createdby'] ?? 0);
@@ -379,6 +383,8 @@ class learning_paths {
                 $copyindex++;
             }
             $learningpath->id = null;
+            // The copy gets one edge per connection (local_adele #603).
+            [$learningpath->json] = path_edges::normalize_json($learningpath->json);
             $learningpath->createdby = $USER->id;
             if ($copyindex > 1) {
                 $learningpath->name .= ' ' . $copyindex;
@@ -807,6 +813,10 @@ class learning_paths {
         $coursenames = $courseids
             ? $DB->get_records_list('course', 'id', array_values($courseids), '', 'id, fullname, shortname')
             : [];
+        // A person's path is drawn with one edge per connection (local_adele #603).
+        if (isset($json->tree->edges) && is_array($json->tree->edges)) {
+            $json->tree->edges = path_edges::normalize($json->tree->edges)['edges'];
+        }
 
         foreach ($json->tree->nodes as $node) {
             $node->draggable = false;

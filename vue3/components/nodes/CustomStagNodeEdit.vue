@@ -183,8 +183,12 @@ const collapseCourses = () => {
   if (courseExpanded.value && !isBlocked.value) {
     expandCourses()
   }
+  // Escape is a keyboard action: the focus it moves is to be shown. In
+  // Firefox it was not (CI 2026-10-18, S17: :focus-visible false after
+  // Escape); focusVisible asks the browser to show it. Browsers without the
+  // option ignore it.
   if (toggleButton.value && toggleButton.value.focus) {
-    toggleButton.value.focus({ preventScroll: true })
+    toggleButton.value.focus({ preventScroll: true, focusVisible: true })
   }
 }
 

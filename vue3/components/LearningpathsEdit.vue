@@ -155,6 +155,7 @@
 </template>
 
 <script setup>
+import { hasEdge } from '../composables/flowHelper/normalizeEdges';
 // Import needed libraries
 import { ref, onMounted, nextTick } from 'vue'
 import { onBeforeRouteUpdate, useRoute } from 'vue-router';
@@ -347,8 +348,9 @@ const finishEdit = () => {
   learningpath.value = null
 }
 
+// The path's edges keep one edge per connection (local_adele #603).
 const handleAddEdge = (edge) => {
-  if (edge && learningpath.value.json.tree.edges) {
+  if (edge && learningpath.value.json.tree.edges && !hasEdge(learningpath.value.json.tree.edges, edge)) {
     learningpath.value.json.tree.edges.push(edge)
   }
 }

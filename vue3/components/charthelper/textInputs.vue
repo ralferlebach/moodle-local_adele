@@ -198,7 +198,7 @@ const editLearningpath = async (singlelearningpathid) => {
             :id="appDomId(store, 'goalsubjectplaceholder')"
             data-testid="learningpath-description"
             v-model="goaldescription"
-            :name="store.state.strings.goalsubjectplaceholder"
+            name="goalsubjectplaceholder"
             v-autowidth="{ maxWidth: '960px', minWidth: '40%', comfortZone: 0 }"
             class="form-control fancy-input"
             :placeholder="store.state.strings.goalsubjectplaceholder"

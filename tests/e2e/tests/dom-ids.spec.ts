@@ -192,6 +192,12 @@ test.describe('ADELE-E2E-A18 — DOM ids once per page, references on their own 
       }
       expect(await duplicateIds(page)).toEqual([]);
       expect(await brokenReferences(page)).toEqual([]);
+      // Behat finds these fields by id, name or label. The ids carry the
+      // application's prefix now, so the names must stay as Behat knows them
+      // (CI 2026-11-20: 'Field matching locator "goalsubjectplaceholder" not found').
+      for (const name of ['goalnameplaceholder', 'goalsubjectplaceholder']) {
+        await expect(app(page).locator(`[name="${name}"]`), `field named ${name}`).toHaveCount(1);
+      }
 
       const opener = app(page).locator('.vue-flow__node button[aria-controls$="-nodeModal"]').first();
       await checkDialog(page, opener);

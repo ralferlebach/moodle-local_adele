@@ -111,8 +111,11 @@ test.describe('ADELE-PW-574 — machine-readable interface', () => {
     for (const hook of ['learningpath-title', 'learningpath-description', 'learningpath-save']) {
       await expect(app(page).locator(`[data-testid="${hook}"]`).first()).toBeVisible();
     }
-    // The title field is labelled, not merely preceded by a heading.
-    await expect(page.locator('label[for="goalnameplaceholder"]')).toHaveCount(1);
+    // The title field is labelled, not merely preceded by a heading. Its id
+    // carries the application's prefix (#18): the label must name that id.
+    const titleId = await app(page).locator('[data-testid="learningpath-title"]').first().getAttribute('id');
+    expect(titleId).toMatch(/^adele\d+-goalnameplaceholder$/);
+    await expect(page.locator(`label[for="${titleId}"]`)).toHaveCount(1);
   });
 });
 
@@ -171,6 +174,18 @@ test.describe('ADELE-PW-575 — usable without the graph', () => {
     await page.goto('/local/adele/index.php');
     await expect(app(page).locator(`[data-testid="learningpath-row-${PATH_ID()}"]`))
       .toBeVisible({ timeout: 30_000 });
+
+    // Measured at rest. The overview fades in (LearningpathsEdit.vue,
+    // .fade-in, 2 s); axe blends a half-transparent ancestor into the
+    // background, so a check during the fade reports a lighter button
+    // (CI 2026-11-19: #3080c8 = 4.16:1; locally #257ac5 = 4.49:1 - the fade
+    // at another moment). The contrast of the page as people read it is the
+    // one at rest; reduced-motion users get no fade at all.
+    await page.waitForFunction(
+      () => document.getAnimations().every((a) => a.playState !== 'running'),
+      undefined,
+      { timeout: 10_000 }
+    );
 
     // Scoped to this plugin's application: Moodle's own theme is not what
     // these issues are about, and its findings would drown ours.

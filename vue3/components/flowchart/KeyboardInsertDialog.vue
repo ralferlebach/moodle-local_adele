@@ -52,11 +52,11 @@
         <h2 class="h5">{{ title }}</h2>
 
         <div class="form-group">
-          <label for="local-adele-insert-target">
+          <label :for="appDomId(store, 'local-adele-insert-target')">
             {{ store.state.strings.insert_dialog_target }}
           </label>
           <select
-            id="local-adele-insert-target"
+            :id="appDomId(store, 'local-adele-insert-target')"
             ref="firstField"
             v-model="targetId"
             class="form-control"
@@ -73,11 +73,11 @@
         </div>
 
         <div class="form-group">
-          <label for="local-adele-insert-relation">
+          <label :for="appDomId(store, 'local-adele-insert-relation')">
             {{ store.state.strings.insert_dialog_relation }}
           </label>
           <select
-            id="local-adele-insert-relation"
+            :id="appDomId(store, 'local-adele-insert-relation')"
             v-model="relation"
             class="form-control"
             data-testid="learningpath-insert-relation"
@@ -119,6 +119,7 @@
 <script setup>
 import { computed, nextTick, onMounted, onBeforeUnmount, ref } from 'vue';
 import { useStore } from 'vuex';
+import { appDomId } from '../../composables/domIds';
 
 const store = useStore();
 

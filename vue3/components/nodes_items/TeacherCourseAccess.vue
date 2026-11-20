@@ -40,6 +40,8 @@ import CourseAccessRequestDialog from './CourseAccessRequestDialog.vue';
 import CourseEnrolConfirmDialog from './CourseEnrolConfirmDialog.vue';
 
 const store = useStore();
+// Page-unique ids (#18), the rule of composables/domIds.js::appDomId().
+const domPrefix = () => (store.state.domPrefix ? store.state.domPrefix + '-' : '');
 
 const props = defineProps({
   // The vue-flow id of the tile (the id the activation stores).
@@ -68,8 +70,10 @@ const shown = computed(() => store.state.view === 'teacher' && store.state.activ
 const access = computed(() => store.state.nodeCourseAccess || { loading: true, courses: [] });
 const strings = computed(() => store.state.strings || {});
 const safeId = computed(() => String(props.nodeId).replace(/[^A-Za-z0-9_-]/g, '_'));
-const headingId = computed(() => `adele-course-access-heading-${safeId.value}`);
-const listId = computed(() => `adele-course-access-list-${safeId.value}`);
+const headingId = computed(() => `${domPrefix()}adele-course-access-heading-${safeId.value}`);
+const listId = computed(() => `${domPrefix()}adele-course-access-list-${safeId.value}`);
+// The id of the line that names a full course (#18: prefixed per application).
+const fullId = (courseid) => `${domPrefix()}adele-course-full-${safeId.value}-${courseid}`;
 
 /**
  * Fill a Moodle string's {$a} / {$a->name} placeholders.
@@ -372,7 +376,7 @@ defineExpose({ close, rows, requestFor, enrolFor });
             rel="noopener noreferrer"
             class="btn btn-sm btn-primary adele-course-access-open"
             :aria-label="openLabel(course)"
-            :aria-describedby="'adele-course-full-' + safeId + '-' + course.courseid"
+            :aria-describedby="fullId(course.courseid)"
           >
             <i
               class="fa fa-external-link"
@@ -385,7 +389,7 @@ defineExpose({ close, rows, requestFor, enrolFor });
             type="button"
             class="btn btn-sm btn-outline-primary adele-course-access-request"
             :aria-label="requestLabel(course)"
-            :aria-describedby="'adele-course-full-' + safeId + '-' + course.courseid"
+            :aria-describedby="fullId(course.courseid)"
             :data-testid="'node-course-request-' + course.courseid"
             @click="openRequest(course, $event)"
           >
@@ -396,7 +400,7 @@ defineExpose({ close, rows, requestFor, enrolFor });
             type="button"
             class="btn btn-sm btn-outline-primary adele-course-access-request"
             :aria-label="enrolLabel(course)"
-            :aria-describedby="'adele-course-full-' + safeId + '-' + course.courseid"
+            :aria-describedby="fullId(course.courseid)"
             :data-testid="'node-course-enrol-' + course.courseid"
             @click="openEnrol(course, $event)"
           >
@@ -404,7 +408,7 @@ defineExpose({ close, rows, requestFor, enrolFor });
           </button>
         </div>
         <div
-          :id="'adele-course-full-' + safeId + '-' + course.courseid"
+          :id="fullId(course.courseid)"
           class="adele-course-access-full"
         >
           {{ course.fullname }}

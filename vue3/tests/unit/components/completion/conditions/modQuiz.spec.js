@@ -108,7 +108,7 @@ describe('modQuiz.vue', () => {
     wrapper.vm.selectedQuiz = '1'
     await nextTick()
 
-    const gradeInput = wrapper.find('input#grade')
+    const gradeInput = wrapper.find('input[id$="-grade"]')
     expect(gradeInput.exists()).toBe(true)
 
     // Simulate entering a grade
@@ -128,7 +128,7 @@ describe('modQuiz.vue', () => {
     })
     wrapper.vm.selectedQuiz = '1'
     await nextTick()
-    const gradeInput = wrapper.find('input#grade')
+    const gradeInput = wrapper.find('input[id$="-grade"]')
     await gradeInput.setValue('150')
     await nextTick()
     expect(wrapper.vm.grade).toBe(100)
@@ -153,7 +153,7 @@ describe('modQuiz.vue', () => {
     await nextTick()
 
     // Simulate entering a grade
-    await wrapper.find('input#grade').setValue('75')
+    await wrapper.find('input[id$="-grade"]').setValue('75')
 
     // Check that the event has been emitted
     expect(wrapper.emitted('update:modelValue')).toBeTruthy()
@@ -187,7 +187,7 @@ describe('modQuiz.vue', () => {
     // Check if the grade input field is populated with the correct value
     wrapper.vm.selectedQuiz = "1";  // Simulate setting this value
     await nextTick();
-    const gradeInput = wrapper.find('input#grade')
+    const gradeInput = wrapper.find('input[id$="-grade"]')
     expect(gradeInput.exists()).toBe(true);
     expect(gradeInput.element.value).toBe('10')
   })

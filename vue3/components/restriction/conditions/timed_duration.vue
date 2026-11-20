@@ -25,7 +25,7 @@
   <div class="form-group">
     <div class="input-group mb-3">
       <select 
-        :id="`restriction-${restriction.node_id}-option`"
+        :id="appDomId(store, `restriction-${restriction.node_id}-option`)"
         v-model="data.selectedOption"
         :name="`restriction-${restriction.node_id}-option`"
         class="form-select"
@@ -56,7 +56,7 @@
            value while the input rendered empty); a plain value binding patches
            unconditionally. -->
       <input
-        :id="`restriction-${restriction.node_id}-duration`"
+        :id="appDomId(store, `restriction-${restriction.node_id}-duration`)"
         :value="data.selectedDuration"
         :name="`restriction-${restriction.node_id}-duration`"
         class="col-md-6 form-control"
@@ -65,7 +65,7 @@
         @change="onChange()"
       >
       <select 
-        :id="`restriction-${restriction.node_id}-format`"
+        :id="appDomId(store, `restriction-${restriction.node_id}-format`)"
         v-model="data.durationValue"
         :name="`restriction-${restriction.node_id}-format`"
         class="col-md-6 form-select ml-0" 
@@ -95,6 +95,7 @@
 <script setup>
 import { ref, watch, onMounted } from 'vue';
 import { useStore } from 'vuex';
+import { appDomId } from '../../../composables/domIds';
 import TimeWarning from '../../nodes_items/TimeWarning.vue'
 
 const store = useStore()

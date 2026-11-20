@@ -205,6 +205,7 @@ import {
 } from '../../composables/flowHelper/autofocus';
 import { rememberFocus, restoreFocusWhenReady } from '../../composables/flowHelper/keyboardFocus';
 import { uniqueEdges } from '../../composables/flowHelper/normalizeEdges';
+import { scopeMarkers } from '../../composables/domIds';
 
 // Load Router
 const router = useRouter()
@@ -516,9 +517,14 @@ onMounted( async () => {
     setFlowchart()
     later(() => {
       nextTick().then(() => {
-        // Restore the student's last viewport if we have one, otherwise fit the whole
-        // path so every node is reachable (#480/#485).
-        restoreOrFitView()
+        // Opened from a node counter or marker of the teachers' overview
+        // (#15): centre the node it came from, not the whole graph.
+        // Otherwise restore the student's last viewport if we have one, or
+        // fit the whole path so every node is reachable (#480/#485).
+        const focusnode = route && route.query ? String(route.query.node || '') : ''
+        if (!(focusnode && findNode(focusnode) && focusNodes([focusnode], fitView))) {
+          restoreOrFitView()
+        }
       })
     }, 300)
   }
@@ -577,7 +583,8 @@ function setFlowchart() {
   const flowchart = user_learningpath.value.json
   nodes.value = flowchart.tree.nodes;
   // One edge per connection (local_adele #603).
-  edges.value = uniqueEdges(flowchart.tree.edges);
+  // Markers named per graph, not per page (#18).
+  edges.value = scopeMarkers(uniqueEdges(flowchart.tree.edges));
 
   edges.value.forEach((edge) => {
     edge.deletable = false

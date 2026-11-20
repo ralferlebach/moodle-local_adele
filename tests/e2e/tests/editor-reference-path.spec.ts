@@ -171,14 +171,14 @@ test.describe('ADELE-E2E-E1 — the reference path with its configuration, built
         // standard text", then write.
         const feedback = page.locator('.dndflowcompletion .vue-flow__node[data-id$="_feedback"]').first();
         await expect(feedback, 'the criterion offers a feedback field').toBeVisible({ timeout: 15_000 });
-        const standard = feedback.locator('input[type="checkbox"][id^="feedback_before_restriction_"]');
+        const standard = feedback.locator('input[type="checkbox"][id*="feedback_before_restriction_"]');
         if (await standard.isDisabled()) {
           await feedback.locator('button:has(i.fa-eye-slash)').click();
         }
         if (await standard.isChecked()) {
           await standard.uncheck();
         }
-        const text = feedback.locator('textarea[id^="feedback_before_restriction_textarea_"]');
+        const text = feedback.locator('textarea[id*="feedback_before_restriction_textarea_"]');
         await text.fill(AUTHOR_TEXT);
         await text.blur();
         await saveCriteria(page);
@@ -225,7 +225,7 @@ test.describe('ADELE-E2E-E1 — the reference path with its configuration, built
         const timed = conditions(page).filter({ has: page.locator('input[type="datetime-local"]') });
         await expect(timed.locator('input[type="datetime-local"]').nth(0)).toHaveValue(WINDOW.start);
         await expect(timed.locator('input[type="datetime-local"]').nth(1)).toHaveValue(WINDOW.end);
-        await expect(page.locator('.dndflowcompletion textarea[id^="feedback_before_restriction_textarea_"]').first())
+        await expect(page.locator('.dndflowcompletion textarea[id*="feedback_before_restriction_textarea_"]').first())
           .toHaveValue(AUTHOR_TEXT);
         await expect(conditionNode(page, 'condition_1')).toBeVisible();
       });

@@ -24,6 +24,7 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import { useStore } from 'vuex';
+import { appDomId } from '../../composables/domIds';
 
 const store = useStore();
 const props = defineProps({
@@ -75,7 +76,7 @@ const toggleVisibility = () => {
     <button
       class="btn dropdown-toggle master-dropdown"
       type="button"
-      :id="masterdata.node_id + '_dropdown_menu_button'"
+      :id="appDomId(store, masterdata.node_id + '_dropdown_menu_button')"
       @click="toggleVisibility"
     >
 
@@ -85,24 +86,24 @@ const toggleVisibility = () => {
 
       <div class="form-check">
         <input
-          :id="masterdata.node_id + '_master_restriction'"
+          :id="appDomId(store, masterdata.node_id + '_master_restriction')"
           class="form-check-input"
           type="checkbox"
           v-model="masterdata.completion.master.restriction"
         >
-        <label :for="masterdata.node_id + '_master_restriction'">
+        <label :for="appDomId(store, masterdata.node_id + '_master_restriction')">
           {{ store.state.strings.course_master_condition_restriction }}
         </label>
       </div>
 
       <div class="form-check">
         <input
-          :id="masterdata.node_id + '_master_completion'"
+          :id="appDomId(store, masterdata.node_id + '_master_completion')"
           class="form-check-input"
           type="checkbox"
           v-model="masterdata.completion.master.completion"
         >
-        <label :for="masterdata.node_id + '_master_completion'">
+        <label :for="appDomId(store, masterdata.node_id + '_master_completion')">
           {{ store.state.strings.course_master_condition_completion }}
         </label>
       </div>

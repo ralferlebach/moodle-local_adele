@@ -59,6 +59,7 @@ require_once($CFG->dirroot . '/backup/util/includes/restore_includes.php');
 require_once($CFG->dirroot . '/course/lib.php');
 require_once($CFG->dirroot . '/user/lib.php');
 require_once($CFG->libdir . '/enrollib.php');
+require_once($CFG->dirroot . '/group/lib.php');
 
 [$options] = cli_get_params([
     'fixtures' => __DIR__ . '/fixtures',
@@ -1845,6 +1846,151 @@ $mastercompletionhost = $mastercompletionpath ? local_adele_fixture_host_course(
     $mastercompletionpath[1],
     (int) $options['category']
 ) : null;
+// Issue #18: one course page with three ADELE applications - the same path twice
+// and a second path - so that the DOM ids of the applications are checked
+// side by side. No learners: the manager looks at the teachers' views.
+// Copies of Linear A1 and B1 of their own: removing the activities of a run
+// before withdraws the subscriptions no embedding carries any more - on the
+// reference paths themselves that took their learners off them (measured
+// 2026-11-20: student01 lost Linear A1, E2E R3 red).
+$multiembedhost = null;
+$m18paths = [];
+foreach (['E2E M18 Linear' => 'Linear A1', 'E2E M18 Verzweigt' => 'Verzweigt, gestapelt B1'] as $m18name => $m18source) {
+    if (empty($imported[$m18source])) {
+        continue;
+    }
+    $m18record = (object) [
+        'name' => $m18name,
+        'description' => 'E2E fixture for local_adele #18 (copy of ' . $m18source . ').',
+        'json' => $DB->get_field('local_adele_learning_paths', 'json', ['id' => $imported[$m18source]]),
+        'timemodified' => time(),
+        'createdby' => get_admin()->id,
+        'visibility' => 1,
+    ];
+    $m18existing = $DB->get_record('local_adele_learning_paths', ['name' => $m18name]);
+    if ($m18existing) {
+        $m18record->id = $m18existing->id;
+        $DB->update_record('local_adele_learning_paths', $m18record);
+        $m18paths[$m18source] = (int) $m18existing->id;
+    } else {
+        $m18record->timecreated = time();
+        $m18paths[$m18source] = (int) $DB->insert_record('local_adele_learning_paths', $m18record);
+    }
+}
+if (count($m18paths) === 2) {
+    $multiembedhost = $DB->get_record('course', ['shortname' => 'E2EM18']);
+    if (!$multiembedhost) {
+        $multiembedhost = create_course((object) [
+            'shortname' => 'E2EM18',
+            'fullname' => 'E2E host course E2EM18',
+            'category' => (int) $options['category'],
+            'summary' => 'Three ADELE activities on one course page (local_adele #18). Created by seed_fixtures.php.',
+            'summaryformat' => FORMAT_HTML,
+        ]);
+    }
+    foreach ($DB->get_records('adele', ['course' => $multiembedhost->id]) as $activity) {
+        $cm = get_coursemodule_from_instance('adele', $activity->id, $multiembedhost->id);
+        if ($cm) {
+            course_delete_module($cm->id);
+        }
+    }
+    local_adele_fixture_embed($multiembedhost, 'E2E #18 embed A', $m18paths['Linear A1']);
+    local_adele_fixture_embed($multiembedhost, 'E2E #18 embed B', $m18paths['Linear A1']);
+    local_adele_fixture_embed($multiembedhost, 'E2E #18 embed C', $m18paths['Verzweigt, gestapelt B1']);
+}
+// Issues #12 - #17: groups, non-learners, live markers and node counters. A path of
+// its own (a copy of Linear A1), one host course with two groups and two
+// activities on it: separate groups with live markers (window 5 minutes),
+// visible groups without. Progress is set on the snapshots (n1 = dndnode_1 ...).
+$groupfixture = null;
+if (!empty($imported['Linear A1'])) {
+    $gjson = json_decode($DB->get_field('local_adele_learning_paths', 'json', ['id' => $imported['Linear A1']]), true);
+    $gpath = $DB->get_record('local_adele_learning_paths', ['name' => 'E2E Gruppen G16']);
+    $grecord = (object) ['name' => 'E2E Gruppen G16', 'description' => 'E2E fixture for local_adele #12 - #17 (copy of Linear A1).',
+        'json' => json_encode($gjson), 'timemodified' => time(), 'createdby' => get_admin()->id, 'visibility' => 1];
+    if ($gpath) {
+        $grecord->id = $gpath->id;
+        $DB->update_record('local_adele_learning_paths', $grecord);
+        $gpathid = (int) $gpath->id;
+    } else {
+        $grecord->timecreated = time();
+        $gpathid = (int) $DB->insert_record('local_adele_learning_paths', $grecord);
+    }
+    $ghost = $DB->get_record('course', ['shortname' => 'E2EG16']);
+    if (!$ghost) {
+        $ghost = create_course((object) [
+            'shortname' => 'E2EG16',
+            'fullname' => 'E2E host course E2EG16',
+            'category' => (int) $options['category'],
+            'summary' => 'Groups and live activity of ADELE (local_adele #12 - #17). Created by seed_fixtures.php.',
+            'summaryformat' => FORMAT_HTML,
+        ]);
+    }
+    foreach ($DB->get_records('adele', ['course' => $ghost->id]) as $activity) {
+        $cm = get_coursemodule_from_instance('adele', $activity->id, $ghost->id);
+        if ($cm) {
+            course_delete_module($cm->id);
+        }
+    }
+    $DB->delete_records('local_adele_path_user', ['learning_path_id' => $gpathid]);
+    $ggroups = [];
+    foreach (['Rot', 'Blau'] as $gname) {
+        $gid = $DB->get_field('groups', 'id', ['courseid' => $ghost->id, 'name' => 'Gruppe ' . $gname]);
+        $ggroups[$gname] = $gid ?: groups_create_group((object) ['courseid' => $ghost->id, 'name' => 'Gruppe ' . $gname]);
+    }
+    $gseparate = local_adele_fixture_embed($ghost, 'E2E G16 getrennt', $gpathid);
+    $gvisible = local_adele_fixture_embed($ghost, 'E2E G16 sichtbar', $gpathid);
+    $DB->set_field('course_modules', 'groupmode', SEPARATEGROUPS, ['id' => $gseparate]);
+    $DB->set_field('course_modules', 'groupmode', VISIBLEGROUPS, ['id' => $gvisible]);
+    $DB->set_field('adele', 'livemarkers', 1, ['id' => $DB->get_field('course_modules', 'instance', ['id' => $gseparate])]);
+    $DB->set_field('adele', 'livewindow', 5, ['id' => $DB->get_field('course_modules', 'instance', ['id' => $gseparate])]);
+    rebuild_course_cache($ghost->id, true);
+
+    $manual = enrol_get_plugin('manual');
+    $ginstance = $DB->get_record('enrol', ['courseid' => $ghost->id, 'enrol' => 'manual'], '*', IGNORE_MULTIPLE);
+    $groleids = ['student' => $DB->get_field('role', 'id', ['shortname' => 'student']),
+        'teacher' => $DB->get_field('role', 'id', ['shortname' => 'teacher'])];
+    // Learners: group, completed nodes. Dirk completes nothing (the live chain uses him).
+    $gpeople = [
+        'ANNA' => ['fx_g_anna', 'Anna Rot', 'Rot', ['dndnode_1', 'dndnode_2'], 'student'],
+        'BERT' => ['fx_g_bert', 'Bert Rot', 'Rot', ['dndnode_1'], 'student'],
+        'CORA' => ['fx_g_cora', 'Cora Blau', 'Blau', ['dndnode_1', 'dndnode_2', 'dndnode_3'], 'student'],
+        'DIRK' => ['fx_g_dirk', 'Dirk Blau', 'Blau', [], 'student'],
+        // Nora completes nothing: 0 % (a learner without a path is a PHPUnit
+        // case - an enrolled participant is subscribed again by ADELE itself).
+        'NOPATH' => ['fx_g_nopath', 'Nora Ohnepfad', 'Rot', [], 'student'],
+        'TUTOR' => ['fx_g_tutor', 'Tim Tutor', 'Rot', null, 'teacher'],
+    ];
+    $groupfixture = ['host' => $ghost, 'separate' => $gseparate, 'visible' => $gvisible, 'path' => $gpathid, 'people' => []];
+    foreach ($gpeople as $key => [$username, $lastname, $gname, $completed, $role]) {
+        $person = local_adele_fixture_person($username, $lastname, $fixturepassword);
+        $DB->delete_records('local_adele_activity', ['userid' => $person->id]);
+        if ($manual && $ginstance) {
+            $manual->enrol_user($ginstance, $person->id, $groleids[$role]);
+        }
+        groups_add_member($ggroups[$gname], $person->id);
+        $groupfixture['people'][$key] = $person;
+        if ($role !== 'student') {
+            continue;
+        }
+        $row = $DB->get_record('local_adele_path_user', ['user_id' => $person->id, 'learning_path_id' => $gpathid]);
+        if ($completed === null) {
+            $DB->delete_records('local_adele_path_user', ['user_id' => $person->id, 'learning_path_id' => $gpathid]);
+            continue;
+        }
+        $snapshot = $row ? json_decode($row->json, true) : ['tree' => $gjson['tree']];
+        foreach ($gjson['tree']['nodes'] as $node) {
+            $snapshot['user_path_relation'][$node['id']]['completionnode']['valid'] = in_array($node['id'], $completed, true);
+        }
+        if ($row) {
+            $DB->set_field('local_adele_path_user', 'json', json_encode($snapshot), ['id' => $row->id]);
+        } else {
+            $DB->insert_record('local_adele_path_user', (object) ['user_id' => $person->id, 'course_id' => $ghost->id,
+                'learning_path_id' => $gpathid, 'status' => 'active', 'json' => json_encode($snapshot),
+                'timecreated' => time(), 'timemodified' => time(), 'createdby' => get_admin()->id]);
+        }
+    }
+}
 $masteraccesshosts = [];
 foreach (['O2' => $masteraccesspath, 'O2T' => $masteraccesstimepath, 'O4' => $masterbothpath] as $key => $entry) {
     if ($entry) {
@@ -1948,6 +2094,15 @@ if ($privacypath && $privacysecond) {
     if (class_exists('\\enrol_adele\\local\\reconciler')) {
         \enrol_adele\local\reconciler::purge_user($privacyid, (int) $privacypeople['SWITCH']->id);
     }
+    // Issue local_adele #12: learners see each other only within a group. The
+    // switchable embedding has separate groups and A and B share one, so
+    // taking "all results" back still changes what a learner sees (P1/P2).
+    $privacygroup = $DB->get_field('groups', 'id', ['courseid' => $privacyhost->id, 'name' => 'E2E P Gruppe'])
+        ?: groups_create_group((object) ['courseid' => $privacyhost->id, 'name' => 'E2E P Gruppe']);
+    groups_add_member($privacygroup, $privacya->id);
+    groups_add_member($privacygroup, $privacyb->id);
+    $DB->set_field('course_modules', 'groupmode', SEPARATEGROUPS, ['id' => $privacycms['SWITCHABLE']]);
+    rebuild_course_cache($privacyhost->id, true);
     $privacyenrol($privacyother, $privacypeople['OUTSIDER'], 'student');
     // A teacher - of the OTHER course only. Without editing rights: an
     // editing teacher would become an ADELE assistant (enrollassistant).
@@ -2540,6 +2695,19 @@ if ($diagnosis) {
         printf("export ADELE_FIXTURE_D_%s_LEARNER_NAME='%s'\n", $key, fullname($learner));
         printf("export ADELE_FIXTURE_D_%s_HOST='%d'\n", $key, $host->id);
     }
+}
+if ($groupfixture) {
+    printf("export ADELE_FIXTURE_G16_HOST='%d'\n", $groupfixture['host']->id);
+    printf("export ADELE_FIXTURE_G16_SEPARATE='%d'\n", $groupfixture['separate']);
+    printf("export ADELE_FIXTURE_G16_VISIBLE='%d'\n", $groupfixture['visible']);
+    printf("export ADELE_FIXTURE_G16_PATH='%d'\n", $groupfixture['path']);
+    foreach ($groupfixture['people'] as $key => $person) {
+        printf("export ADELE_FIXTURE_G16_%s='%s'\n", $key, $person->username);
+        printf("export ADELE_FIXTURE_G16_%s_NAME='%s'\n", $key, fullname($person));
+    }
+}
+if ($multiembedhost) {
+    printf("export ADELE_FIXTURE_M18_HOST='%d'\n", $multiembedhost->id);
 }
 if ($linear4path && $linear4host) {
     printf("export ADELE_FIXTURE_L1_LEARNER='%s'\n", $linear4path[1]->username);

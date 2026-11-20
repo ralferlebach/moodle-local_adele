@@ -195,6 +195,17 @@ export function createAppStore() {
         state() {
             return {
                 view: 'defaultView',
+                // The prefix of this application's DOM ids (#18), set in main.js.
+                domPrefix: '',
+                // The group shown in an ADELE activity (#12): -1 the activity's
+                // default, 0 all participants; the server decides what is allowed.
+                groupid: -1,
+                // Group mode, groups, rankings and averages (#12), as the server gives them.
+                groupoverview: null,
+                // Markers and counters per node (#14, #15) while the teachers'
+                // overview is open: nodeid => node of the snapshot.
+                livesnapshot: null,
+                livenodes: {},
                 // Refresh and auto-focus of an open path (mod_adele #26, #27).
                 pathviewsettings: null,
                 // False in a read-only teacher's view (mod_adele #39).
@@ -355,6 +366,23 @@ export function createAppStore() {
             setLpUserPathRelations(state, data){
                 state.lpuserpathrelations = data;
             },
+            setGroupId(state, groupid) {
+                state.groupid = Number(groupid);
+            },
+            setGroupOverview(state, overview) {
+                state.groupoverview = overview;
+                if (overview && state.groupid < 0) {
+                    state.groupid = overview.groupid;
+                }
+            },
+            setLiveSnapshot(state, snapshot) {
+                state.livesnapshot = snapshot;
+                const nodes = {};
+                (snapshot ? snapshot.nodes : []).forEach((node) => {
+                    nodes[node.nodeid] = node;
+                });
+                state.livenodes = nodes;
+            },
             setLpUserPathRelation(state, data){
                 state.lpuserpathrelation = data;
             },
@@ -474,8 +502,40 @@ export function createAppStore() {
                   userid: context.state.user,
                   learningpathid: context.state.learningPathID,
                   contextid: context.state.contextid,
+                  groupid: context.state.groupid,
                 });
                 context.commit('setLpUserPathRelations', lpUserPathRelations);
+            },
+            // Groups, non-learners, live data (#12 - #15): read only, the
+            // server decides what the person may see.
+            async fetchGroupOverview(context) {
+                const overview = await ajax('local_adele_get_group_overview', {
+                    contextid: context.state.contextid,
+                    groupid: context.state.groupid,
+                }, true);
+                context.commit('setGroupOverview', overview);
+                return overview;
+            },
+            async fetchNonLearners(context) {
+                return ajax('local_adele_get_non_learners', {
+                    contextid: context.state.contextid,
+                    groupid: context.state.groupid,
+                }, true);
+            },
+            async fetchLiveSnapshot(context) {
+                return ajax('local_adele_get_live_snapshot', {
+                    contextid: context.state.contextid,
+                    groupid: context.state.groupid,
+                }, true);
+            },
+            async fetchNodePeople(context, { nodeid, kind, page }) {
+                return ajax('local_adele_get_node_people', {
+                    contextid: context.state.contextid,
+                    groupid: context.state.groupid,
+                    nodeid,
+                    kind,
+                    page,
+                }, true);
             },
             async fetchUserPathRelation(context, route) {
                 const lpUserPathRelation = await ajax('local_adele_get_user_path_relation',

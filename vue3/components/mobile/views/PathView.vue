@@ -30,6 +30,10 @@
         :edges="edges"
         @node-click="onNodeClick"
       >
+        <!-- Edges with page-unique DOM ids (#18). -->
+        <template #edge-smoothstep="edgeProps">
+          <ScopedEdge v-bind="edgeProps" shape="smoothstep" />
+        </template>
         <template #node-custom="{ data }">
           <MobileNode
             :data="data"
@@ -46,7 +50,9 @@
 </template>
 
 <script setup>
+import ScopedEdge from '../../edges/ScopedEdge.vue'
 import { uniqueEdges } from '../../../composables/flowHelper/normalizeEdges';
+import { scopeMarkers } from '../../../composables/domIds';
 import { onMounted, ref } from 'vue'
 import { useStore } from 'vuex'
 import { VueFlow, useVueFlow } from '@vue-flow/core'
@@ -75,7 +81,8 @@ const emit = defineEmits([
 function setFlowchart() {
   nodes.value = store.state.lpuserpathrelation.json.tree.nodes
   // One edge per connection (local_adele #603).
-  edges.value = uniqueEdges(store.state.lpuserpathrelation.json.tree.edges)
+  // Markers named per graph, not per page (#18).
+  edges.value = scopeMarkers(uniqueEdges(store.state.lpuserpathrelation.json.tree.edges))
   edges.value.forEach((edge) => {
     edge.deletable = false
     edge.type = 'smoothstep'

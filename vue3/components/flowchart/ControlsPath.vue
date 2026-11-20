@@ -266,7 +266,6 @@ const onCancelConfirmation = (toggle) => {
   >
     <button
       v-if="current_user_view"
-      id="save-learning-path"
       class="btn btn-primary m-2"
       data-testid="learningpath-save"
       @click="onSave"
@@ -274,7 +273,6 @@ const onCancelConfirmation = (toggle) => {
       {{ store.state.strings.save }}
     </button>
     <button
-      id="cancel-learning-path"
       class="btn btn-secondary m-2"
       data-testid="learningpath-close"
       :disabled="showCancelConfirmation"
@@ -288,15 +286,14 @@ const onCancelConfirmation = (toggle) => {
     >
       {{ store.state.strings.flowchart_cancel_confirmation }}
       <button
-        id="cancel-learning-path"
         class="btn btn-primary m-2"
         @click="onCancel"
       >
         {{ store.state.strings.flowchart_back_button }}
       </button>
       <button
-        id="confim-cancel-learning-path"
         class="btn btn-warning m-2"
+        data-testid="learningpath-cancel-confirm"
         @click="onCancelConfirmation(true)"
       >
         {{ store.state.strings.flowchart_cancel_button }}
@@ -357,7 +354,6 @@ const onCancelConfirmation = (toggle) => {
     class="save-restore-controls"
   >
     <button
-      id="cancel-learning-path"
       class="btn btn-secondary m-2"
       data-testid="learningpath-close"
       :disabled="showCancelConfirmation"

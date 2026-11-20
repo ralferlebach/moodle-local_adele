@@ -29,12 +29,12 @@
     <div v-else-if="course_node.course_node_id">
       <label
         class="form-label"
-        :for="`completion-${completion.node_id}-min`"
+        :for="appDomId(store, `completion-${completion.node_id}-min`)"
       >
         {{ store.state.strings.course_completion_minimum_amount }}
       </label>
       <select
-        :id="`completion-${completion.node_id}-min`"
+        :id="appDomId(store, `completion-${completion.node_id}-min`)"
         v-model="data.min_courses"
         :name="`completion-${completion.node_id}-min`"
         class="form-select"
@@ -63,6 +63,7 @@
 <script setup>
 import { onMounted, ref, watch } from 'vue';
 import { useStore } from 'vuex';
+import { appDomId } from '../../../composables/domIds';
 
 const store = useStore();
 const course_node = ref({});

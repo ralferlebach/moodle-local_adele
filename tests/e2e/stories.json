@@ -34,9 +34,10 @@
     "Z1",
     "Z2",
     "Z3",
-    "Z4"
+    "Z4",
+    "A18"
   ],
-  "note": "Test plan AdeLe_E2E_Testplan_UserStories.md, sections 6-18 (C2 is struck from the plan). H and P are covered by mod_adele, V1/V2 (section 27) by enrol_adele.",
+  "note": "Test plan AdeLe_E2E_Testplan_UserStories.md, sections 6-18 (C2 is struck from the plan). H and P are covered by mod_adele, V1/V2 (section 27) by enrol_adele. A18: DOM ids once per page (local_adele #18).",
   "withdrawal": [
     "R4",
     "R5",

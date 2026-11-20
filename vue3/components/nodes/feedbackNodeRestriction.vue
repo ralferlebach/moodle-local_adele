@@ -28,6 +28,7 @@ import { Handle, Position } from '@vue-flow/core'
 import {  useVueFlow } from '@vue-flow/core'
 import { computed, onMounted, ref, watch } from 'vue';
 import { useStore } from 'vuex';
+import { appDomId } from '../../composables/domIds';
 
 const store = useStore()
 
@@ -161,7 +162,7 @@ const renderFeedback = (action, emitting) => {
             <div class="mb-3">
               <div>
                 <label
-                  :for="'feedback_before_restriction_textarea_' + data.childCondition"
+                  :for="appDomId(store, 'feedback_before_restriction_textarea_' + data.childCondition)"
                   class="form-label"
                 >
                   <h5>
@@ -170,18 +171,18 @@ const renderFeedback = (action, emitting) => {
                 </label>
               </div>
               <input
-                :id="'feedback_before_restriction_' + data.childCondition"
+                :id="appDomId(store, 'feedback_before_restriction_' + data.childCondition)"
                 v-model="feedback.feedback_before_checkmark"
                 class="form-check-input"
                 type="checkbox"
                 :disabled="!feedback.visibility"
                 @change="renderFeedback('before', true)"
               >
-              <label :for="'feedback_before_restriction_' + data.childCondition">
+              <label :for="appDomId(store, 'feedback_before_restriction_' + data.childCondition)">
                 {{store.state.strings.nodes_feedback_use_default}}
               </label>
               <textarea
-                :id="'feedback_before_restriction_textarea_' + data.childCondition"
+                :id="appDomId(store, 'feedback_before_restriction_textarea_' + data.childCondition)"
                 v-model="feedback.feedback_before"
                 :name="store.state.strings.nodes_no_feedback"
                 class="form-control"

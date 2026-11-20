@@ -92,14 +92,13 @@
         >
           {{ store.state.strings.flowchart_cancel_confirmation }}
           <button
-            id="cancel-learning-path"
             class="btn btn-primary m-2"
             @click="goBack"
           >
             {{ store.state.strings.flowchart_back_button }}
           </button>
           <button
-            id="confim-cancel-learning-path"
+            data-testid="learningpath-cancel-confirm"
             class="btn btn-warning m-2"
             @click="goBackConfirmation(true)"
           >
@@ -425,6 +424,13 @@ const handleMoveNode = (params) => {
 @keyframes fadeIn {
   0% { opacity: 0; }
   100% { opacity: 1; }
+}
+
+/* No fade for people who asked their system for less motion (WCAG 2.3.3). */
+@media (prefers-reduced-motion: reduce) {
+  .fade-in {
+    animation: none;
+  }
 }
 
 .cancelConfi{

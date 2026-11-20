@@ -58,25 +58,26 @@ function storedEdges(title: string): string[][] {
 }
 
 /**
- * The DOM ids that appear more than once in the graph - nodes, edges and
- * everything inside the canvas. (Outside it the editor's dialogs repeat ids
- * of their own - a finding apart from #603: issue draft
- * local_adele-issue-duplicate-modal-ids.md.)
+ * The DOM ids that appear more than once on the whole page - the graph, the
+ * editor's dialogs and Moodle's page (the dialogs were left out until their
+ * ids were made unique, local_adele #18).
  *
  * @param page The page.
  */
 const duplicateIds = (page: Page) => page.evaluate(() => {
   const seen = new Map<string, number>();
-  document.querySelectorAll('.vue-flow [id]').forEach((e) => seen.set(e.id, (seen.get(e.id) || 0) + 1));
+  document.querySelectorAll('[id]').forEach((e) => seen.set(e.id, (seen.get(e.id) || 0) + 1));
   return [...seen].filter(([, n]) => n > 1).map(([id]) => id);
 });
 
 /**
- * The ids the graph's edges carry on their path elements.
+ * The ids the graph's edges carry on their path elements, without the
+ * application's prefix (adele1-, ...; local_adele #18).
  *
  * @param page The page.
  */
-const edgePathIds = (page: Page) => page.locator('.vue-flow__edges [id]').evaluateAll((els) => els.map((e) => e.id));
+const edgePathIds = (page: Page) => page.locator('.vue-flow__edges path[id]')
+  .evaluateAll((els) => els.map((e) => e.id.replace(/^adele\d+-/, '')));
 
 /**
  * Drag a connection from one node's source handle to another node's target

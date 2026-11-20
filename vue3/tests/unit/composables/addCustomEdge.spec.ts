@@ -35,7 +35,7 @@ interface CustomEdge {
     'position': string;
     'z-index': number;
   };
-  markerEnd: MarkerType;
+  markerEnd: { type: MarkerType };
 }
 
 describe('addCustomEdge', () => {
@@ -54,7 +54,7 @@ describe('addCustomEdge', () => {
         'position': 'relative',
         'z-index': -10
       },
-      markerEnd: MarkerType.ArrowClosed,
+      markerEnd: { type: MarkerType.ArrowClosed },
     };
 
     const result = addCustomEdge(source, target);

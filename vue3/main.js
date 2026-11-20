@@ -30,6 +30,7 @@ import { createAppRouter } from './router/router'
 import tooltipDirective from './directives/tooltip';
 import A11yLiveRegion from './components/A11yLiveRegion.vue';
 import { parsePathViewSettings } from './composables/flowHelper/pathViewSettings';
+import { nextAppDomPrefix } from './composables/domIds';
 
 
 // Enables the Composition API
@@ -62,9 +63,14 @@ function init() {
     localAdeleAppElements.forEach((localAdeleAppElement) => {
         if (!localAdeleAppElement.__vue_app__) {
             const app = createApp({});
+            // Page-unique DOM ids per application (#18): several ADELE
+            // applications on one page must not share the ids of their dialogs.
+            const domPrefix = nextAppDomPrefix();
+            app.config.idPrefix = domPrefix;
             app.use(VueInputAutowidth);
             app.use(Notifications);
             const store = createAppStore();
+            store.state.domPrefix = domPrefix;
             // The plugin version keys the localStorage string cache, so every
             // plugin upgrade invalidates stale cached strings automatically.
             store.dispatch('loadComponentStrings', localAdeleAppElement.getAttribute('stringsrev'));

@@ -57,5 +57,22 @@
         <INDEX NAME="useridlearningpathid" UNIQUE="true" FIELDS="userid, learningpathid" COMMENT="Fix G.18 (Session 003): a person is an editor of a given learning path at most once."/>
       </INDEXES>
     </TABLE>
+    <TABLE NAME="local_adele_activity" COMMENT="When a learner was last seen in a course (live activity markers and node counters, #14 #15). One row per person and course; kept for a limited time (setting liveretention).">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="courseid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="timeseen" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Time (UTC) of the last course or activity view Moodle recorded on the server."/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="userid" TYPE="foreign" FIELDS="userid" REFTABLE="user" REFFIELDS="id"/>
+        <KEY NAME="courseid" TYPE="foreign" FIELDS="courseid" REFTABLE="course" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="useridcourseid" UNIQUE="true" FIELDS="userid, courseid"/>
+        <INDEX NAME="timeseen" UNIQUE="false" FIELDS="timeseen"/>
+      </INDEXES>
+    </TABLE>
   </TABLES>
 </XMLDB>

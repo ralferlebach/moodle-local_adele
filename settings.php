@@ -26,6 +26,7 @@
 use local_adele\admin_setting_course_tags;
 use local_adele\helper\role_names;
 use local_adele\course_restriction\course_restriction_info;
+
 defined('MOODLE_INTERNAL') || die();
 
 $componentname = 'local_adele';
@@ -173,6 +174,24 @@ if ($hassiteconfig) {
         \local_adele\path_view_settings::FOCUS_NEXTOPEN,
         $focusmodes
     ));
+
+    // Live activity markers and node counters (#14, #15). Whether an activity
+    // shows them, and its window, is the activity's setting (mod_adele #17).
+    $settings->add(new admin_setting_heading(
+        $componentname . '/liveheading',
+        get_string('live_heading', $componentname),
+        get_string('live_heading_desc', $componentname)
+    ));
+    foreach (\local_adele\live_activity::BOUNDS as $name => [$default, $min, $max]) {
+        $settings->add(new \local_adele\admin_setting_bounded_int(
+            $componentname . '/' . $name,
+            get_string($name, $componentname),
+            get_string($name . '_desc', $componentname, (object) ['min' => $min, 'max' => $max]),
+            $default,
+            $min,
+            $max
+        ));
+    }
 
     // Build the list of course-assignable roles (used by the assistant-role
     // trigger setting below).

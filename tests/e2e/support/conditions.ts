@@ -273,7 +273,7 @@ export async function saveCriteria(page: Page): Promise<void> {
  */
 export async function closeCriteriaDiscarding(page: Page): Promise<void> {
   await page.locator('.save-restore-controls button.btn-secondary').first().click();
-  await page.locator('#confim-cancel-learning-path').first().click();
+  await page.locator('[data-testid="learningpath-cancel-confirm"]').first().click();
   await expect(page.locator('[data-testid="learningpath-title"]'), 'closing must lead back to the path editor')
     .toBeVisible({ timeout: 30_000 });
 }

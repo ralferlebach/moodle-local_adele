@@ -155,7 +155,10 @@ final class privacy_provider_test extends provider_testcase {
         $collection = provider::get_metadata(new \core_privacy\local\metadata\collection('local_adele'));
         $tables = array_map(fn($item) => $item->get_name(), $collection->get_collection());
         sort($tables);
-        $this->assertSame(['local_adele_learning_paths', 'local_adele_lp_editors', 'local_adele_path_user'], $tables);
+        $this->assertSame(
+            ['local_adele_activity', 'local_adele_learning_paths', 'local_adele_lp_editors', 'local_adele_path_user'],
+            $tables
+        );
     }
 
     /**

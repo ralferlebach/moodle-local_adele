@@ -124,12 +124,12 @@ Feature: High-value cross-stack Adele flows that unit tests cannot reach
     And I am on "Course 1" course homepage
     And I follow "Adele Teacher"
     And I wait until the page is ready
-    And I wait until "#adele-userlist-toggle" "css_element" exists
+    And I wait until "[data-testid='adele-userlist-toggle']" "css_element" exists
     # The participant list renders with the subscribed student's row and the
     # progress / ranking columns.
-    Then "#adele-userlist-table" "css_element" should exist
-    And "#adele-userlist-row-r1" "css_element" should exist
-    And I should see "Student" in the "#adele-userlist-table" "css_element"
+    Then "[data-testid='adele-userlist-table']" "css_element" should exist
+    And "[data-testid='adele-userlist-row-r1']" "css_element" should exist
+    And I should see "Student" in the "[data-testid='adele-userlist-table']" "css_element"
 
   @javascript
   Scenario: A stored XSS node name renders inert in the runtime node feedback
@@ -202,11 +202,11 @@ Feature: High-value cross-stack Adele flows that unit tests cannot reach
     And I am on "Course 1" course homepage
     And I follow "Adele Tabreturn"
     And I wait until the page is ready
-    And I wait until "#adele-userlist-toggle" "css_element" exists
+    And I wait until "[data-testid='adele-userlist-toggle']" "css_element" exists
     And I wait until "[data-id='dndnode_2']" "css_element" exists
     # Student view: cells are firstname, lastname, progress, completed nodes, rank.
     # The completed-nodes cell shows the best route as x/y (#461).
-    And I should see "0/2" in the "#adele-userlist-row-r1 td:nth-child(4)" "css_element"
+    And I should see "0/2" in the "[data-testid='adele-userlist-row-r1'] td:nth-child(4)" "css_element"
     And "[data-id='dndnode_2'] .icon-link i.fa-lock" "css_element" should exist
     # The teacher completes the parent course while the student's tab stays open.
     When "teacher" completes the course "C1" for "student"
@@ -215,4 +215,4 @@ Feature: High-value cross-stack Adele flows that unit tests cannot reach
     # The canvas refreshed in place (gated node unlocked) - the refresh ran...
     Then "[data-id='dndnode_2'] .icon-link i.fa-play" "css_element" should exist
     # ...and the progress list followed without a reload (#568).
-    And I should see "1/2" in the "#adele-userlist-row-r1 td:nth-child(4)" "css_element"
+    And I should see "1/2" in the "[data-testid='adele-userlist-row-r1'] td:nth-child(4)" "css_element"

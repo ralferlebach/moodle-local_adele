@@ -167,6 +167,24 @@ final class catquiz_test extends advanced_testcase {
             ->method('record_exists_sql')
             ->willReturn(false);
 
+        // The plugin local_catquiz builds IN lists with get_in_or_equal() since its issue
+        // #175 (ALiSe-v-1.2.0-legacy, 2026111706); a bare mock returned null
+        // and its "$params += null" broke the test. Built the way the real
+        // method builds them, from the mock's own placeholders.
+        $this->dbmock->expects($this->any())
+            ->method('get_in_or_equal')
+            ->willReturnCallback(static function ($items, $type = SQL_PARAMS_QM, $prefix = 'param', $equal = true) {
+                $items = array_values((array) $items);
+                if ($type !== SQL_PARAMS_NAMED) {
+                    return [($equal ? 'IN' : 'NOT IN') . ' (' . implode(',', array_fill(0, count($items), '?')) . ')', $items];
+                }
+                $params = [];
+                foreach ($items as $index => $item) {
+                    $params[$prefix . $index] = $item;
+                }
+                return [($equal ? 'IN' : 'NOT IN') . ' (:' . implode(', :', array_keys($params)) . ')', $params];
+            });
+
         $this->dbmock->expects($this->any())
             ->method('get_record')
             ->willReturnOnConsecutiveCalls(

@@ -12,7 +12,7 @@ jobs:
       # Change these based on your plugin's requirements
       disable_release: true  # Use true if using the tag-based release workflow
       moodle_branches: "MOODLE_405_STABLE"  # Optional: Only test specific Moodle versions
-      min_php: '8.1'  # Optional: Set minimum PHP version
+      min_php: '8.2'  # PHP 8.1 and older are not tested (local_adele #11)
 
       # Command to install more dependencies
       # Companion plugins come from the owner of the code under test: for a
@@ -47,7 +47,10 @@ jobs:
         moodle-plugin-ci add-plugin --branch ALiSe-v-1.2.0-legacy ralferlebach/moodle-mod_adaptivequiz
         moodle-plugin-ci add-plugin --branch ALiSe-v-1.2.0-legacy ralferlebach/moodle-adaptivequizcatmodel_catquiz
         moodle-plugin-ci add-plugin --branch ALiSe-v-1.2.0-legacy ralferlebach/moodle-local_catquiz
-        git -C moodle-plugin-ci-plugins/moodle-local_catquiz submodule update --init --depth 1
+        # One by one, with a fallback to the default branch for a submodule
+        # pinned to a commit its repository no longer has (catquizcentralhub/host
+        # at ec77e605 - CI 2026-11-19).
+        d=moodle-plugin-ci-plugins/moodle-local_catquiz; git -C "$d" config -f .gitmodules --get-regexp '^submodule\..*\.path$' | while read -r k p; do n="${k#submodule.}"; n="${n%.path}"; u="$(git -C "$d" config -f .gitmodules --get "submodule.$n.url")"; git -C "$d" submodule update --init --depth 1 -- "$p" >/dev/null 2>&1 || { echo "::warning::moodle-local_catquiz: submodule $p is pinned to a commit $u does not have - using its default branch."; rm -rf "${d:?}/$p"; git clone --quiet --depth 1 "$u" "$d/$p"; }; done
 
       # If you need to ignore specific paths (third-party libraries are ignored by default)
       ignore_paths: 'vue3,moodle/tests/fixtures,moodle/Sniffs,moodle/vue3'

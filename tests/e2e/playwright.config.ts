@@ -59,5 +59,11 @@ export default defineConfig({
   },
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+    // The DOM-id and dialog checks of #18 once more in Firefox. Only where
+    // Firefox is installed - the E2E workflow installs it and sets
+    // ADELE_E2E_FIREFOX.
+    ...(process.env.ADELE_E2E_FIREFOX
+      ? [{ name: 'firefox', use: { ...devices['Desktop Firefox'] }, grep: /@story:A18\b/ }]
+      : []),
   ],
 });

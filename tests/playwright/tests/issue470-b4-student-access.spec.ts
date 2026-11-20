@@ -44,6 +44,6 @@ test.describe('ADELE-PW-470-B4 — Student access', () => {
     await expect(page.locator('[id^="local-adele-app"]')).toBeVisible();
 
     // B4: a student may view the path, but must not get editing controls.
-    await expect(page.locator('#save-learning-path')).toHaveCount(0);
+    await expect(page.locator('[data-testid="learningpath-save"]')).toHaveCount(0);
   });
 });

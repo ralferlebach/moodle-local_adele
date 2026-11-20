@@ -26,11 +26,12 @@
 <template>
   <div>
     <div
-      id="helpingSlider"
+      ref="dialog"
+      :id="ids.dialog"
       tabindex="-1"
       role="dialog"
       class="modal fade"
-      aria-labelledby="helpingSliderModal"
+      :aria-labelledby="ids.title"
       aria-hidden="true"
     >
       <div
@@ -43,14 +44,17 @@
             class="modal-header text-white"
             :style="{ backgroundColor: store.state.strings.DARK_GREEN }"
           >
-            <h5 class="modal-title">
+            <h5
+              :id="ids.title"
+              class="modal-title"
+            >
               {{ s.tutorial_title }}
             </h5>
             <button
               type="button"
               class="close text-white"
               data-dismiss="modal"
-              aria-label="Close"
+              :aria-label="store.state.strings.modals_close"
             >
               <span aria-hidden="true">&times;</span>
             </button>
@@ -221,9 +225,17 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue';
+import { appDomId, DIALOGS } from '../../composables/domIds';
 import { useStore } from 'vuex';
 
 const store = useStore();
+// Page-unique ids (#18). The dialog named a label id (helpingSliderModal)
+// that no element carried.
+const ids = computed(() => ({
+  dialog: appDomId(store, DIALOGS.tutorial),
+  title: appDomId(store, 'helpingSlider-title'),
+}));
+const dialog = ref(null);
 const s = computed(() => store.state.strings);
 
 // Prefix with the Moodle root URL so the images resolve on sub-directory installs
@@ -291,7 +303,7 @@ function goToPart(part) {
 
 // Reset to the first step every time the modal is opened.
 onMounted(() => {
-  const modal = document.getElementById('helpingSlider');
+  const modal = dialog.value;
   if (modal) {
     modal.addEventListener('show.bs.modal', () => {
       index.value = 0;

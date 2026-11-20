@@ -60,6 +60,10 @@
           :pattern-color="dark ? '#FFFFFB' : '#aaa'"
           gap="8"
         />
+        <!-- Default edges with page-unique DOM ids (#18). -->
+        <template #edge-default="edgeProps">
+          <ScopedEdge v-bind="edgeProps" />
+        </template>
         <template #node-custom="{ data }">
           <CustomNode
             :data="data"
@@ -164,6 +168,7 @@
 </template>
 
 <script setup>
+import ScopedEdge from '../edges/ScopedEdge.vue'
 // Import needed libraries
 import { ref, watch, nextTick, onMounted, computed, onUnmounted } from 'vue'
 import { VueFlow, useVueFlow, Panel } from '@vue-flow/core'

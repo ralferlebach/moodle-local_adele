@@ -32,12 +32,24 @@ import NodeInformation from '../nodes_items/NodeInformation.vue';
 import ProgressBar from '../nodes_items/ProgressBar.vue';
 import UserInformation from '../nodes_items/UserInformation.vue';
 import truncatedText from '../../composables/nodesHelper/truncatedText';
+import { appDomId, appDomSelector, DIALOGS } from '../../composables/domIds';
 import { useNodeStatus } from '../../composables/useNodeStatus';
 import TeacherCourseAccess from '../nodes_items/TeacherCourseAccess.vue';
+import NodeLive from '../live/NodeLive.vue';
 
 
 // Load Store
 const store = useStore();
+
+// The dialogs this node opens, by their page-unique ids (#18).
+const dialogId = computed(() => ({
+  node: appDomId(store, DIALOGS.node),
+  course: appDomId(store, DIALOGS.course),
+}));
+const dialogTarget = computed(() => ({
+  node: appDomSelector(store, DIALOGS.node),
+  course: appDomSelector(store, DIALOGS.course),
+}));
 // Machine-readable identity and state of this node (#574) and its accessible
 // name (#575 B1). All three come from useNodeStatus, the single derivation
 // shared with the icon the sighted user sees; role="group" is what makes the
@@ -280,7 +292,9 @@ const zoomOnParent = () => {
                 :title="store.state.strings.edit_course_node"
                 :aria-label="store.state.strings.edit_course_node + ': ' + (data.fullname || store.state.strings.nodes_collection)"
                 data-toggle="modal"
-                data-target="#nodeModal"
+                :data-target="dialogTarget.node"
+                :aria-controls="dialogId.node"
+                aria-haspopup="dialog"
                 data-placement="right"
                 @click="setNodeModal"
               >
@@ -361,6 +375,13 @@ const zoomOnParent = () => {
           </div>
         </div>
       </div>
+      <!-- Live markers and counters in the teachers' overview (#14, #15). -->
+      <NodeLive
+        v-if="store.state.livesnapshot"
+        :nodeid="data.node_id"
+        :nodename="data.fullname || ''"
+        class="px-2"
+      />
       <TeacherCourseAccess
         :node-id="data.node_id"
         :course-ids="data.course_node_id || []"

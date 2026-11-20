@@ -36,14 +36,13 @@
     >
       {{ store.state.strings.flowchart_cancel_confirmation }}
       <button
-        id="cancel-learning-path"
         class="btn btn-primary m-2"
         @click="goBack"
       >
         {{ store.state.strings.flowchart_back_button }}
       </button>
       <button
-        id="confim-cancel-learning-path"
+        data-testid="learningpath-cancel-confirm"
         class="btn btn-warning m-2"
         @click="goBackConfirmation(true)"
       >

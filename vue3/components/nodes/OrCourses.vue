@@ -36,8 +36,10 @@ import CourseCompletion from '../nodes_items/CourseCompletion.vue';
 import ExpandedCourses from '../nodes_items/ExpandedCourses.vue';
 import { stackControls, stackToggleId } from '../../composables/nodesHelper/expandedCourse';
 import truncatedText from '../../composables/nodesHelper/truncatedText';
+import { appDomId, appDomSelector, DIALOGS } from '../../composables/domIds';
 import { useNodeStatus } from '../../composables/useNodeStatus';
 import TeacherCourseAccess from '../nodes_items/TeacherCourseAccess.vue';
+import NodeLive from '../live/NodeLive.vue';
 
 const courses = computed(() => {
   if (
@@ -100,6 +102,16 @@ const props = defineProps({
 });
 // Load Store
 const store = useStore();
+
+// The dialogs this node opens, by their page-unique ids (#18).
+const dialogId = computed(() => ({
+  node: appDomId(store, DIALOGS.node),
+  course: appDomId(store, DIALOGS.course),
+}));
+const dialogTarget = computed(() => ({
+  node: appDomSelector(store, DIALOGS.node),
+  course: appDomSelector(store, DIALOGS.course),
+}));
 // Machine-readable identity and state of this node (#574) and its accessible
 // name (#575 B1). All three come from useNodeStatus, the single derivation
 // shared with the icon the sighted user sees; role="group" is what makes the
@@ -237,9 +249,12 @@ const enableButton = () => {
 // folds the stack from its button or from one of its panels; the button then
 // keeps / takes the keyboard focus (#17, TP-08).
 const toggleButton = ref(null)
-const toggleId = computed(() => stackToggleId(props.data.node_id))
+// Prefixed per application (#18), as is every panel id it controls.
+const toggleId = computed(() => appDomId(store, stackToggleId(props.data.node_id)))
 const toggleControls = computed(() =>
-  courseExpanded.value ? stackControls(props.data.node_id, props.data.course_node_id) : undefined
+  courseExpanded.value
+    ? stackControls(props.data.node_id, props.data.course_node_id).split(' ').map((id) => appDomId(store, id)).join(' ')
+    : undefined
 )
 const toggleLabel = computed(() =>
   (courseExpanded.value ? store.state.strings.collapse_courses : store.state.strings.expand_courses)
@@ -361,7 +376,9 @@ const deleteCondition = () => {
                   :title="store.state.strings.edit_course_node"
                   :aria-label="store.state.strings.edit_course_node + ': ' + (data.fullname || store.state.strings.nodes_collection)"
                   data-toggle="modal"
-                  data-target="#nodeModal"
+                  :data-target="dialogTarget.node"
+                  :aria-controls="dialogId.node"
+                  aria-haspopup="dialog"
                   @click="setNodeModal"
                 >
                   <i class="fas fa-pencil" />
@@ -446,7 +463,10 @@ const deleteCondition = () => {
                     type="button"
                     class="btn btn-secondary btn-sm trash-button"
                     data-toggle="modal"
-                    data-target="#courseModal"
+                    :data-target="dialogTarget.course"
+                    :aria-controls="dialogId.course"
+                    aria-haspopup="dialog"
+                    :aria-label="store.state.strings.modals_edit + ' ' + (value.fullname || value.givenname || '')"
                     @click="setCourseModal(value.id)"
                   >
                     <i
@@ -487,6 +507,13 @@ const deleteCondition = () => {
           </div>
         </div>
       </div>
+      <!-- Live markers and counters in the teachers' overview (#14, #15). -->
+      <NodeLive
+        v-if="store.state.livesnapshot"
+        :nodeid="data.node_id"
+        :nodename="data.fullname || ''"
+        class="px-2"
+      />
       <TeacherCourseAccess
         :node-id="data.node_id"
         :course-ids="data.course_node_id || []"

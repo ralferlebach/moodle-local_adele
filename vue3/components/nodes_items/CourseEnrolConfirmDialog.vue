@@ -34,6 +34,7 @@ import { useStore } from 'vuex';
 import { modalKeydown } from './modalFocus';
 
 const store = useStore();
+const domPrefix = () => (store.state.domPrefix ? store.state.domPrefix + '-' : '');
 
 const props = defineProps({
   // The row of the course: courseid, label, fullname, role, roledescription.
@@ -53,7 +54,8 @@ const error = ref('');
 const strings = computed(() => store.state.strings || {});
 const source = computed(() => (store.state.nodeCourseAccess && store.state.nodeCourseAccess.source) || '');
 const ids = computed(() => {
-  const base = `adele-enrol-confirm-${Number(props.course.courseid)}`;
+  // Page-unique (#18), the rule of composables/domIds.js::appDomId().
+  const base = `${domPrefix()}adele-enrol-confirm-${Number(props.course.courseid)}`;
   return { title: `${base}-title`, body: `${base}-body` };
 });
 

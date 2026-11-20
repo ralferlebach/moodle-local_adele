@@ -25,6 +25,7 @@
   // Import needed libraries
   import { computed, ref, watch } from 'vue';
   import { useStore } from 'vuex';
+import { appDomId } from '../../composables/domIds';
   import * as nodeColors from '../../config/nodeColors';
   import { expandedCoursePanelId, expandedCourseTitle } from '../../composables/nodesHelper/expandedCourse';
 
@@ -74,7 +75,7 @@
       props.data?.course_id ?? props.courses?.id ?? props.courses?.[0]?.id?.[0] ?? 'course'
     )
   )
-  const cardId = computed(() => panelKey.value + '-information')
+  const cardId = computed(() => appDomId(store, panelKey.value + '-information'))
   const toggleLabel = computed(() => {
     const what = store.state.strings.a11y_node_information || ''
     // The course's name also where the store's course list does not hold it

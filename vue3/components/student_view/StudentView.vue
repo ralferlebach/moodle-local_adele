@@ -41,6 +41,8 @@
         :userlearningpathparent="userLearningpath"
       />
       <UserList />
+      <!-- The rankings and averages of the own groups (#12). -->
+      <GroupRanking />
     </div>
   </div>
 </template>
@@ -50,6 +52,7 @@
 import { onMounted, onUnmounted, ref } from 'vue'
 import UserList from '../user_view/UserList.vue'
 import UserPath from '../user_view/UserPath.vue'
+import GroupRanking from '../groups/GroupRanking.vue'
 import ViewButton from '../mobile/ViewButton.vue'
 import MobileViews from '../mobile/MobileViews.vue'
 import { useStore } from 'vuex'

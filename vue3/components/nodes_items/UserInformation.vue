@@ -26,6 +26,7 @@
 import { ref, watchEffect, computed } from 'vue';
 import UserFeedbackBlock from './UserFeedbackBlock.vue';
 import { useStore } from 'vuex';
+import { appDomId } from '../../composables/domIds';
 import * as nodeColors from '../../config/nodeColors';
 
 // Load Store
@@ -103,7 +104,7 @@ const iconColor = computed(() => {
 
 // The trigger is a button with a name and a state, so that the feedback is
 // reachable without a mouse (#591): Enter and Space open and close, Escape closes.
-const feedbackId = computed(() => 'adele-node-feedback-' + props.data.node_id);
+const feedbackId = computed(() => appDomId(store, 'adele-node-feedback-' + props.data.node_id));
 const toggleLabel = computed(() => {
   const what = store.state.strings.a11y_node_feedback || '';
   return props.data.fullname ? what + ': ' + props.data.fullname : what;

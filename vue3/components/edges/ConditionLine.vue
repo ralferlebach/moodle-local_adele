@@ -26,7 +26,10 @@
  <script setup>
  import { BaseEdge, EdgeLabelRenderer, getBezierPath } from '@vue-flow/core'
  import { computed } from 'vue'
+ import { useStore } from 'vuex'
+ import { appDomId } from '../../composables/domIds'
 
+ const store = useStore()
  const props = defineProps({
   data: {
     type: Object,
@@ -81,7 +84,7 @@
 <template>
   <!-- You can use the `BaseEdge` component to create your own custom edge more easily -->
   <BaseEdge
-    :id="id"
+    :id="appDomId(store, id)"
     :style="style"
     :path="path[0]"
     :marker-end="markerEnd"

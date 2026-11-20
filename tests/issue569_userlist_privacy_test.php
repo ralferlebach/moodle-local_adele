@@ -171,18 +171,22 @@ final class issue569_userlist_privacy_test extends advanced_testcase {
     }
 
     /**
-     * With 'Results of all other participants' (userlist = 1) the full
-     * leaderboard is intended and stays available to students.
+     * 'Results of all other participants' (userlist = 1) no longer opens the
+     * course's roster to a learner (local_adele #12 AK0-L2, mod_adele #16
+     * AK0-M4): without groups learners are isolated; the rankings of a group
+     * come from get_group_overview, in the group only. Before #12 this test
+     * expected the full roster (2 rows).
      *
      * @return void
      */
-    public function test_all_results_setting_returns_the_full_roster(): void {
+    public function test_all_results_setting_returns_the_own_row_only(): void {
         $this->resetAfterTest(true);
         $this->build_world(1);
         $modulecontextid = context_module::instance($this->adele->cmid)->id;
 
         $relations = $this->fetch($this->student1, $modulecontextid);
-        $this->assertCount(2, $relations);
+        $this->assertCount(1, $relations);
+        $this->assertSame((int) $this->student1->id, (int) $relations[0]['id']);
     }
 
     /**

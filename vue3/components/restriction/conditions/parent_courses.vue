@@ -28,12 +28,12 @@
       <div v-if="data.courses_id && data.courses_id.length > 0">
         <label
           class="form-label"
-          :for="`restriction-${restriction.node_id}-min`"
+          :for="appDomId(store, `restriction-${restriction.node_id}-min`)"
         >
           {{ store.state.strings.restriction_select_number }}
         </label>
         <select
-          :id="`restriction-${restriction.node_id}-min`"
+          :id="appDomId(store, `restriction-${restriction.node_id}-min`)"
           v-model="data.min_courses"
           :name="`restriction-${restriction.node_id}-min`"
           class="form-select"
@@ -66,6 +66,7 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import { useStore } from 'vuex';
+import { appDomId } from '../../../composables/domIds';
 
 const props = defineProps({
   modelValue: {

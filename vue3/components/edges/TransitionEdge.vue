@@ -26,7 +26,10 @@
 import { computed, ref } from 'vue'
 import { TransitionPresets, useDebounceFn, useTransition, watchDebounced } from '@vueuse/core'
 import { getBezierPath, useVueFlow } from '@vue-flow/core'
+import { useStore } from 'vuex'
+import { appDomId } from '../../composables/domIds'
 
+const store = useStore()
 const props = defineProps({
   id: {
     type: String,
@@ -187,7 +190,7 @@ export default {
 
 <template>
   <path
-    :id="id"
+    :id="appDomId(store, id)"
     ref="curve"
     class="vue-flow__edge-path trans-edge"
     :class="{ 'active-edge': isActive }"

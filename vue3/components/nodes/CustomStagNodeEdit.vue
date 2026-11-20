@@ -27,6 +27,7 @@ import { Handle, Position } from '@vue-flow/core'
 import absUrl from '../../composables/absUrl';
 import { computed, ref, onMounted } from 'vue'
 import { useStore } from 'vuex'
+import { appDomId } from '../../composables/domIds';
 import CompletionOutPutItem from '../completion/CompletionOutPutItem.vue'
 import RestrictionOutPutItem from '../restriction/RestrictionOutPutItem.vue'
 import UserInformation from '../nodes_items/UserInformation.vue';
@@ -171,9 +172,12 @@ const enableButton = () => {
 // folds the stack from its button or from one of its panels; the button then
 // keeps / takes the keyboard focus (#17, TP-08).
 const toggleButton = ref(null)
-const toggleId = computed(() => stackToggleId(props.data.node_id))
+// Prefixed per application (#18), as is every panel id it controls.
+const toggleId = computed(() => appDomId(store, stackToggleId(props.data.node_id)))
 const toggleControls = computed(() =>
-  courseExpanded.value ? stackControls(props.data.node_id, props.data.course_node_id) : undefined
+  courseExpanded.value
+    ? stackControls(props.data.node_id, props.data.course_node_id).split(' ').map((id) => appDomId(store, id)).join(' ')
+    : undefined
 )
 const toggleLabel = computed(() =>
   (courseExpanded.value ? store.state.strings.collapse_courses : store.state.strings.expand_courses)

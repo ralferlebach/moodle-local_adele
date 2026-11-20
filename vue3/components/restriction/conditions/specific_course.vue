@@ -27,12 +27,12 @@
     <div class="form-group">
       <label
         class="form-label"
-        for="courseSelect"
+        :for="appDomId(store, `restriction-${restriction.node_id}-course`)"
       >
         {{ store.state.strings.restriction_select_course }}
       </label>
       <select
-        id="courseSelect"
+        :id="appDomId(store, `restriction-${restriction.node_id}-course`)"
         v-model="selectedCourse"
         class="form-select"
       >
@@ -63,6 +63,7 @@
 <script setup>
 import { onMounted, ref, watch } from 'vue';
 import { useStore } from 'vuex';
+import { appDomId } from '../../../composables/domIds';
 
 // Load Store
 const store = useStore();

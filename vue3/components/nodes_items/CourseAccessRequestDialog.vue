@@ -36,6 +36,7 @@ import { useStore } from 'vuex';
 import { modalKeydown } from './modalFocus';
 
 const store = useStore();
+const domPrefix = () => (store.state.domPrefix ? store.state.domPrefix + '-' : '');
 
 const props = defineProps({
   // The row of the course: courseid, label (short name), fullname.
@@ -59,7 +60,8 @@ const recipientid = ref(0);
 
 const strings = computed(() => store.state.strings || {});
 const ids = computed(() => {
-  const base = `adele-access-request-${Number(props.course.courseid)}`;
+  // Page-unique (#18), the rule of composables/domIds.js::appDomId().
+  const base = `${domPrefix()}adele-access-request-${Number(props.course.courseid)}`;
   return { title: `${base}-title`, message: `${base}-message`, recipient: `${base}-recipient`, note: `${base}-note` };
 });
 const recipients = computed(() => (data.value && data.value.recipients) || []);

@@ -61,9 +61,12 @@ function local_adele_render_navbar_output(\renderer_base $renderer) {
     if (
         $iseditor === true
     ) {
-        $output = '<div class="popover-region nav-link icon-no-margin dropdown">
+        // Issue #18: no id - the link is on every page, and the generic id "dropdownMenuButton"
+        // was set by local_catquiz as well (removed there in 2026101701); no
+        // aria-haspopup either - it is a link, it opens no menu.
+        $output = '<div class="popover-region nav-link icon-no-margin">
             <a class="btn btn-secondary"
-            id="dropdownMenuButton" aria-haspopup="true" aria-expanded="false" href="'
+            href="'
                 . $CFG->wwwroot . '/local/adele/index.php#/learningpaths"
             role="button">
             ' . get_string('btnadele', 'local_adele') . '

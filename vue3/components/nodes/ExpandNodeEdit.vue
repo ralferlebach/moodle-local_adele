@@ -27,6 +27,7 @@
 import { computed, onMounted } from 'vue';
 import absUrl from '../../composables/absUrl';
 import { useStore } from 'vuex';
+import { appDomId } from '../../composables/domIds';
 import ExpandNodeInformation from '../nodes_items/ExpandNodeInformation.vue';
 import * as nodeColors from '../../config/nodeColors';
 import TeacherCourseAccess from '../nodes_items/TeacherCourseAccess.vue';
@@ -141,7 +142,8 @@ const courseLabel = computed(() =>
 );
 
 // DOM ids of this panel: unique on the page (stack and course in them).
-const panelId = computed(() => expandedCoursePanelId(props.data.node_id, props.data.course_id));
+// Prefixed per application (#18): two embeds of one path show the same panels.
+const panelId = computed(() => appDomId(store, expandedCoursePanelId(props.data.node_id, props.data.course_id)));
 const headingId = computed(() => panelId.value + '-heading');
 const descriptionId = computed(() => panelId.value + '-desc');
 

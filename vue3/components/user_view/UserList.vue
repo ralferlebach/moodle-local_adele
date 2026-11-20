@@ -24,7 +24,15 @@
 
  <template>
   <div>
-    <button id="adele-userlist-toggle" @click="toggleTable" class="btn-primary toggle-button">
+    <!-- Ids prefixed per application (#18); tests find the parts by data-testid. -->
+    <button
+      :id="appDomId(store, 'adele-userlist-toggle')"
+      data-testid="adele-userlist-toggle"
+      :aria-expanded="isTableVisible ? 'true' : 'false'"
+      :aria-controls="isTableVisible ? appDomId(store, 'adele-userlist-table') : undefined"
+      @click="toggleTable"
+      class="btn-primary toggle-button"
+    >
       {{ isTableVisible ? store.state.strings.user_view_user_list_hide : store.state.strings.user_view_user_list_show }}
       {{ store.state.strings.user_view_user_list }}
     </button>
@@ -33,9 +41,9 @@
         v-if="isTableVisible"
         class="table-container"
       >
-        <table id="adele-userlist-table" class="table" :title="store.state.strings.user_view_user_list">
+        <table :id="appDomId(store, 'adele-userlist-table')" data-testid="adele-userlist-table" class="table adele-userlist-table" :title="store.state.strings.user_view_user_list">
           <thead>
-            <tr id="adele-userlist-header-row">
+            <tr :id="appDomId(store, 'adele-userlist-header-row')" data-testid="adele-userlist-header-row">
               <th
                 v-if="store.state.view !== 'student'"
                 @click="sortTable('id')"
@@ -66,13 +74,14 @@
               <tr
                 v-for="(relation, index) in sortedRelations"
                 :key="relation.id"
-                :id="'adele-userlist-row-r' + (index + 1)"
+                :id="appDomId(store, 'adele-userlist-row-r' + (index + 1))"
+                :data-testid="'adele-userlist-row-r' + (index + 1)"
                 :class="{ 'highlighted-row': relation.id === focusEntry }"
               >
                 <td v-if="store.state.view !== 'student'" :style="{ width: columnWidth }">
                   <router-link
                     :to="{ name: 'userDetails', params: { learningpathId: store.state.learningPathID, userId: relation.id }}"
-                    :id="'adele-userlist-link-' + relation.id + '-' + store.state.learningPathID"
+                    :id="appDomId(store, 'adele-userlist-link-' + relation.id + '-' + store.state.learningPathID)"
                     :title="relation.firstname + ' ' + relation.lastname"
                   >
                     {{ relation.id }}
@@ -98,6 +107,7 @@
 <script setup>
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { useStore } from 'vuex';
+import { appDomId } from '../../composables/domIds';
 import ProgressBar from '../nodes_items/ProgressBar.vue';
 
 // Load Store

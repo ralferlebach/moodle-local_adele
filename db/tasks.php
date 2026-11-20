@@ -37,4 +37,14 @@ $tasks = [
         'month' => '*',
         'dayofweek' => '*',
     ],
+    [
+        // Live activity (#14): rows older than the retention go.
+        'classname' => 'local_adele\task\purge_live_activity',
+        'blocking' => 0,
+        'minute' => '25',
+        'hour' => '4',
+        'day' => '*',
+        'month' => '*',
+        'dayofweek' => '*',
+    ],
 ];

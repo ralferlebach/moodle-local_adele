@@ -75,6 +75,16 @@
       'callback' => 'local_adele_observer::user_views_learning_path',
     ],
     [
+      // Live activity (#14): a course or any of its activities opened. The
+      // observer of the base class hears every *_course_module_viewed event.
+      'eventname' => '\core\event\course_viewed',
+      'callback' => '\local_adele\live_activity::observe',
+    ],
+    [
+      'eventname' => '\core\event\course_module_viewed',
+      'callback' => '\local_adele\live_activity::observe',
+    ],
+    [
       'eventname' => '\core\event\role_assigned',
       'callback' => 'local_adele_observer::assign_assistant_to_role',
     ],

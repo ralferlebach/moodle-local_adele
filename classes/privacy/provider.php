@@ -92,6 +92,16 @@ class provider implements
             'privacy:metadata:local_adele_lp_editors'
         );
 
+        $collection->add_database_table(
+            'local_adele_activity',
+            [
+                'userid' => 'privacy:metadata:local_adele_activity:userid',
+                'courseid' => 'privacy:metadata:local_adele_activity:courseid',
+                'timeseen' => 'privacy:metadata:local_adele_activity:timeseen',
+            ],
+            'privacy:metadata:local_adele_activity'
+        );
+
         return $collection;
     }
 
@@ -115,6 +125,7 @@ class provider implements
                             SELECT 1 FROM {local_adele_path_user} lpu WHERE lpu.user_id = :userid2 OR lpu.createdby = :userid3
                        )
                        OR EXISTS (SELECT 1 FROM {local_adele_lp_editors} lpe WHERE lpe.userid = :userid4)
+                       OR EXISTS (SELECT 1 FROM {local_adele_activity} laa WHERE laa.userid = :userid5)
                    )";
 
         $params = [
@@ -123,6 +134,7 @@ class provider implements
             'userid2' => $userid,
             'userid3' => $userid,
             'userid4' => $userid,
+            'userid5' => $userid,
         ];
 
         $contextlist->add_from_sql($sql, $params);
@@ -162,6 +174,12 @@ class provider implements
         // Users who are editors.
         $sql = "SELECT DISTINCT userid
                   FROM {local_adele_lp_editors}
+                 WHERE userid > 0";
+        $userlist->add_from_sql('userid', $sql, []);
+
+        // Live activity (#14).
+        $sql = "SELECT DISTINCT userid
+                  FROM {local_adele_activity}
                  WHERE userid > 0";
         $userlist->add_from_sql('userid', $sql, []);
     }
@@ -254,6 +272,19 @@ class provider implements
                 (object) ['permissions' => $data]
             );
         }
+
+        // Export the live activity (#14): course and time last seen.
+        $activity = $DB->get_records('local_adele_activity', ['userid' => $userid], 'courseid ASC');
+        if (!empty($activity)) {
+            $data = [];
+            foreach ($activity as $row) {
+                $data[] = (object) [
+                    'courseid' => $row->courseid,
+                    'timeseen' => transform::datetime($row->timeseen),
+                ];
+            }
+            writer::with_context($systemcontext)->export_data(['live_activity'], (object) ['activity' => $data]);
+        }
     }
 
     /**
@@ -284,6 +315,7 @@ class provider implements
             self::take_back_enrolments((int) $pair->learning_path_id, (int) $pair->user_id);
         }
         $DB->delete_records('local_adele_lp_editors');
+        $DB->delete_records('local_adele_activity');
         $DB->set_field('local_adele_learning_paths', 'createdby', 0);
     }
 
@@ -335,6 +367,7 @@ class provider implements
     private static function delete_user(int $userid): void {
         global $DB;
 
+        $DB->delete_records('local_adele_activity', ['userid' => $userid]);
         $lpids = $DB->get_fieldset_select('local_adele_path_user', 'learning_path_id', 'user_id = ?', [$userid]);
         $DB->delete_records('local_adele_path_user', ['user_id' => $userid]);
         foreach (array_unique(array_map('intval', $lpids)) as $lpid) {

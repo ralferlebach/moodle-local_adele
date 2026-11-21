@@ -176,6 +176,27 @@ test.describe('ADELE-E2E-A18 — DOM ids once per page, references on their own 
       await checkDialog(page, app(page).locator('button[aria-controls$="-helpingSlider"]'));
     });
 
+  // What ADELE-SR-01 (tests/a11y-screenreader, NVDA on Windows, manual
+  // workflow) expects NVDA to read out must first be in the accessibility
+  // tree. Checked here on every E2E run, so the manual NVDA run is not the
+  // first place a lost name shows up. Whether NVDA SPEAKS it stays SR-01's job.
+  test('overview: the controls ADELE-SR-01 listens for carry their names and state in the accessibility tree',
+    { tag: ['@story:A18'] }, async ({ page }) => {
+      await loginAs(page, env.adminUser, env.adminPassword);
+      await page.goto('/local/adele/index.php');
+      const row = app(page).locator('[data-testid^="learningpath-row-"]').first();
+      await expect(row).toBeVisible({ timeout: 30_000 });
+      const toggle = row.getByRole('button', { name: /^Visible to users: / });
+      await expect(toggle, 'the visibility toggle is a named button').toHaveCount(1);
+      await expect(toggle, 'and has a pressed state').toHaveAttribute('aria-pressed', /^(true|false)$/);
+      for (const control of ['Edit', 'Delete', 'Duplicate']) {
+        await expect(row.getByRole('button', { name: new RegExp(`^${control}: `) }),
+          `the ${control} control is named`).toHaveCount(1);
+      }
+      await expect(app(page).getByRole('button', { name: /Add a new learning path/i }),
+        'the create control is reachable and named').toHaveCount(1);
+    });
+
   test('editor with a stored path: no id twice on the whole page, every reference resolves, the node dialog works',
     { tag: ['@story:A18'] }, async ({ page }) => {
       await loginAs(page, env.adminUser, env.adminPassword);

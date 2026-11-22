@@ -26,8 +26,23 @@ jobs:
         with:
           node-version: '20'
 
+      # Build gate (#18 DoD6): the bundle in amd/ must be built from the
+      # sources of this commit (buildtools/check-bundle.js compares the source
+      # hash webpack writes into it), and the sources must still build (last
+      # step). It runs BEFORE the installation: "npm install --save-dev
+      # @babel/plugin-syntax-dynamic-import" below adds a line to package.json,
+      # which is one of the hashed sources - checked after it, the gate
+      # compared the bundle with a package.json that is not the commit's
+      # (run 45034960566, 2026-11-22). Needs no dependencies.
+      - name: Check that the shipped bundle is built from these sources
+        working-directory: vue3
+        run: node buildtools/check-bundle.js
+
+      # The remaining checks run even when the gate is red, so one run gives
+      # every result.
       - name: Install the dependencies
         working-directory: vue3
+        if: ${{ !cancelled() }}
         run: |
           # Same flags as in Moodle Plugin CI, so both runs test the same tree.
           npm install --force
@@ -35,26 +50,22 @@ jobs:
 
       - name: Run the tests with coverage
         working-directory: vue3
+        if: ${{ !cancelled() }}
         env:
           NODE_OPTIONS: --max-old-space-size=4096
         run: npm test -- --ci 2>&1 | tee jest-run.log; exit "${PIPESTATUS[0]}"
-
-      # Build gate (#18 DoD6): the bundle in amd/ must be built from the
-      # sources of this commit (buildtools/check-bundle.js compares the source
-      # hash webpack writes into it), and the sources must still build.
-      - name: Check that the shipped bundle is built from these sources
-        working-directory: vue3
-        run: node buildtools/check-bundle.js
 
       # Lint gate (#18 DoD6) as a ratchet: no finding beyond
       # buildtools/lint-baseline.json (the findings the code had when the
       # gate came; lower it when findings go away).
       - name: Lint the Vue sources
         working-directory: vue3
+        if: ${{ !cancelled() }}
         run: node buildtools/lint-gate.js
 
       - name: Check that the sources build
         working-directory: vue3
+        if: ${{ !cancelled() }}
         run: npm run build
 
       - name: Keep the report and the coverage

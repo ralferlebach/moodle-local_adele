@@ -213,6 +213,13 @@ test.describe('ADELE-E2E-A18 — DOM ids once per page, references on their own 
       }
       expect(await duplicateIds(page)).toEqual([]);
       expect(await brokenReferences(page)).toEqual([]);
+      // #18 AK4/DoD3: the navbar's ADELE link (on every page of a manager)
+      // carries no id; "dropdownMenuButton" - set by it and, in the second
+      // source, by local_catquiz (installed in CI) - is on the page no more.
+      await expect(page.locator('[id="dropdownMenuButton"]')).toHaveCount(0);
+      const navlink = page.locator('a[href$="/local/adele/index.php#/learningpaths"]').filter({ hasNot: page.locator('[id]') });
+      await expect(navlink.first(), 'the ADELE link in the navigation is there').toBeAttached();
+      expect(await navlink.first().getAttribute('id'), 'and has no id').toBeNull();
       // Behat finds these fields by id, name or label. The ids carry the
       // application's prefix now, so the names must stay as Behat knows them
       // (CI 2026-11-20: 'Field matching locator "goalsubjectplaceholder" not found').

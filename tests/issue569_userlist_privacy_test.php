@@ -171,22 +171,50 @@ final class issue569_userlist_privacy_test extends advanced_testcase {
     }
 
     /**
-     * 'Results of all other participants' (userlist = 1) no longer opens the
-     * course's roster to a learner (local_adele #12 AK0-L2, mod_adele #16
-     * AK0-M4): without groups learners are isolated; the rankings of a group
-     * come from get_group_overview, in the group only. Before #12 this test
-     * expected the full roster (2 rows).
+     * 'Results of all other participants' (userlist = 1) in an activity
+     * without groups (decision 2026-11-22; the setting applies without groups
+     * only): through the activity a learner gets the activity's learners,
+     * the other rows without id and username - a learner opens nobody's
+     * path. Through the course context the own row only (the next test).
+     * From #12 until this decision the learner got the own row here too.
      *
      * @return void
      */
-    public function test_all_results_setting_returns_the_own_row_only(): void {
+    public function test_all_results_setting_lists_the_learners_without_ids(): void {
         $this->resetAfterTest(true);
         $this->build_world(1);
         $modulecontextid = context_module::instance($this->adele->cmid)->id;
 
         $relations = $this->fetch($this->student1, $modulecontextid);
-        $this->assertCount(1, $relations);
-        $this->assertSame((int) $this->student1->id, (int) $relations[0]['id']);
+        $this->assertCount(2, $relations);
+        $own = array_values(array_filter($relations, fn($row) => (int) $row['id'] === (int) $this->student1->id));
+        $other = array_values(array_filter($relations, fn($row) => (int) $row['id'] !== (int) $this->student1->id));
+        $this->assertCount(1, $own, 'the own row keeps its id');
+        $this->assertSame($this->student2->lastname, $other[0]['lastname']);
+        $this->assertLessThan(0, (int) $other[0]['id'], 'no user id of the other learner');
+        $this->assertSame('', $other[0]['username'], 'no username of the other learner');
+        // A request naming the other learner selects nothing more.
+        $this->assertCount(2, $this->fetch($this->student1, $modulecontextid, (int) $this->student2->id));
+        // Through the course context: the own row only.
+        $relations = $this->fetch($this->student1, (int) context_course::instance($this->course->id)->id);
+        $this->assertSame([(int) $this->student1->id], array_map('intval', array_column($relations, 'id')));
+    }
+
+    /**
+     * With groups the setting is not in effect: 'all results' opens no
+     * roster through the participant list (the rankings of a group are
+     * get_group_overview's), whatever is stored.
+     *
+     * @return void
+     */
+    public function test_all_results_setting_with_groups_returns_the_own_row(): void {
+        global $DB;
+        $this->resetAfterTest(true);
+        $this->build_world(1);
+        $DB->set_field('course_modules', 'groupmode', SEPARATEGROUPS, ['id' => $this->adele->cmid]);
+        rebuild_course_cache($this->course->id, true);
+        $relations = $this->fetch($this->student1, context_module::instance($this->adele->cmid)->id);
+        $this->assertSame([(int) $this->student1->id], array_map('intval', array_column($relations, 'id')));
     }
 
     /**

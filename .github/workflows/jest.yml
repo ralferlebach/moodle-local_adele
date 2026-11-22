@@ -39,6 +39,24 @@ jobs:
           NODE_OPTIONS: --max-old-space-size=4096
         run: npm test -- --ci 2>&1 | tee jest-run.log; exit "${PIPESTATUS[0]}"
 
+      # Build gate (#18 DoD6): the bundle in amd/ must be built from the
+      # sources of this commit (buildtools/check-bundle.js compares the source
+      # hash webpack writes into it), and the sources must still build.
+      - name: Check that the shipped bundle is built from these sources
+        working-directory: vue3
+        run: node buildtools/check-bundle.js
+
+      # Lint gate (#18 DoD6) as a ratchet: no finding beyond
+      # buildtools/lint-baseline.json (the findings the code had when the
+      # gate came; lower it when findings go away).
+      - name: Lint the Vue sources
+        working-directory: vue3
+        run: node buildtools/lint-gate.js
+
+      - name: Check that the sources build
+        working-directory: vue3
+        run: npm run build
+
       - name: Keep the report and the coverage
         if: always()
         uses: actions/upload-artifact@v6

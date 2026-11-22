@@ -40,16 +40,23 @@ export function fill(text, a) {
 }
 
 /**
- * An average as text: "41.7 % (3 of 4 learners with progress)", or "no data"
- * for a group without measured learners - never 0 % or NaN.
+ * An average as text: "31.3 % (average over 4 learners; 1 without progress,
+ * counted as 0 %)", or "no data" for a group without learners - never NaN.
  *
  * @param {object} row groupid, value (null: none), measured, members.
  * @param {object} strings The component strings.
  * @returns {string}
  */
 export function averageText(row, strings) {
-  if (row.value === null || row.value === undefined || !row.measured) {
-    return fill(strings.group_average_nodata, row.members - (row.measured || 0));
+  // Over every learner of the group (#12): those without progress count with
+  // 0 % and are named; a group without learners has no value.
+  if (!row.members || row.value === null || row.value === undefined) {
+    return strings.group_average_nodata;
   }
-  return fill(strings.group_average_value, { value: row.value, measured: row.measured, members: row.members });
+  const missing = row.members - (row.measured || 0);
+  return fill(missing ? strings.group_average_missing : strings.group_average_value, {
+    value: row.value,
+    members: row.members,
+    missing,
+  });
 }

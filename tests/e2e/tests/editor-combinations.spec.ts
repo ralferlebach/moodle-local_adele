@@ -131,6 +131,45 @@ test.describe('ADELE-E2E-E2 — logical combinations by drag and drop', () => {
       await expect(nodes.first()).toContainText('Testkurs 01');
       await expect(nodes.first()).toContainText('Testkurs 02');
       expect(await edgeIds(page), 'a single node has no edges').toEqual([]);
+
+      await test.step('#18 DoD2: the course dialog of the stack - keyboard, own title and fields, Escape, focus back', async () => {
+        const opener = app(page).locator('.vue-flow__node button[aria-controls$="-courseModal"]').first();
+        await expect(opener).toBeVisible({ timeout: 30_000 });
+        const controls = await opener.getAttribute('aria-controls');
+        expect(controls).toMatch(/^adele\d+-courseModal$/);
+        expect(await opener.getAttribute('data-target')).toBe(`#${controls}`);
+        expect(await opener.getAttribute('aria-haspopup')).toBe('dialog');
+        const dialog = page.locator(`[id="${controls}"]`);
+        await opener.focus();
+        await page.keyboard.press('Enter');
+        await expect(dialog).toBeVisible();
+        await expect(dialog).toHaveAttribute('role', 'dialog');
+        const facts = await dialog.evaluate((d) => {
+          const title = document.getElementById(d.getAttribute('aria-labelledby') || '');
+          const labels = [...d.querySelectorAll('label[for]')].map((l) => {
+            const field = document.getElementById(l.getAttribute('for') || '');
+            return !!field && d.contains(field);
+          });
+          return { titleInside: !!title && d.contains(title), labels };
+        });
+        expect(facts.titleInside, 'named by its own title').toBe(true);
+        expect(facts.labels.length, 'it has labelled fields').toBeGreaterThan(0);
+        expect(facts.labels.every(Boolean), 'every label names a field of this dialog').toBe(true);
+        const fullname = dialog.locator('input[id$="-courseModal-fullname"]');
+        await expect(fullname).toBeVisible();
+        const label = (await dialog.locator(`label[for="${await fullname.getAttribute('id')}"]`).innerText()).trim();
+        await expect(fullname, 'the field is named by its own label').toHaveAccessibleName(label);
+        await expect.poll(() => dialog.evaluate((d) => d.contains(document.activeElement))).toBe(true);
+        await page.keyboard.press('Escape');
+        await expect(dialog).toBeHidden();
+        await expect(opener, 'the focus goes back to the button that opened it').toBeFocused();
+        const duplicates = await page.evaluate(() => {
+          const seen = new Map<string, number>();
+          document.querySelectorAll('[id]').forEach((el) => seen.set(el.id, (seen.get(el.id) || 0) + 1));
+          return [...seen].filter(([, n]) => n > 1).map(([id]) => id);
+        });
+        expect(duplicates, 'no id twice after the dialog was used').toEqual([]);
+      });
     } finally {
       await removePath(page, title);
     }

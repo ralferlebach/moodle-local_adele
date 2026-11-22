@@ -111,7 +111,15 @@ class get_lp_user_path_relation extends external_api {
             $teacherhere = $coursecontext
                 && learning_paths::is_embedded_in_course((int) $params['learningpathid'], (int) $params['courseid'])
                 && learning_paths::can_view_participants($context)
-                && learning_paths::is_roster_member((int) $params['courseid'], (int) $params['userpathid']);
+                && learning_paths::is_roster_member((int) $params['courseid'], (int) $params['userpathid'])
+                // ... and of the learners the activity's groups give the
+                // teacher (#12 AK0-L6, #16 AK0-M4), whichever context is named.
+                && \local_adele\cohort::teacher_may_see(
+                    $context,
+                    (int) $params['courseid'],
+                    (int) $params['learningpathid'],
+                    (int) $params['userpathid']
+                );
             if (!$teacherhere) {
                 throw new \required_capability_exception(
                     $context,

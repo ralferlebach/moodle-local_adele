@@ -24,6 +24,10 @@
 export function nextAppDomPrefix(): string;
 export function appDomId(store: { state?: { domPrefix?: string } } | null | undefined, name: string): string;
 export function appDomSelector(store: { state?: { domPrefix?: string } } | null | undefined, name: string): string;
+export function dialogInstanceId(
+  store: { state?: { domPrefix?: string } } | null | undefined,
+  name: string
+): { base: string; release: () => boolean };
 export const DIALOGS: Readonly<{ node: string; course: string; feedback: string; tutorial: string }>;
 export function scopedMarker<T>(marker: T): T | { type: string };
 export function scopeMarkers<T extends object>(edges: T[]): T[];

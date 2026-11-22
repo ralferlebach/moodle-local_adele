@@ -56,9 +56,8 @@ import {
   fixturePassword,
   hasServerClock,
   reseedFixtures,
-  resetServerTime,
   runCompletion,
-  setServerTime,
+  moveServerClock,
 } from '../support/fixtures';
 
 /** The scheduling buffer of local_adele's re-evaluation, plus a margin. */
@@ -73,9 +72,9 @@ test.beforeEach(() => reseedFixtures());
 test.describe('ADELE-E2E-T — a fixed time window opens and closes the entry course', () => {
   test.skip(!hasServerClock(), 'needs the server test clock (libfaketime): ADELE_FAKETIME_LIB and ADELE_FAKETIME_FILE');
 
-  test.afterEach(() => {
+  test.afterEach(async ({ page }) => {
     // Whatever happened, the next chain starts on the real clock.
-    resetServerTime();
+    await moveServerClock(page, null);
   });
 
   // No order between these tests or relative to other files: each starts
@@ -95,7 +94,7 @@ test.describe('ADELE-E2E-T — a fixed time window opens and closes the entry co
     });
 
     await test.step('one day later, the course is closed', async () => {
-      setServerTime(from + 86400 + AFTER_BUFFER);
+      await moveServerClock(page, from + 86400 + AFTER_BUFFER);
       await loginAs(page, learner, fixturePassword());
       await expectCourseClosedAfterTasks(page, entry, 'the period of one day is over');
     });
@@ -108,20 +107,20 @@ test.describe('ADELE-E2E-T — a fixed time window opens and closes the entry co
     const entry = fixtureCourse('T01');
 
     await test.step('T1: one minute before the start, the course is closed', async () => {
-      setServerTime(start - 60);
+      await moveServerClock(page, start - 60);
       drainTaskQueue();
       await loginAs(page, learner, fixturePassword());
       await expectCourseClosed(page, entry, 'the window has not opened yet');
     });
 
     await test.step('T1: after the start, the course opens', async () => {
-      setServerTime(start + AFTER_BUFFER);
+      await moveServerClock(page, start + AFTER_BUFFER);
       await loginAs(page, learner, fixturePassword());
       await expectCourseOpenAfterTasks(page, entry, 'the window is open, so the entry course must be');
     });
 
     await test.step('T2: after the end, the course closes again', async () => {
-      setServerTime(end + AFTER_BUFFER);
+      await moveServerClock(page, end + AFTER_BUFFER);
       await loginAs(page, learner, fixturePassword());
       await expectCourseClosedAfterTasks(page, entry, 'the window has closed, so must the course');
     });
@@ -159,7 +158,7 @@ test.describe('ADELE-E2E-T — a fixed time window opens and closes the entry co
     });
 
     await test.step('window only: AND stays locked, OR opens', async () => {
-      setServerTime(Number(fixture('ADELE_FIXTURE_TIMEWINDOW2_START')) + AFTER_BUFFER);
+      await moveServerClock(page, Number(fixture('ADELE_FIXTURE_TIMEWINDOW2_START')) + AFTER_BUFFER);
       await loginAs(page, who('OR_LATE'), fixturePassword());
       await expectCourseOpenAfterTasks(page, t02, 'OR: the open window is enough');
       await loginAs(page, who('AND_LATE'), fixturePassword());

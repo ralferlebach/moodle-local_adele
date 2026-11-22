@@ -21,8 +21,11 @@ namespace local_adele;
  *
  * Who sees what (#12, visibility matrix):
  *
- *   no groups        learner: only the own path (the participant list holds
- *                    the own row); teacher: the learners of the course.
+ *   no groups        learner: the own path; the participant list holds the
+ *                    own row, or with "Participant results: results of all
+ *                    other participants" the ranking of the activity's
+ *                    learners (no ids, nothing to click); teacher: the
+ *                    learners of the course.
  *   separate groups  learner: per own group a ranking of its members - name
  *                    and progress, no ids, nothing to click; teacher: the
  *                    learners of the group chosen.
@@ -32,15 +35,18 @@ namespace local_adele;
  *                    the learners of the group chosen plus the averages of
  *                    the groups.
  *
- * The activity setting "Participant results: only own results" still closes
- * the rankings for learners. Every number is computed here; foreign single
- * values never leave the server.
+ * The activity setting "Participant results" is shown and applies without
+ * groups only (decision 2026-11-22, cohort::own_results_only()); with groups
+ * the matrix above holds whatever value is stored. Every number is computed
+ * here; foreign single values never leave the server.
  *
  * An average is the arithmetic mean of the progress (the roster's best-route
- * percentage) of the group's learners who have a path. Learners of the group
- * without one are not silently dropped: the result names how many there are
- * ("measured" of "members"); a group without measured learners has no value
- * (null, shown as "no data"), never 0 %.
+ * percentage) over the group's distinct learners - every participant of the
+ * group who takes part by role, also those without a path or progress yet.
+ * They are not dropped from the denominator: they count with 0 %, and the
+ * result says how many they are ("members" - "measured"). A group without
+ * learners has no value (null, shown as "no data"), never 0 % or NaN. A
+ * person in several groups counts once in each of them.
  *
  * @package     local_adele
  * @copyright   2026 Wunderbyte GmbH
@@ -65,8 +71,9 @@ class group_progress {
                 && ($mode === NOGROUPS || $mode === VISIBLEGROUPS || !empty($contract['accessallgroups'])),
             'rankings' => [],
             'averages' => [],
-            // A learner whose activity says "only own results": no rankings.
-            'closed' => $contract['view'] !== 'teacher' && (int) $contract['userlist'] === 2,
+            // A learner whose activity says "only own results" - without groups
+            // only (decision 2026-11-22): the own row, no rankings.
+            'closed' => $contract['view'] !== 'teacher' && cohort::own_results_only($contract),
         ];
         if ($mode === NOGROUPS) {
             return $result;
@@ -83,10 +90,8 @@ class group_progress {
             return $result;
         }
 
-        // A learner. "Only own results": no rankings and no averages.
-        if ($result['closed']) {
-            return $result;
-        }
+        // A learner: the ranking of each own group - whatever "Participant
+        // results" says, which applies without groups only (decision 2026-11-22).
         $own = array_values(array_intersect($contract['owngroups'], array_map('intval', array_keys($allgroups))));
         $members = cohort::group_members($own);
         $learners = $own ? cohort::learners($contract['courseid'], $contract['learningpathid'], array_keys($members)) : [];
@@ -122,7 +127,7 @@ class group_progress {
      * @param array $allgroups id => group record of the grouping.
      * @param array $groupids The groups to compute.
      * @param array $own The person's own groups (first, marked).
-     * @return array list of groupid, groupname, own, value (null: no data), measured, members
+     * @return array list of groupid, groupname, own, value (null: no learners), measured, members
      */
     public static function averages(array $contract, array $allgroups, array $groupids, array $own): array {
         $groupids = array_values(array_intersect(array_map('intval', $groupids), array_map('intval', array_keys($allgroups))));
@@ -158,7 +163,8 @@ class group_progress {
                 'groupid' => $groupid,
                 'groupname' => format_string($allgroups[$groupid]->name, true, ['context' => $context]),
                 'own' => in_array($groupid, $own, true),
-                'value' => $measured ? round($sum / $measured, 1) : null,
+                // Learners without progress count with 0 % (not out of the denominator).
+                'value' => ($measured + $unmeasured) ? round($sum / ($measured + $unmeasured), 1) : null,
                 'measured' => $measured,
                 'members' => $measured + $unmeasured,
             ];
@@ -252,8 +258,13 @@ class group_progress {
         $coursecontext = \context_course::instance($contract['courseid']);
         [$rostersql, $params] = learning_paths::roster_members_sql((int) $contract['courseid']);
         $people = $DB->get_fieldset_sql("SELECT r.id FROM ({$rostersql}) r", $params);
-        if ((int) $contract['groupid'] > 0) {
-            $people = array_intersect($people, array_keys(cohort::group_members([(int) $contract['groupid']])));
+        // The same people the participant list covers (#12 AK0-L7, #13 AK1.6):
+        // the group chosen, or with "all participants" and a grouping the
+        // people of the grouping's groups (re-audit 2026-11-21: groupid 0
+        // used to ignore the grouping).
+        $filter = cohort::member_filter($contract);
+        if ($filter !== null) {
+            $people = array_intersect($people, $filter);
         }
         $people = array_map('intval', array_values($people));
         if (!$people) {

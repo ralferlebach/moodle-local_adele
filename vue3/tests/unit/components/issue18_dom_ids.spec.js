@@ -269,6 +269,61 @@ describe('dialogs of two applications on one page (#18)', () => {
   });
 });
 
+describe('the same dialog twice in one application (#18 AK2, DoD3)', () => {
+  let host;
+  let wrappers;
+
+  beforeEach(() => {
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    const store = makeStore('adele7');
+    // Every dialog twice, in one application (one store, one prefix).
+    wrappers = mountApplication(store, host).concat(mountApplication(store, host));
+  });
+
+  afterEach(() => {
+    wrappers.forEach((w) => w.unmount());
+    host.remove();
+  });
+
+  it('no id is twice; the first instance keeps the id the openers name, the second has its own', () => {
+    expect(duplicates()).toEqual([]);
+    for (const dialog of Object.values(DIALOGS)) {
+      expect(host.querySelectorAll(`[id="adele7-${dialog}"][role="dialog"]`)).toHaveLength(1);
+      expect(host.querySelectorAll(`[id="adele7-${dialog}-2"][role="dialog"]`)).toHaveLength(1);
+    }
+  });
+
+  it('every label and ARIA reference stays inside its own instance', () => {
+    expect(broken(host)).toEqual([]);
+    for (const dialog of Object.values(DIALOGS)) {
+      for (const id of [`adele7-${dialog}`, `adele7-${dialog}-2`]) {
+        const el = host.querySelector(`[id="${id}"]`);
+        const title = el.getAttribute('aria-labelledby');
+        expect(title.startsWith(id + '-')).toBe(true);
+        expect(el.querySelector(`[id="${title}"]`)).not.toBeNull();
+        el.querySelectorAll('label[for]').forEach((label) => {
+          expect(el.querySelector(`[id="${label.getAttribute('for')}"]`)).not.toBeNull();
+        });
+      }
+    }
+  });
+
+  it('an instance gives its number back when it unmounts', () => {
+    const store = makeStore('adele8');
+    const other = document.createElement('div');
+    document.body.appendChild(other);
+    const first = mountApplication(store, other);
+    let second = mountApplication(store, other);
+    second.forEach((w) => w.unmount());
+    second = mountApplication(store, other);
+    expect(other.querySelectorAll('[id="adele8-nodeModal-2"]')).toHaveLength(1);
+    expect(other.querySelectorAll('[id="adele8-nodeModal-3"]')).toHaveLength(0);
+    first.concat(second).forEach((w) => w.unmount());
+    other.remove();
+  });
+});
+
 describe('the learning-module forms (#18)', () => {
   it('the add form and the edit form, open together, use their own fields and colour lists', async () => {
     const host = document.createElement('div');

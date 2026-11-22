@@ -37,6 +37,9 @@ import { nextAppDomPrefix } from './composables/domIds';
 window.__VUE_OPTIONS_API__ = true;
 // Disable devtools in production
 window.__VUE_PROD_DEVTOOLS__ = false;
+// The sources this bundle was built from (build gate, buildtools/check-bundle.js).
+// eslint-disable-next-line no-undef
+window.ADELE_SOURCE_HASH = typeof __ADELE_SOURCE_HASH__ === 'undefined' ? '' : __ADELE_SOURCE_HASH__;
 
 function init() {
     // We need to overwrite the variable for lazy loading.

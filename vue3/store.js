@@ -206,6 +206,9 @@ export function createAppStore() {
                 // overview is open: nodeid => node of the snapshot.
                 livesnapshot: null,
                 livenodes: {},
+                // Where a teacher left the overview for a learner (#15 AK3.5):
+                // viewport, scroll position and the control to focus again.
+                returnpoint: null,
                 // Refresh and auto-focus of an open path (mod_adele #26, #27).
                 pathviewsettings: null,
                 // False in a read-only teacher's view (mod_adele #39).
@@ -365,6 +368,9 @@ export function createAppStore() {
           },
             setLpUserPathRelations(state, data){
                 state.lpuserpathrelations = data;
+            },
+            setReturnPoint(state, point) {
+                state.returnpoint = point;
             },
             setGroupId(state, groupid) {
                 state.groupid = Number(groupid);

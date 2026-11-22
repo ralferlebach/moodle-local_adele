@@ -72,12 +72,13 @@
         v-for="marker in node.markers"
         :key="marker.userid"
         type="button"
-        :class="['adele-marker', 'adele-marker-' + marker.state]"
+        :class="['adele-marker', 'adele-marker-' + marker.state, { 'adele-marker-ambiguous': marker.ambiguous > 1 }]"
         :aria-label="markerLabel(marker)"
         :title="markerLabel(marker)"
         :data-testid="'adele-marker-' + nodeid + '-' + marker.userid"
         :data-state="marker.state"
-        @click="openPerson(marker.userid)"
+        :data-ambiguous="marker.ambiguous > 1 ? marker.ambiguous : null"
+        @click="openPerson(marker.userid, 'adele-marker-' + nodeid + '-' + marker.userid)"
       >
         <img
           :src="marker.avatar"
@@ -85,11 +86,16 @@
           class="adele-marker-avatar"
         >
         <span class="adele-marker-name">{{ marker.fullname }}</span>
-        <span class="sr-only">{{ stateText(marker.state) }}</span>
+        <span class="sr-only">{{ stateText(marker) }}</span>
         <span
           class="adele-marker-state"
           aria-hidden="true"
         >{{ marker.state === 'active' ? '\u25CF' : '\u25CB' }}</span>
+        <span
+          v-if="marker.ambiguous > 1"
+          class="adele-marker-ambiguous-count"
+          aria-hidden="true"
+        >?{{ marker.ambiguous }}</span>
       </button>
       <button
         v-if="node.moremarkers > 0"
@@ -139,7 +145,7 @@
               class="btn btn-link btn-sm p-0 text-left"
               :aria-label="fill(strings.live_people_open, person.fullname)"
               data-testid="adele-live-person"
-              @click="openPerson(person.userid)"
+              @click="openPerson(person.userid, 'adele-counter-' + openKind + '-' + nodeid)"
             >
               {{ person.fullname }}
             </button>
@@ -183,6 +189,7 @@
 import { computed, nextTick, ref } from 'vue';
 import { useStore } from 'vuex';
 import { useRouter } from 'vue-router';
+import { useVueFlow } from '@vue-flow/core';
 import { appDomId } from '../../composables/domIds';
 import { fill } from '../../composables/groupProgress';
 
@@ -193,6 +200,13 @@ const props = defineProps({
 
 const store = useStore();
 const router = useRouter();
+// The flow this node is drawn in (inside VueFlow; absent in isolation).
+let flow = null;
+try {
+  flow = useVueFlow();
+} catch (e) {
+  flow = null;
+}
 const strings = computed(() => store.state.strings || {});
 const node = computed(() => (store.state.livenodes || {})[props.nodeid] || null);
 const enabled = computed(() => !!(store.state.livesnapshot && store.state.livesnapshot.enabled));
@@ -209,8 +223,17 @@ const completedButton = ref(null);
 let firstName = null;
 const pages = computed(() => Math.max(1, Math.ceil(total.value / perpage.value)));
 
-const stateText = (state) => (state === 'active' ? strings.value.live_state_active : strings.value.live_state_inactive);
-const markerLabel = (marker) => fill(strings.value.live_marker_label, { name: marker.fullname, state: stateText(marker.state) });
+// Inactive with a last activity that is not one node (#14): the marker is on
+// every such node and says so - no node is picked.
+const stateText = (marker) => {
+  if (marker.state === 'active') {
+    return strings.value.live_state_active;
+  }
+  return marker.ambiguous > 1
+    ? fill(strings.value.live_state_inactive_ambiguous, marker.ambiguous)
+    : strings.value.live_state_inactive;
+};
+const markerLabel = (marker) => fill(strings.value.live_marker_label, { name: marker.fullname, state: stateText(marker) });
 
 /**
  * Load a page of names.
@@ -271,9 +294,20 @@ function close() {
 /**
  * Open a learner's path, centred on this node.
  *
+ * The way back is remembered (#15 AK3.5): the overview's viewport and scroll
+ * position, and the control that led here - a marker, or the counter whose
+ * list held the name - to be focused again when the teacher comes back.
+ *
  * @param {number} userid
+ * @param {string|null} origin data-testid of the control to focus on return.
  */
-function openPerson(userid) {
+function openPerson(userid, origin = null) {
+  store.commit('setReturnPoint', {
+    learningpathid: store.state.learningPathID,
+    viewport: flow && flow.viewport && flow.viewport.value ? { ...flow.viewport.value } : null,
+    scrolly: typeof window !== 'undefined' ? window.scrollY : 0,
+    focus: origin,
+  });
   router.push({
     name: 'userDetails',
     params: { learningpathId: store.state.learningPathID, userId: userid },
@@ -302,6 +336,13 @@ defineExpose({ toggle, close, openPerson });
 .adele-marker-inactive {
   border: 2px dashed #6c757d;
   color: #495057;
+}
+.adele-marker-ambiguous {
+  border-style: dotted;
+}
+.adele-marker-ambiguous-count {
+  margin-left: 0.15rem;
+  font-weight: bold;
 }
 .adele-marker-avatar {
   width: 1.5rem;

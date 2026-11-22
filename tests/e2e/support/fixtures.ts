@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { writeFileSync } from 'node:fs';
+import { renameSync, writeFileSync } from 'node:fs';
 import { Locator, Page, expect } from '@playwright/test';
 
 /**
@@ -263,7 +263,20 @@ export function setServerTime(epoch: number): void {
     throw new Error('No test clock: ADELE_FAKETIME_FILE is not set.');
   }
   const offset = Math.round(epoch - Date.now() / 1000);
-  writeFileSync(file, `${offset >= 0 ? '+' : ''}${offset}s\n`);
+  writeClockFile(file, `${offset >= 0 ? '+' : ''}${offset}s\n`);
+}
+
+/**
+ * Write the clock file in one step: a reader (libfaketime reads it on every
+ * clock call) never sees it truncated or half written.
+ *
+ * @param file The clock file.
+ * @param content The offset.
+ */
+function writeClockFile(file: string, content: string): void {
+  const temp = `${file}.${process.pid}.tmp`;
+  writeFileSync(temp, content);
+  renameSync(temp, file);
 }
 
 /**
@@ -305,12 +318,34 @@ export function reseedFixtures(): void {
 }
 
 /**
+ * Move the server clock with the browser out of the way.
+ *
+ * A request still running on the web server while the clock jumps - a poll
+ * of the page just left - may wait for a deadline it computed on the other
+ * side of the jump (CI 2026-11-21, mod_adele: a jump back by a month stalled
+ * the web server for good). So the page leaves the site first and the
+ * server gets a moment to finish what it serves, then the clock moves.
+ *
+ * @param page The test's page.
+ * @param epoch The instant the server should see as "now"; null: the real time.
+ */
+export async function moveServerClock(page: Page, epoch: number | null): Promise<void> {
+  await page.goto('about:blank');
+  await page.waitForTimeout(1000);
+  if (epoch === null) {
+    resetServerTime();
+  } else {
+    setServerTime(epoch);
+  }
+}
+
+/**
  * Put the server back on the real time.
  */
 export function resetServerTime(): void {
   const file = process.env.ADELE_FAKETIME_FILE;
   if (file) {
-    writeFileSync(file, '+0s\n');
+    writeClockFile(file, '+0s\n');
   }
 }
 

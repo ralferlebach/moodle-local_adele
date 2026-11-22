@@ -258,11 +258,51 @@ const finishEdit = () => {
 
 // load useVueFlow properties / functions
 const { nodes, edges, findNode, onConnect, addEdges, zoomTo,
-    addNodes, removeNodes, fitView, viewport, setCenter,
+    addNodes, removeNodes, fitView, viewport, setCenter, setViewport,
     toObject, getEdges, onNodeDragStop, updateNode } = useVueFlow({
 nodes: [],
 edges: [],
 })
+
+// Coming back from a learner opened from the live data (#15 AK3.5): the
+// overview as the teacher left it - viewport, scroll position, and the focus
+// on the marker or counter that led away - instead of a fresh fit.
+const returnPoint = store.state.view === 'teacher'
+  && store.state.returnpoint
+  && Number(store.state.returnpoint.learningpathid) === Number(store.state.learningPathID)
+  ? store.state.returnpoint
+  : null;
+let restoring = !!returnPoint;
+
+/**
+ * Put the overview back as the teacher left it, then forget the return point.
+ */
+function restoreReturnPoint() {
+  if (returnPoint.viewport) {
+    setViewport(returnPoint.viewport);
+  }
+  if (typeof window !== 'undefined' && typeof window.scrollTo === 'function') {
+    window.scrollTo(0, returnPoint.scrolly || 0);
+  }
+  store.commit('setReturnPoint', null);
+  if (returnPoint.focus) {
+    // The node's live data arrive with the first snapshot; wait for the control.
+    let tries = 0;
+    const focusLater = () => {
+      const root = document.querySelector('[id^="local-adele-app"]') || document;
+      const target = root.querySelector(`[data-testid="${returnPoint.focus}"]`);
+      if (target) {
+        target.focus({ preventScroll: true });
+      } else if (tries++ < 50) {
+        setTimeout(focusLater, 100);
+      }
+    };
+    focusLater();
+  }
+  setTimeout(() => {
+    restoring = false;
+  }, 500);
+}
 
 onMounted(() => {
   store.state.undoNodes = []
@@ -276,7 +316,9 @@ onMounted(() => {
         // Re-fit the whole path whenever the canvas resizes - window resize or the
         // space freed by hiding the user list - so all nodes stay reachable (#480).
         clearTimeout(fitTimeout);
-        fitTimeout = setTimeout(() => fitView({ padding: 0.2, duration: 400 }), 150);
+        if (!restoring) {
+          fitTimeout = setTimeout(() => fitView({ padding: 0.2, duration: 400 }), 150);
+        }
         break;
       }
     }
@@ -288,7 +330,11 @@ onMounted(() => {
   }
   setTimeout(() => {
     nextTick().then(() => {
-      fitView({ duration: 1000 })
+      if (returnPoint) {
+        restoreReturnPoint();
+      } else {
+        fitView({ duration: 1000 })
+      }
     })
   }, 300)
 });

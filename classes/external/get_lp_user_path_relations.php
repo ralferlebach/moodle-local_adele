@@ -127,41 +127,66 @@ class get_lp_user_path_relations extends external_api {
         }
         $relations = learning_paths::get_learning_user_relations($params);
 
-        // A teacher in an ADELE activity with groups sees the learners of the
-        // group chosen (#12, #16): the activity's contract decides which
-        // groups may be chosen; a foreign group is refused there.
-        if ($isprivileged && isset($relations[0]) && $context->contextlevel == CONTEXT_MODULE) {
-            $cm = get_coursemodule_from_id('adele', $context->instanceid);
-            if ($cm && (int) $cm->course === (int) $params['courseid']) {
-                $contract = \local_adele\cohort::contract((int) $context->id, (int) $params['groupid']);
-                if (
-                    $contract['view'] === 'teacher' && (int) $contract['learningpathid'] === (int) $params['learningpathid']
-                        && (int) $contract['groupmode'] !== NOGROUPS
-                ) {
-                    $shown = \local_adele\cohort::learners_of_contract($contract);
-                    $relations = self::rerank(array_values(array_filter(
-                        $relations,
-                        static fn($relation) => isset($shown[(int) $relation['id']])
-                    )));
-                }
+        // A teacher sees the learners the activity's groups give them (#12
+        // AK0-L1/L6, #16 AK0-M2/M4): through the activity's module context
+        // the group chosen there (a foreign group is refused); through any
+        // other context - the course, another module, an activity of another
+        // path - no more than the path's activities in the course give
+        // together. Before, only the module context of the path's activity
+        // was filtered, and the course context returned the whole roster.
+        if ($isprivileged && isset($relations[0])) {
+            $scope = \local_adele\cohort::teacher_scope(
+                $context,
+                (int) $params['courseid'],
+                (int) $params['learningpathid'],
+                (int) $params['groupid']
+            );
+            if ($scope !== null) {
+                $relations = self::rerank(array_values(array_filter(
+                    $relations,
+                    static fn($relation) => isset($scope[(int) $relation['id']])
+                )));
             }
         }
 
-        // A learner gets the own row only (#12 AK0-L2, #16 AK0-M4): without
-        // groups the learners of an activity are isolated, whatever the
-        // setting 'Participant results' says and through whichever context
-        // the call comes. The rankings of a group are get_group_overview's,
-        // without ids and in the group only. (Before #12, 'all results' gave
-        // learners the course's whole roster; 'only own results', #569, the
-        // own row.) Filtering after ranking keeps the caller's true rank.
+        // A learner (#12 AK0-L2, #16 AK0-M4, decision 2026-11-22):
+        // - through the module context of an activity WITHOUT groups whose
+        // 'Participant results' says 'results of all other participants':
+        // the ranking of that activity's learners (cohort: course roster,
+        // active path, participation by role), ranked among themselves.
+        // The other rows carry no id and no username - a learner can open
+        // nobody's path, the client only needs a key;
+        // - everywhere else - 'only own results' (#569), an activity with
+        // groups (the rankings of a group are get_group_overview's), the
+        // course or any other context - the own row only. Filtering after
+        // ranking keeps the caller's true rank.
         if (!$isprivileged && isset($relations[0])) {
             $ownid = (int) $USER->id;
-            $relations = array_values(array_filter(
-                $relations,
-                static function ($relation) use ($ownid) {
-                    return (int) $relation['id'] === $ownid;
+            $scope = \local_adele\cohort::learner_roster_scope(
+                $context,
+                (int) $params['courseid'],
+                (int) $params['learningpathid']
+            );
+            if ($scope !== null) {
+                $relations = self::rerank(array_values(array_filter(
+                    $relations,
+                    static fn($relation) => (int) $relation['id'] === $ownid || isset($scope[(int) $relation['id']])
+                )));
+                foreach ($relations as $index => &$relation) {
+                    if ((int) $relation['id'] !== $ownid) {
+                        $relation['id'] = -($index + 1);
+                        $relation['username'] = '';
+                    }
                 }
-            ));
+                unset($relation);
+            } else {
+                $relations = array_values(array_filter(
+                    $relations,
+                    static function ($relation) use ($ownid) {
+                        return (int) $relation['id'] === $ownid;
+                    }
+                ));
+            }
         }
 
         return $relations;

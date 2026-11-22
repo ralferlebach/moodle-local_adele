@@ -41,8 +41,9 @@ const strings = {
   group_averages_heading: 'Group averages',
   group_average_own: 'Average of your group {$a}',
   group_other_groups: 'Other groups',
-  group_average_value: '{$a->value} % ({$a->measured} of {$a->members} learners with progress)',
-  group_average_nodata: 'No data ({$a} learners without progress)',
+  group_average_value: '{$a->value} % (average over {$a->members} learners)',
+  group_average_missing: '{$a->value} % (average over {$a->members} learners; {$a->missing} without progress, counted as 0 %)',
+  group_average_nodata: 'No data (no learners in this group)',
   group_you: '(you)',
   group_rank: 'Rank {$a}',
   group_progress_value: '{$a} % progress',
@@ -58,6 +59,7 @@ const strings = {
   nonlearners_loading: 'Loading ...',
   live_state_active: 'active now',
   live_state_inactive: 'last seen here',
+  live_state_inactive_ambiguous: 'last seen - not unique: shown on {$a} nodes',
   live_marker_label: '{$a->name}, {$a->state}',
   live_more: '+{$a}',
   live_more_label: '{$a} more',
@@ -89,6 +91,7 @@ const makeStore = (state = {}, actions = {}) => createStore({
   mutations: {
     setGroupId(s, id) { s.groupid = Number(id); },
     setGroupOverview(s, o) { s.groupoverview = o; },
+    setReturnPoint(s, p) { s.returnpoint = p; },
   },
   actions: {
     fetchGroupOverview: jest.fn(),
@@ -104,9 +107,13 @@ describe('texts (#12)', () => {
     expect(fill('{$a->a} of {$a->b}', { a: 1, b: 2 })).toBe('1 of 2');
   });
 
-  it('an average names its learners; a group without measured learners has no data - never 0 % or NaN', () => {
-    expect(averageText({ value: 41.7, measured: 3, members: 4 }, strings)).toBe('41.7 % (3 of 4 learners with progress)');
-    expect(averageText({ value: null, measured: 0, members: 2 }, strings)).toBe('No data (2 learners without progress)');
+  it('an average is over all learners of the group; those without progress are named and count 0 %; no learners: no data', () => {
+    expect(averageText({ value: 41.7, measured: 4, members: 4 }, strings)).toBe('41.7 % (average over 4 learners)');
+    expect(averageText({ value: 31.3, measured: 3, members: 4 }, strings))
+      .toBe('31.3 % (average over 4 learners; 1 without progress, counted as 0 %)');
+    expect(averageText({ value: 0, measured: 0, members: 2 }, strings))
+      .toBe('0 % (average over 2 learners; 2 without progress, counted as 0 %)');
+    expect(averageText({ value: null, measured: 0, members: 0 }, strings)).toBe('No data (no learners in this group)');
     expect(averageText({ value: null, measured: 0, members: 0 }, strings)).not.toMatch(/NaN|0 %/);
   });
 });
@@ -172,7 +179,7 @@ describe('GroupRanking.vue (#12)', () => {
     const section = wrapper.find('[data-testid="adele-group-ranking-5"]');
     const html = section.html();
     expect(html.indexOf('adele-own-average-5')).toBeLessThan(html.indexOf('adele-ranking-list'));
-    expect(section.find('[data-testid="adele-own-average-5"]').text()).toContain('41.7 % (4 of 4');
+    expect(section.find('[data-testid="adele-own-average-5"]').text()).toContain('41.7 % (average over 4 learners)');
     const others = wrapper.findAll('[data-testid^="adele-group-average-"]');
     expect(others.map((o) => o.attributes('data-testid'))).toEqual(['adele-group-average-6', 'adele-group-average-7']);
     expect(others[1].text()).toContain('No data');
@@ -227,7 +234,8 @@ describe('GroupSelector.vue and GroupAverages.vue (#12)', () => {
     const wrapper = mount(GroupAverages, {
       props: { averages: [
         { groupid: 5, groupname: 'Blue', own: true, value: 20, measured: 1, members: 2 },
-        { groupid: 6, groupname: 'Red', own: false, value: null, measured: 0, members: 3 },
+        { groupid: 6, groupname: 'Red', own: false, value: 0, measured: 0, members: 3 },
+        { groupid: 7, groupname: 'Empty', own: false, value: null, measured: 0, members: 0 },
       ] },
       global: { plugins: [makeStore()] },
     });
@@ -235,8 +243,9 @@ describe('GroupSelector.vue and GroupAverages.vue (#12)', () => {
     expect(wrapper.find(`#${section.attributes('aria-labelledby')}`).text()).toBe('Group averages');
     const rows = wrapper.findAll('li');
     expect(rows[0].classes()).toContain('font-weight-bold');
-    expect(rows[0].text()).toBe('Blue: 20 % (1 of 2 learners with progress)');
-    expect(rows[1].text()).toBe('Red: No data (3 learners without progress)');
+    expect(rows[0].text()).toBe('Blue: 20 % (average over 2 learners; 1 without progress, counted as 0 %)');
+    expect(rows[1].text()).toBe('Red: 0 % (average over 3 learners; 3 without progress, counted as 0 %)');
+    expect(rows[2].text()).toBe('Empty: No data (no learners in this group)');
   });
 });
 
@@ -310,6 +319,25 @@ describe('NodeLive.vue (#14, #15)', () => {
     wrapper.unmount();
   });
 
+  it('a last activity that is not one node is said, in text and visibly, with the number of nodes (#14)', () => {
+    node.markers.push({ userid: 13, fullname: 'Tia Tie', avatar: 'https://x/t.png', state: 'inactive', lastseen: 5, ambiguous: 3 });
+    try {
+      const wrapper = mountNode();
+      const marker = wrapper.find('[data-testid="adele-marker-n1-13"]');
+      expect(marker.attributes('aria-label')).toBe('Tia Tie, last seen - not unique: shown on 3 nodes');
+      expect(marker.attributes('data-ambiguous')).toBe('3');
+      expect(marker.classes()).toContain('adele-marker-ambiguous');
+      expect(marker.find('.adele-marker-ambiguous-count').text()).toBe('?3');
+      // A clear inactive marker stays as it was.
+      const idle = wrapper.find('[data-testid="adele-marker-n1-12"]');
+      expect(idle.attributes('data-ambiguous')).toBeUndefined();
+      expect(idle.find('.adele-marker-ambiguous-count').exists()).toBe(false);
+      wrapper.unmount();
+    } finally {
+      node.markers.pop();
+    }
+  });
+
   it('switched off: no active counter, no markers; the completed counter stays', () => {
     const wrapper = mountNode(false);
     expect(wrapper.find('[data-testid="adele-counter-active-n1"]').exists()).toBe(false);
@@ -353,8 +381,15 @@ describe('NodeLive.vue (#14, #15)', () => {
     await flushPromises();
     await wrapper.find('[data-testid="adele-live-person"]').trigger('click');
     expect(mockPush).toHaveBeenCalledWith({ name: 'userDetails', params: { learningpathId: 7, userId: 13 }, query: { node: 'n1' } });
+    // The way back (#15 AK3.5): the counter whose list held the name gets the focus again.
+    const store = wrapper.vm.$store;
+    expect(store.state.returnpoint).toEqual(expect.objectContaining({
+      learningpathid: 7, focus: 'adele-counter-active-n1', scrolly: expect.any(Number),
+    }));
+    expect(store.state.returnpoint.viewport).toEqual(expect.objectContaining({ zoom: expect.any(Number) }));
     await wrapper.find('[data-testid="adele-marker-n1-12"]').trigger('click');
     expect(mockPush).toHaveBeenLastCalledWith({ name: 'userDetails', params: { learningpathId: 7, userId: 12 }, query: { node: 'n1' } });
+    expect(store.state.returnpoint.focus).toBe('adele-marker-n1-12');
     wrapper.unmount();
   });
 

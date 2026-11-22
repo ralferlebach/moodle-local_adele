@@ -2094,14 +2094,15 @@ if ($privacypath && $privacysecond) {
     if (class_exists('\\enrol_adele\\local\\reconciler')) {
         \enrol_adele\local\reconciler::purge_user($privacyid, (int) $privacypeople['SWITCH']->id);
     }
-    // Issue local_adele #12: learners see each other only within a group. The
-    // switchable embedding has separate groups and A and B share one, so
-    // taking "all results" back still changes what a learner sees (P1/P2).
+    // The setting "Participant results" applies without groups only (decision
+    // 2026-11-22): the switchable embedding has none. A and B share a group
+    // of the course, so the story can switch the embedding to separate
+    // groups and show the setting has no effect there (P1/P2).
     $privacygroup = $DB->get_field('groups', 'id', ['courseid' => $privacyhost->id, 'name' => 'E2E P Gruppe'])
         ?: groups_create_group((object) ['courseid' => $privacyhost->id, 'name' => 'E2E P Gruppe']);
     groups_add_member($privacygroup, $privacya->id);
     groups_add_member($privacygroup, $privacyb->id);
-    $DB->set_field('course_modules', 'groupmode', SEPARATEGROUPS, ['id' => $privacycms['SWITCHABLE']]);
+    $DB->set_field('course_modules', 'groupmode', NOGROUPS, ['id' => $privacycms['SWITCHABLE']]);
     rebuild_course_cache($privacyhost->id, true);
     $privacyenrol($privacyother, $privacypeople['OUTSIDER'], 'student');
     // A teacher - of the OTHER course only. Without editing rights: an

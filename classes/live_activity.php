@@ -33,10 +33,15 @@ namespace local_adele;
  *   active     a learner seen in one of the node's courses within the
  *              activity's window (now - window <= timeseen); shown on EVERY
  *              node holding such a course;
- *   inactive   a learner not active anywhere, shown only on the node of the
- *              last course seen (latest time; same time: the lower course
- *              id; a course in several nodes: the first node of the path);
- *              never seen: no marker;
+ *   inactive   a learner not active anywhere, shown on the node of the last
+ *              course seen; never seen: no marker. When that is not one
+ *              node - several courses seen at the same latest second, or the
+ *              last course sits in several nodes - no node is picked: the
+ *              marker is shown on EVERY such node and says that the last
+ *              activity is not unique and on how many nodes it is shown
+ *              ('ambiguous', #14 "Mehrdeutigkeitsdarstellung ohne
+ *              willkürliche Auswahl", re-audit 2026-11-21; it used to pick
+ *              the lower course id and the first node);
  *   completed  a learner whose snapshot has the node completed (the measure
  *              of the participant list), independent of activity.
  * A person counts once per node, also on stacked nodes with several courses.
@@ -161,7 +166,8 @@ class live_activity {
      *
      * @param array $contract The teacher's contract (cohort::contract()).
      * @return array enabled, window, nodes (nodeid => [completed, active, inactive] lists of userids),
-     *     seen (userid => time last seen), learners (userid => record)
+     *     seen (userid => time last seen), ambiguous (userid => nodes the inactive marker is on, if more
+     *     than one), learners (userid => record)
      */
     public static function compute(array $contract): array {
         global $DB;
@@ -182,6 +188,7 @@ class live_activity {
             }
         }
         $seen = [];
+        $ambiguous = [];
         if ($enabled && $learners && $nodes) {
             $courses = array_values(array_unique(array_merge(...array_column($nodes, 'courses'))));
             $rows = [];
@@ -211,22 +218,31 @@ class live_activity {
                     }
                     continue;
                 }
-                // Not active: the last course seen, ties to the lower course id.
-                $last = null;
-                foreach ($times as $courseid => $time) {
-                    if ($last === null || $time > $times[$last] || ($time === $times[$last] && $courseid < $last)) {
-                        $last = $courseid;
+                // Not active: the node(s) of the last course(s) seen. Every
+                // course seen at the latest time, every node holding one of
+                // them - no arbitrary pick among them.
+                $latest = max($times);
+                $lastcourses = array_keys(array_filter($times, static fn($t) => $t === $latest));
+                $onnodes = 0;
+                foreach ($nodes as $node) {
+                    if (array_intersect($node['courses'], $lastcourses)) {
+                        $out[$node['id']]['inactive'][] = $userid;
+                        $onnodes++;
                     }
                 }
-                foreach ($nodes as $node) {
-                    if (in_array($last, $node['courses'], true)) {
-                        $out[$node['id']]['inactive'][] = $userid;
-                        break;
-                    }
+                if ($onnodes > 1) {
+                    $ambiguous[$userid] = $onnodes;
                 }
             }
         }
-        return ['enabled' => $enabled, 'window' => $window, 'nodes' => $out, 'seen' => $seen, 'learners' => $learners];
+        return [
+            'enabled' => $enabled,
+            'window' => $window,
+            'nodes' => $out,
+            'seen' => $seen,
+            'ambiguous' => $ambiguous,
+            'learners' => $learners,
+        ];
     }
 
     /**
@@ -279,6 +295,8 @@ class live_activity {
                     'avatar' => $picture->get_url($PAGE)->out(false),
                     'state' => $state,
                     'lastseen' => (int) ($data['seen'][$id] ?? 0),
+                    // Inactive and the last activity is not one node: on how many it is shown.
+                    'ambiguous' => $state === 'inactive' ? (int) ($data['ambiguous'][$id] ?? 0) : 0,
                 ];
             }
             $total = count($sets['active']) + count($sets['inactive']);

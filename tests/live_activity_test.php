@@ -130,19 +130,59 @@ final class live_activity_test extends groups_live_testcase {
         $activity = $this->embed(NOGROUPS, ['livemarkers' => 1]);
         $both = $this->learner('Both');
         $tie = $this->learner('Tie');
+        $reused = $this->learner('Reused');
+        $clear = $this->learner('Clear');
         $this->seen($both, 'c2', self::NOW - 10);
         $this->seen($both, 'c3', self::NOW - 20);
         $time = self::NOW - DAYSECS;
+        // Seen in c3 (node n2) and c1 (nodes n1 and n3) at the same second.
         $this->seen($tie, 'c3', $time);
         $this->seen($tie, 'c1', $time);
+        // Last seen in c1 alone - a course in two nodes, n1 and n3.
+        $this->seen($reused, 'c3', $time - 60);
+        $this->seen($reused, 'c1', $time);
+        // Last seen in c2 alone: one node, n2.
+        $this->seen($clear, 'c1', $time - 60);
+        $this->seen($clear, 'c2', $time);
         $this->setUser($this->teacher());
         $nodes = $this->snap($activity);
         $this->assertSame(1, $nodes['n2']['active'], 'one person once per node');
         $this->assertCount(1, array_filter($nodes['n2']['markers'], fn($m) => (int) $m['userid'] === (int) $both->id));
-        // Tie: c1 has the lower id (created first) -> n1, the first node holding c1, not n3.
-        $this->assertSame('inactive', $this->markers($nodes['n1'])[$tie->id] ?? null);
-        $this->assertArrayNotHasKey($tie->id, $this->markers($nodes['n3']));
-        $this->assertArrayNotHasKey($tie->id, $this->markers($nodes['n2']));
+
+        // A tie of the last activity: no pick - the marker on every node of
+        // the courses seen last (n1, n2, n3), each saying "not unique, 3 nodes".
+        foreach (['n1', 'n2', 'n3'] as $nodeid) {
+            $marker = $this->marker($nodes[$nodeid], $tie);
+            $this->assertSame('inactive', $marker['state'] ?? null, "tie on {$nodeid}");
+            $this->assertSame(3, $marker['ambiguous']);
+        }
+        // A reused course: both of its nodes, "not unique, 2 nodes"; not n2.
+        foreach (['n1', 'n3'] as $nodeid) {
+            $this->assertSame(2, $this->marker($nodes[$nodeid], $reused)['ambiguous'] ?? null, "reused on {$nodeid}");
+        }
+        $this->assertNull($this->marker($nodes['n2'], $reused));
+        // One node: the marker there only, not ambiguous.
+        $this->assertSame(0, $this->marker($nodes['n2'], $clear)['ambiguous'] ?? null);
+        $this->assertNull($this->marker($nodes['n1'], $clear));
+        $this->assertNull($this->marker($nodes['n3'], $clear));
+        // The same input, the same output (deterministic).
+        $this->assertSame($nodes, $this->snap($activity));
+    }
+
+    /**
+     * The marker of a person on a node, or null.
+     *
+     * @param array $node
+     * @param \stdClass $user
+     * @return array|null
+     */
+    private function marker(array $node, \stdClass $user): ?array {
+        foreach ($node['markers'] as $marker) {
+            if ((int) $marker['userid'] === (int) $user->id) {
+                return $marker;
+            }
+        }
+        return null;
     }
 
     /**

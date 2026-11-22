@@ -28,6 +28,7 @@
       <button
         v-if="store.state.view!='student'"
         class="btn btn-outline-primary"
+        data-testid="adele-userpath-back"
         @click="goBack"
       >
         <i class="fas fa-arrow-left" /> {{ store.state.strings.user_view_go_back_overview }}

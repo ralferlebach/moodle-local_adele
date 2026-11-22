@@ -91,18 +91,22 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue';
-import { appDomId, DIALOGS } from '../../composables/domIds';
+import { computed, onMounted, ref, onBeforeUnmount } from 'vue';
+import { DIALOGS, dialogInstanceId } from '../../composables/domIds';
 import { useStore } from 'vuex';
 
 // Load Store
 const store = useStore();
 // Page-unique ids (#18). The dialog used to name a label id that did not
 // exist (feedbackModalLabel) while its title carried the node dialog's id.
+// One id per instance of this dialog in the application (#18 AK2): the
+// first is the one the openers name, a further one gets a number.
+const dialogId = dialogInstanceId(store, DIALOGS.feedback);
+onBeforeUnmount(dialogId.release);
 const ids = computed(() => ({
-  dialog: appDomId(store, DIALOGS.feedback),
-  title: appDomId(store, 'feedbackModal-title'),
-  content: appDomId(store, 'feedbackModal-content'),
+  dialog: dialogId.base,
+  title: `${dialogId.base}-title`,
+  content: `${dialogId.base}-content`,
 }));
 
 const initialFeedback = ref(null);

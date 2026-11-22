@@ -72,6 +72,42 @@ export function appDomSelector(store, name) {
   return `#${appDomId(store, name)}`;
 }
 
+/** Instances of each dialog per application: store => { name => Set of numbers }. */
+const dialogInstances = new WeakMap();
+
+/**
+ * The id of one instance of a dialog in its application (#18 AK2).
+ *
+ * The first instance of a dialog in an application is the one the openers
+ * name (`adele1-nodeModal`); should the same dialog be mounted again in that
+ * application, every further instance gets a number of its own
+ * (`adele1-nodeModal-2`), and its fields, labels and ARIA references derive
+ * from it - so two instances never share an id. The number is given back
+ * when the instance unmounts.
+ *
+ * @param {object} store The application's Vuex store.
+ * @param {string} name The dialog, one of DIALOGS.
+ * @returns {{ base: string, release: Function }} The instance's id and its release.
+ */
+export function dialogInstanceId(store, name) {
+  const key = store || dialogInstances;
+  let byname = dialogInstances.get(key);
+  if (!byname) {
+    byname = {};
+    dialogInstances.set(key, byname);
+  }
+  const taken = byname[name] || (byname[name] = new Set());
+  let number = 1;
+  while (taken.has(number)) {
+    number += 1;
+  }
+  taken.add(number);
+  return {
+    base: appDomId(store, number === 1 ? name : `${name}-${number}`),
+    release: () => taken.delete(number),
+  };
+}
+
 /** The names of the dialogs that other components open (data-target). */
 export const DIALOGS = Object.freeze({
   node: 'nodeModal',

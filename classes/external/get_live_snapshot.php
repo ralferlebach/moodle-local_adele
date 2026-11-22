@@ -89,6 +89,10 @@ class get_live_snapshot extends external_api {
                     'avatar' => new external_value(PARAM_URL, 'Picture'),
                     'state' => new external_value(PARAM_ALPHA, 'active or inactive'),
                     'lastseen' => new external_value(PARAM_INT, 'Last activity seen'),
+                    'ambiguous' => new external_value(
+                        PARAM_INT,
+                        'Inactive: the number of nodes the last activity is shown on when it is not one node, else 0'
+                    ),
                 ])),
                 'moremarkers' => new external_value(PARAM_INT, 'Markers not listed'),
             ])),

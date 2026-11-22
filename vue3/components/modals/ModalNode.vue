@@ -220,18 +220,22 @@
 // import dependancies
 import { useStore } from 'vuex'
 import absUrl from '../../composables/absUrl';
-import { onMounted, ref, watch, computed } from 'vue';
-import { appDomId, DIALOGS } from '../../composables/domIds';
+import { onMounted, ref, watch, computed, onBeforeUnmount } from 'vue';
+import { DIALOGS, dialogInstanceId } from '../../composables/domIds';
 
 // define constants
 const store = useStore();
 // Page-unique ids (#18): the course dialog has fields of the same names.
+// One id per instance of this dialog in the application (#18 AK2): the
+// first is the one the openers name, a further one gets a number.
+const dialogId = dialogInstanceId(store, DIALOGS.node);
+onBeforeUnmount(dialogId.release);
 const ids = computed(() => ({
-  dialog: appDomId(store, DIALOGS.node),
-  title: appDomId(store, 'nodeModal-title'),
-  fullname: appDomId(store, 'nodeModal-fullname'),
-  description: appDomId(store, 'nodeModal-description'),
-  duration: appDomId(store, 'nodeModal-estimate-duration'),
+  dialog: dialogId.base,
+  title: `${dialogId.base}-title`,
+  fullname: `${dialogId.base}-fullname`,
+  description: `${dialogId.base}-description`,
+  duration: `${dialogId.base}-estimate-duration`,
 }));
 const learningpathModal = ref(null);
 const fullname = ref('')

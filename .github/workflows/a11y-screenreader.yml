@@ -22,8 +22,9 @@ name: Accessibility Screenreader
 # The site is a throwaway built for this run; its accounts and the tunnel
 # address end with the run.
 #
-# EVERY run uploads ONE artefact, whatever the outcome: HTML report, video of
-# every test, the spoken phrase log of every test as a plain transcript,
+# EVERY run uploads ONE artefact, whatever the outcome: HTML report, videos
+# (green or cancelled run: of every test; red run: of the failed tests only,
+# decision 2026-11-22), the spoken phrase log of every test as a plain transcript,
 # results.json, junit.xml and the console output. For this suite the
 # recording of a PASSING run is the point: it lets a sighted reviewer follow
 # what a blind user would have heard.
@@ -436,6 +437,15 @@ jobs:
               "same run from the outside."
           } > "$summary"
           cat "$summary" >> "$GITHUB_STEP_SUMMARY"
+
+      # A red run delivers the videos of the failed tests only (decision
+      # 2026-11-22); the transcripts of all tests stay.
+      - name: Keep the videos of the failed tests only
+        if: failure()
+        run: |
+          node tests/e2e/support/keep-failed-videos.mjs \
+            "$EXPORT_DIR/results.json" "$EXPORT_DIR" \
+            | tee -a "$EXPORT_DIR/summary.md" | tee -a "$GITHUB_STEP_SUMMARY"
 
       # One artefact, always: passed, failed or cancelled.
       - name: Upload report, videos and transcripts

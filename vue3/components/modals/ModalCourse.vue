@@ -109,17 +109,21 @@
 <script setup>
 // import dependancies
 import { useStore } from 'vuex'
-import { computed, ref, watch } from 'vue';
-import { appDomId, DIALOGS } from '../../composables/domIds';
+import { computed, ref, watch, onBeforeUnmount } from 'vue';
+import { DIALOGS, dialogInstanceId } from '../../composables/domIds';
 
 // define constants
 const store = useStore();
 // Page-unique ids (#18): the node dialog has fields of the same names.
+// One id per instance of this dialog in the application (#18 AK2): the
+// first is the one the openers name, a further one gets a number.
+const dialogId = dialogInstanceId(store, DIALOGS.course);
+onBeforeUnmount(dialogId.release);
 const ids = computed(() => ({
-  dialog: appDomId(store, DIALOGS.course),
-  title: appDomId(store, 'courseModal-title'),
-  fullname: appDomId(store, 'courseModal-fullname'),
-  description: appDomId(store, 'courseModal-description'),
+  dialog: dialogId.base,
+  title: `${dialogId.base}-title`,
+  fullname: `${dialogId.base}-fullname`,
+  description: `${dialogId.base}-description`,
 }));
 const fullname = ref('')
 const description = ref('')

@@ -116,23 +116,64 @@ final class group_progress_test extends groups_live_testcase {
     }
 
     /**
-     * No groups: a learner gets the own row only - also with "all results" (AK0-L2, AK0-M4).
+     * No groups, "results of all other participants" (decision 2026-11-22):
+     * through the activity a learner gets the ranking of the activity's
+     * learners - the other rows without id or username; through the course
+     * context the own row only. No rankings or averages of groups.
      */
-    public function test_no_groups_learner_gets_own_data_only(): void {
+    public function test_no_groups_all_results_lists_the_activitys_learners(): void {
+        global $USER;
         $activity = $this->embed(NOGROUPS, ['userlist' => 1]);
         $this->people();
         $this->setUser($this->p['bert']);
-        $this->assertSame($this->ids('bert'), $this->roster($activity));
+        $rows = get_lp_user_path_relations::execute((int) $USER->id, $this->lpid, $this->ctx($activity));
+        $this->assertSame(
+            ['Anna', 'Bert', 'Carl', 'Dora', 'Emil', 'Fred'],
+            $this->sorted(array_column($rows, 'lastname')),
+            'the learners of the activity, staff not among them'
+        );
+        foreach ($rows as $index => $row) {
+            if ($row['lastname'] === 'Bert') {
+                $this->assertSame((int) $this->p['bert']->id, (int) $row['id'], 'the own row keeps its id');
+                continue;
+            }
+            $this->assertLessThan(0, (int) $row['id'], "{$row['lastname']}: no user id");
+            $this->assertSame('', $row['username'], "{$row['lastname']}: no username");
+        }
+        $this->assertSame(1, (int) $rows[0]['rank'], 'ranked among the learners');
+        $this->assertCount(6, array_unique(array_column($rows, 'id')), 'every row keeps a key of its own');
         $overview = $this->overview($activity);
         $this->assertSame(NOGROUPS, $overview['groupmode']);
+        $this->assertFalse($overview['closed']);
         $this->assertSame([], $overview['rankings']);
         $this->assertSame([], $overview['averages']);
         $this->assertSame([], $overview['groups']);
-        // Through the course context neither (no other host context bypasses it).
-        global $USER;
+        // Through the course context the own row only.
         $coursecontextid = (int) \context_course::instance($this->host->id)->id;
         $rows = get_lp_user_path_relations::execute((int) $USER->id, $this->lpid, $coursecontextid);
         $this->assertSame([(int) $this->p['bert']->id], array_map('intval', array_column($rows, 'id')));
+    }
+
+    /**
+     * No groups, "only own results" (#569): the own row, the overview says closed.
+     */
+    public function test_no_groups_only_own_results(): void {
+        $activity = $this->embed(NOGROUPS, ['userlist' => 2]);
+        $this->people();
+        $this->setUser($this->p['bert']);
+        $this->assertSame($this->ids('bert'), $this->roster($activity));
+        $this->assertTrue($this->overview($activity)['closed']);
+    }
+
+    /**
+     * Sorted copy.
+     *
+     * @param array $values
+     * @return array
+     */
+    private function sorted(array $values): array {
+        sort($values);
+        return array_values($values);
     }
 
     /**
@@ -215,32 +256,64 @@ final class group_progress_test extends groups_live_testcase {
     }
 
     /**
-     * A learner of a group without a path counts in the members, not in the average (no silent denominator).
+     * A learner of a group without a path stays in the denominator with 0 %
+     * and is named (#12: mean over all distinct learners, no silent removal).
+     * A learner whose snapshot completes nothing counts with 0 % as well; a
+     * group whose learners all lack a path has 0 %, a group without learners
+     * no value.
      */
-    public function test_missing_progress_is_named(): void {
+    public function test_missing_progress_stays_in_the_denominator(): void {
         global $DB;
         $activity = $this->embed(VISIBLEGROUPS);
         $this->people();
         $DB->delete_records('local_adele_path_user', ['user_id' => $this->p['carl']->id]);
+        $onlymissing = $this->group('D');
+        $nopath = $this->getDataGenerator()->create_and_enrol($this->host, 'student');
+        $this->getDataGenerator()->create_group_member(['groupid' => $onlymissing->id, 'userid' => $nopath->id]);
+        // Enrolling subscribes the person to the path: take that back.
+        $DB->delete_records('local_adele_path_user', ['user_id' => $nopath->id]);
+        // Staff in a group is no learner of it.
+        $this->teacher('teacher', [$onlymissing]);
         $this->setUser($this->p['bert']);
-        $own = $this->overview($activity)['averages'][0];
+        $averages = $this->overview($activity)['averages'];
+        $own = $averages[0];
         $this->assertSame((int) $this->ga->id, $own['groupid']);
         $this->assertSame(3, $own['measured']);
         $this->assertSame(4, $own['members']);
-        $this->assertEqualsWithDelta((100 + 33.33 + 33.33) / 3, $own['value'], 0.05);
+        // Anna 100, Bert 33.33, Emil 33.33, Carl (no path) 0 - over four.
+        $this->assertEqualsWithDelta((100 + 33.33 + 33.33 + 0) / 4, $own['value'], 0.05);
+        $d = array_values(array_filter($averages, fn($row) => $row['groupid'] === (int) $onlymissing->id))[0];
+        $this->assertSame([0, 1], [$d['measured'], $d['members']]);
+        $this->assertEqualsWithDelta(0.0, $d['value'], 0.001);
     }
 
     /**
-     * "Only own results" closes the rankings in a group mode too.
+     * "Participant results" applies without groups only (decision
+     * 2026-11-22): with groups the stored value changes nothing - learners
+     * get the rankings (and with visible groups the averages) of the #12
+     * matrix, and the participant list holds their own row only, whatever
+     * the value. Teachers are never closed out.
      */
-    public function test_only_own_results_closes_rankings(): void {
-        $activity = $this->embed(VISIBLEGROUPS, ['userlist' => 2]);
+    public function test_participant_results_apply_without_groups_only(): void {
         $this->people();
         $this->setUser($this->p['bert']);
-        $overview = $this->overview($activity);
-        $this->assertSame([], $overview['rankings']);
-        $this->assertSame([], $overview['averages']);
-        $this->assertTrue($overview['closed']);
+        foreach ([1, 2] as $userlist) {
+            $visible = $this->embed(VISIBLEGROUPS, ['userlist' => $userlist]);
+            $overview = $this->overview($visible);
+            $this->assertFalse($overview['closed'], "visible groups, userlist {$userlist}");
+            $this->assertSame([(int) $this->ga->id], array_column($overview['rankings'], 'groupid'));
+            $this->assertNotEmpty($overview['averages'], "visible groups, userlist {$userlist}: averages");
+            $this->assertSame($this->ids('bert'), $this->roster($visible), "visible groups, userlist {$userlist}: own row");
+            $separate = $this->embed(SEPARATEGROUPS, ['userlist' => $userlist]);
+            $this->assertSame([(int) $this->ga->id], array_column($this->overview($separate)['rankings'], 'groupid'));
+            $this->assertSame($this->ids('bert'), $this->roster($separate), "separate groups, userlist {$userlist}: own row");
+        }
+        // Without groups the setting decides.
+        $this->assertTrue($this->overview($this->embed(NOGROUPS, ['userlist' => 2]))['closed']);
+        $this->assertFalse($this->overview($this->embed(NOGROUPS, ['userlist' => 1]))['closed']);
+        // Teachers are not closed out.
+        $this->setUser($this->teacher());
+        $this->assertFalse($this->overview($this->embed(NOGROUPS, ['userlist' => 2]))['closed']);
     }
 
     /**
@@ -329,6 +402,40 @@ final class group_progress_test extends groups_live_testcase {
         }
         $large = $count();
         $this->assertLessThanOrEqual($small + 2, $large, "no query per learner ({$small} -> {$large})");
+    }
+
+    /**
+     * Non-learners with "all participants" in an activity with a grouping:
+     * only the people of the grouping's groups (#13 AK1.6, re-audit
+     * 2026-11-21) - the same people the participant list covers.
+     */
+    public function test_non_learners_all_participants_respect_the_grouping(): void {
+        global $DB;
+        $grouping = $this->getDataGenerator()->create_grouping(['courseid' => $this->host->id]);
+        $this->getDataGenerator()->create_grouping_group(['groupingid' => $grouping->id, 'groupid' => $this->ga->id]);
+        $activity = $this->embed(SEPARATEGROUPS, ['groupingid' => $grouping->id]);
+        $this->people();
+        $inside = $this->learner('Inside', [], [$this->ga]);
+        $outside = $this->learner('Outside', [], [$this->gb]);
+        $nogroup = $this->learner('Nogroup', []);
+        $DB->delete_records_list('local_adele_path_user', 'user_id', [$inside->id, $outside->id, $nogroup->id]);
+        $assistantin = $this->teacher('teacher', [$this->ga]);
+        $assistantout = $this->teacher('teacher', [$this->gb]);
+
+        $this->setUser($this->teacher());
+        $rows = \core_external\external_api::clean_returnvalue(
+            get_non_learners::execute_returns(),
+            get_non_learners::execute($this->ctx($activity), 0)
+        );
+        $ids = array_map('intval', array_column($rows, 'userid'));
+        $this->assertContains((int) $inside->id, $ids);
+        $this->assertContains((int) $assistantin->id, $ids);
+        foreach ([$outside, $nogroup, $assistantout] as $person) {
+            $this->assertNotContains((int) $person->id, $ids, 'outside the grouping: not listed');
+        }
+        // The participant list of the same choice covers the same people.
+        $roster = $this->roster($activity, 0);
+        $this->assertSame($this->ids('anna', 'bert', 'carl', 'emil'), $roster);
     }
 
     /**

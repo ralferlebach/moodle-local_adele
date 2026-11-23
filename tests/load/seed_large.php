@@ -137,6 +137,52 @@ for ($i = 1; $i <= $usercount; $i++) {
     ]);
 }
 
+// Live data under load (local_adele #14 DoD2-L5, #15 DoD3.5; re-audit
+// 2026-11-22): with mod_adele installed, the path is embedded in the course
+// as an activity with separate groups and live markers, the learners are
+// spread over ADELE_LOAD_GROUPS groups, and each has been seen in the course
+// at some point of the last ten minutes - half of them inside the 5-minute
+// window. The load plan then asks for the live snapshot, the group overview
+// and the names behind a counter as the teacher view does.
+$contextid = 0;
+if ($DB->get_manager()->table_exists('adele')) {
+    $groupcount = max(1, (int) (getenv('ADELE_LOAD_GROUPS') ?: 4));
+    $groups = [];
+    for ($g = 1; $g <= $groupcount; $g++) {
+        $groups[] = $generator->create_group(['courseid' => $course->id, 'name' => 'Lastgruppe ' . $g]);
+    }
+    $activity = $generator->create_module('adele', [
+        'course' => $course->id,
+        'name' => 'Last-Aktivität ' . $suffix,
+        'learningpathid' => $lpid,
+        'participantslist' => '1',
+        'userlist' => 1,
+        'view' => 1,
+        'groupmode' => SEPARATEGROUPS,
+        'livemarkers' => 1,
+        'livewindow' => 5,
+    ]);
+    $contextid = (int) context_module::instance($activity->cmid)->id;
+    $learners = $DB->get_records_select(
+        'user',
+        $DB->sql_like('username', ':prefix'),
+        ['prefix' => 'loaduser' . $suffix . '\_%'],
+        'id',
+        'id'
+    );
+    $now = time();
+    $i = 0;
+    foreach ($learners as $learner) {
+        $generator->create_group_member(['groupid' => $groups[$i % $groupcount]->id, 'userid' => $learner->id]);
+        $DB->insert_record('local_adele_activity', (object) [
+            'userid' => $learner->id,
+            'courseid' => $course->id,
+            'timeseen' => $now - ($i * 7) % 600,
+        ]);
+        $i++;
+    }
+}
+
 printf("export ADELE_BASE_URL='%s'\n", $CFG->wwwroot);
 printf("export ADELE_ADMIN_USER='%s'\n", $admin->username);
 printf("export ADELE_ADMIN_PASSWORD='%s'\n", $adminpassword);
@@ -145,3 +191,4 @@ printf("export ADELE_LP_ID='%d'\n", $lpid);
 printf("export ADELE_COURSE_ID='%d'\n", (int) $course->id);
 printf("export ADELE_COURSE_SHORTNAME='%s'\n", $courseshortname);
 printf("export ADELE_LOAD_USERS='%d'\n", $usercount);
+printf("export ADELE_LOAD_CONTEXTID='%d'\n", $contextid);

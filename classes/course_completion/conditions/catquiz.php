@@ -233,8 +233,7 @@ class catquiz implements course_completion {
                         $rightanswerspercentage = [];
                         if (!empty($scaleids)) {
                             try {
-                                $rightanswerspercentage =
-                                  Local_catquizCatquiz::get_percentage_of_right_answers_by_scale($scaleids, $record);
+                                $rightanswerspercentage = $this->percentage_of_right_answers($scaleids, $record);
                             } catch (\Throwable $e) {
                                 // One attempt local_catquiz cannot read (no progress
                                 // record - a reader cannot create one) must not abort
@@ -589,6 +588,20 @@ class catquiz implements course_completion {
             }
         }
         return false;
+    }
+
+    /**
+     * Share of right answers of one attempt per scale, from local_catquiz.
+     *
+     * Its own method so tests can supply the share: local_catquiz computes it
+     * from the attempt's progress record, which a test attempt does not have.
+     *
+     * @param array $scaleids Scales with a percentage threshold.
+     * @param object $record The attempt.
+     * @return array Per scale id: ['percentage' => float, ...].
+     */
+    protected function percentage_of_right_answers(array $scaleids, $record): array {
+        return (array) Local_catquizCatquiz::get_percentage_of_right_answers_by_scale($scaleids, $record);
     }
 
     /**

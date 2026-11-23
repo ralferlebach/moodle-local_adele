@@ -33,6 +33,7 @@
  * @license     http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
+import { execFileSync } from 'node:child_process';
 import AxeBuilder from '@axe-core/playwright';
 import { test, expect, Page, Locator } from '@playwright/test';
 import { env, loginAs } from '../support/env';
@@ -238,6 +239,9 @@ test.describe('ADELE-E2E-A18 — DOM ids once per page, references on their own 
       await expect(fullname).toBeVisible();
       const label = (await dialog.locator(`label[for="${await fullname.getAttribute('id')}"]`).innerText()).trim();
       await expect(fullname, 'the field is named by its own label').toHaveAccessibleName(label);
+      // #18 AK5: the label puts the focus on its own field.
+      await dialog.locator(`label[for="${await fullname.getAttribute('id')}"]`).click();
+      await expect(fullname, 'a click on the label focuses the field').toBeFocused();
       expect(await fullname.inputValue()).not.toBe('');
       // Escape reaches the dialog once Bootstrap has moved the focus into it.
       await expect.poll(() => dialog.evaluate((d) => d.contains(document.activeElement))).toBe(true);
@@ -290,5 +294,46 @@ test.describe('ADELE-E2E-A18 — DOM ids once per page, references on their own 
         expect(await duplicateIds(page)).toEqual([]);
         expect(await brokenReferences(page)).toEqual([]);
       });
+
+      await test.step('#18 AK4: the same page in the Classic theme - no id twice, no "dropdownMenuButton", '
+        + 'the navigation link works', async () => {
+        const course = fixture('ADELE_FIXTURE_M18_HOST');
+        setCourseTheme(course, 'classic');
+        try {
+          await page.goto(`/course/view.php?id=${course}`);
+          await expect(page.locator('body')).toHaveClass(/theme-classic|pagelayout-course/);
+          expect(await page.evaluate(() => document.querySelector('link[href*="/theme/styles.php/classic/"]') !== null),
+            'Classic is the theme of the page').toBe(true);
+          await expect(apps).toHaveCount(3, { timeout: 30_000 });
+          await expect(apps.nth(2).locator('.vue-flow__node').first()).toBeVisible({ timeout: 30_000 });
+          expect(await duplicateIds(page)).toEqual([]);
+          expect(await brokenReferences(page)).toEqual([]);
+          await expect(page.locator('[id="dropdownMenuButton"]')).toHaveCount(0);
+          const navlink = page.locator('a[href$="/local/adele/index.php#/learningpaths"]').first();
+          await expect(navlink, 'the ADELE link in the navigation').toBeVisible();
+          expect(await navlink.getAttribute('id')).toBeNull();
+          await navlink.click();
+          await expect(page).toHaveURL(/\/local\/adele\/index\.php/);
+          await expect(app(page).locator('[data-testid^="learningpath-row-"]').first()).toBeVisible({ timeout: 30_000 });
+        } finally {
+          setCourseTheme(course, '');
+        }
+      });
     });
 });
+
+/**
+ * Give a course a theme of its own (allowing course themes), or take it away.
+ *
+ * @param courseid The course.
+ * @param theme The theme, '' for the site's.
+ */
+function setCourseTheme(courseid: string, theme: string): void {
+  execFileSync('php', ['-r', `
+    define('CLI_SCRIPT', true);
+    require('config.php');
+    set_config('allowcoursethemes', $argv[2] === '' ? 0 : 1);
+    $DB->set_field('course', 'theme', $argv[2], ['id' => (int) $argv[1]]);
+    rebuild_course_cache((int) $argv[1], true);
+    theme_reset_all_caches();`, '--', courseid, theme], { cwd: fixture('ADELE_MOODLE_ROOT'), encoding: 'utf8' });
+}

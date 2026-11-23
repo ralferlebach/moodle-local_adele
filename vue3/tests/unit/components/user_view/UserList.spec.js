@@ -183,6 +183,21 @@ describe('UserList.vue', () => {
     expect(rows[0].find('td').text()).toBe('Bea'); // user id 2 -> Bea
   });
 
+  it('"all results" without groups: the others are listed, but no row is a way anywhere and no id shows (decision 2026-11-22)', () => {
+    // As the server sends it: the others with negative stand-in ids, no username.
+    const masked = [
+      { ...relations[0], id: -1, username: '' },
+      { ...relations[1], id: 2, username: 'bea' },
+      { ...relations[2], id: -3, username: '' },
+    ];
+    const wrapper = factory({ view: 'student', userlist: '1', user: '2', relations: masked });
+    const rows = wrapper.findAll('tbody tr');
+    expect(rows).toHaveLength(3);
+    expect(wrapper.findAll('tbody a, tbody button, tbody [role="link"], tbody .stub-link')).toHaveLength(0);
+    expect(wrapper.find('tbody').text()).not.toMatch(/-1|-3/);
+    expect(wrapper.findAll('thead th').map((th) => th.text())).not.toContain('ID');
+  });
+
   it('shows the best route as x/y in the completed-nodes cell (#461)', () => {
     const wrapper = factory();
     // Teacher view: td5 is the completed-nodes cell. Bea's best route is 1/2.

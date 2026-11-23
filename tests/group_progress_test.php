@@ -439,6 +439,62 @@ final class group_progress_test extends groups_live_testcase {
     }
 
     /**
+     * Non-learners by role and enrolment (#13 AK1.5, DoD1.1; re-audit
+     * 2026-11-22): a non-editing teacher and an editing teacher without a
+     * path are "nonlearner"; a learner without a path is "nopath", also one
+     * who teaches as well (a participant role decides); people whose
+     * enrolment is suspended or has ended are not listed; learners with a
+     * path are not listed - and none of this changes the participant list.
+     */
+    public function test_non_learners_roles_and_enrolment_status(): void {
+        global $DB;
+        $activity = $this->embed(NOGROUPS);
+        $this->people();
+        $tutor = $this->teacher('teacher');
+        $editor = $this->teacher('editingteacher');
+        $dual = $this->learner('Dual');
+        role_assign(
+            $DB->get_field('role', 'id', ['shortname' => 'editingteacher']),
+            $dual->id,
+            \context_course::instance($this->host->id)->id
+        );
+        $suspended = $this->learner('Suspended');
+        $ended = $this->learner('Ended');
+        $nopath = $this->learner('Nopath');
+        $DB->delete_records_list(
+            'local_adele_path_user',
+            'user_id',
+            [$tutor->id, $editor->id, $dual->id, $suspended->id, $ended->id, $nopath->id]
+        );
+        $manual = $DB->get_record('enrol', ['courseid' => $this->host->id, 'enrol' => 'manual'], '*', MUST_EXIST);
+        $DB->set_field('user_enrolments', 'status', ENROL_USER_SUSPENDED, ['enrolid' => $manual->id, 'userid' => $suspended->id]);
+        $DB->set_field('user_enrolments', 'timeend', time() - DAYSECS, ['enrolid' => $manual->id, 'userid' => $ended->id]);
+        $this->setUser($this->teacher());
+        $before = $this->roster($activity, 0);
+        $rows = \core_external\external_api::clean_returnvalue(
+            get_non_learners::execute_returns(),
+            get_non_learners::execute($this->ctx($activity), 0)
+        );
+        $reasons = array_column($rows, 'reason', 'userid');
+        $this->assertSame('nonlearner', $reasons[$tutor->id] ?? null, 'non-editing teacher');
+        $this->assertSame('nonlearner', $reasons[$editor->id] ?? null, 'editing teacher without a path');
+        $this->assertSame('nopath', $reasons[$nopath->id] ?? null, 'learner without a path');
+        $this->assertSame('nopath', $reasons[$dual->id] ?? null, 'learner who also teaches, without a path');
+        $this->assertArrayNotHasKey($suspended->id, $reasons, 'suspended enrolment');
+        $this->assertArrayNotHasKey($ended->id, $reasons, 'ended enrolment');
+        foreach (['anna', 'bert', 'carl', 'dora', 'emil', 'fred'] as $learner) {
+            $this->assertArrayNotHasKey($this->p[$learner]->id, $reasons, 'a learner with a path');
+        }
+        // The roles are named; nothing beyond names, roles and the reason.
+        $this->assertStringContainsString(',', $rows[array_search($dual->id, array_column($rows, 'userid'))]['roles']);
+        foreach ($rows as $row) {
+            $this->assertSame(['userid', 'fullname', 'reason', 'roles'], array_keys($row));
+        }
+        // The participant list is the same before and after.
+        $this->assertSame($before, $this->roster($activity, 0));
+    }
+
+    /**
      * Non-learners (#13): teachers only, separate from the learners, nothing created.
      */
     public function test_non_learners(): void {

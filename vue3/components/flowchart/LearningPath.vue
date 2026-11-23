@@ -107,7 +107,16 @@
         <MiniMap
           v-if="shouldShowMiniMap"
           node-color="grey"
-        />
+        >
+          <!-- Minimap nodes without the node's id (#18 AK7): one slot per node type shown. -->
+          <template
+            v-for="type in miniMapNodeTypes"
+            :key="type"
+            #[`node-${type}`]="shape"
+          >
+            <MiniMapNodeShape v-bind="shape" />
+          </template>
+        </MiniMap>
         <Panel position="top-right">
           <div class="adele-view-controls">
             <button
@@ -181,6 +190,7 @@ import { Background } from '@vue-flow/background'
 import Modal from '../modals/ModalNode.vue'
 import CourseModal from '../modals/ModalCourse.vue'
 import { MiniMap } from '@vue-flow/minimap'
+import MiniMapNodeShape from './MiniMapNodeShape.vue'
 import getNodeId from '../../composables/getNodeId'
 import DropzoneNode from '../nodes/DropzoneNode.vue'
 import ModuleNode from '../nodes/ModuleNode.vue'
@@ -263,6 +273,9 @@ const { nodes, edges, findNode, onConnect, addEdges, zoomTo,
 nodes: [],
 edges: [],
 })
+
+// Every node type on the graph gets the minimap node without an id.
+const miniMapNodeTypes = computed(() => [...new Set(['default', ...nodes.value.map((node) => node.type || 'default')])]);
 
 // Coming back from a learner opened from the live data (#15 AK3.5): the
 // overview as the teacher left it - viewport, scroll position, and the focus

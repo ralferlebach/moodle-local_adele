@@ -17,6 +17,7 @@
 namespace local_adele;
 
 use core_external\external_api;
+use local_adele\external\get_group_overview;
 use local_adele\external\get_live_snapshot;
 use local_adele\external\get_node_people;
 
@@ -245,6 +246,42 @@ final class live_activity_test extends groups_live_testcase {
     }
 
     /**
+     * Counting by person (#15 AK3.1/AK3.2, DoD3.1; re-audit 2026-11-22): a
+     * learner in two groups counts once for "all participants" and once in
+     * each of the groups; a learner who also teaches counts as the learner
+     * they are; a teacher without a path is not counted, even when seen.
+     */
+    public function test_multiple_groups_and_dual_roles_count_once(): void {
+        global $DB;
+        $ga = $this->group('A');
+        $gb = $this->group('B');
+        $activity = $this->embed(SEPARATEGROUPS, ['livemarkers' => 1]);
+        $both = $this->learner('Both', ['n1'], [$ga, $gb]);
+        $dual = $this->learner('Dual', ['n1'], [$ga]);
+        $teacherrole = $DB->get_field('role', 'id', ['shortname' => 'teacher']);
+        role_assign($teacherrole, $dual->id, \context_course::instance($this->host->id)->id);
+        // The role change recomputes the snapshot from the real completions;
+        // give it back node 1 completed, as learner() set it.
+        $json = $DB->get_field('local_adele_path_user', 'json', ['user_id' => $both->id, 'learning_path_id' => $this->lpid]);
+        $DB->set_field('local_adele_path_user', 'json', $json, ['user_id' => $dual->id, 'learning_path_id' => $this->lpid]);
+        $tutor = $this->teacher('teacher', [$ga]);
+        $DB->delete_records('local_adele_path_user', ['user_id' => $tutor->id]);
+        foreach ([$both, $dual, $tutor] as $person) {
+            $this->seen($person, 'c1', self::NOW);
+        }
+        $this->setUser($this->teacher());
+        $all = $this->snap($activity, 0)['n1'];
+        $this->assertSame(2, $all['active'], 'all participants: each person once, the tutor not');
+        $this->assertSame(2, $all['completed']);
+        $this->assertEqualsCanonicalizing([(int) $both->id, (int) $dual->id], array_keys($this->markers($all)));
+        $ina = $this->snap($activity, (int) $ga->id)['n1'];
+        $this->assertSame(2, $ina['active'], 'group A: both');
+        $inb = $this->snap($activity, (int) $gb->id)['n1'];
+        $this->assertSame(1, $inb['active'], 'group B: the learner in two groups');
+        $this->assertSame([(int) $both->id => 'active'], $this->markers($inb));
+    }
+
+    /**
      * Name lists: a page at a time, only for nodes of the path.
      */
     public function test_people_pages_and_unknown_node(): void {
@@ -292,6 +329,70 @@ final class live_activity_test extends groups_live_testcase {
         $large = $count();
         $this->assertLessThanOrEqual($small + 2, $large, "no query per learner ({$small} -> {$large})");
         $this->assertLessThan(40, $large);
+    }
+
+    /**
+     * A larger cohort (#14 DoD2-L5, #15 DoD3.5; re-audit 2026-11-22: 45
+     * learners were no large cohort): 300 learners in four groups, half of
+     * them active. The snapshot, the group overview and a page of names cost
+     * the same number of queries as for five learners and stay within a
+     * second each; every count is exact. The HTTP load with many concurrent
+     * teacher views is the k6 plan (tests/load, CONTEXTID).
+     */
+    public function test_large_cohort(): void {
+        global $DB;
+        $activity = $this->embed(SEPARATEGROUPS, ['livemarkers' => 1]);
+        $groups = [];
+        foreach (['A', 'B', 'C', 'D'] as $name) {
+            $groups[] = $this->group($name);
+        }
+        $teacher = $this->teacher();
+        $measure = function () use ($activity, $teacher, $DB): array {
+            $this->setUser($teacher);
+            $out = [];
+            foreach (
+                [
+                'snapshot' => fn() => $this->snap($activity, 0),
+                'overview' => fn() => get_group_overview::execute($this->ctx($activity), 0),
+                'people' => fn() => get_node_people::execute($this->ctx($activity), 0, 'n1', 'active', 0),
+                ] as $name => $call
+            ) {
+                $reads = $DB->perf_get_reads();
+                $start = microtime(true);
+                $result = $call();
+                $out[$name] = ['reads' => $DB->perf_get_reads() - $reads, 'seconds' => microtime(true) - $start,
+                    'result' => $result];
+            }
+            return $out;
+        };
+        $add = function (int $from, int $to) use ($groups): void {
+            for ($i = $from; $i < $to; $i++) {
+                $user = $this->learner(sprintf('Q%03d', $i), $i % 3 ? ['n1'] : [], [$groups[$i % 4]]);
+                // Every second learner inside the window, the others an hour ago.
+                $this->seen($user, 'c1', $i % 2 ? self::NOW - 60 : self::NOW - HOURSECS);
+            }
+        };
+        $add(0, 5);
+        $small = $measure();
+        $add(5, 300);
+        $large = $measure();
+
+        foreach (['snapshot', 'overview', 'people'] as $name) {
+            $this->assertLessThanOrEqual(
+                $small[$name]['reads'] + 2,
+                $large[$name]['reads'],
+                "{$name}: no query per learner ({$small[$name]['reads']} -> {$large[$name]['reads']})"
+            );
+            $this->assertLessThan(1.0, $large[$name]['seconds'], "{$name}: within a second for 300 learners");
+        }
+        $node = $large['snapshot']['result']['n1'];
+        $this->assertSame(150, $node['active'], 'every second learner is active');
+        $this->assertSame(200, $node['completed'], 'two of three completed node 1');
+        $this->assertCount(live_activity::MAXMARKERS, $node['markers']);
+        // Markers: the 150 active ones and the 150 inactive ones on the node last observed.
+        $this->assertSame(300 - live_activity::MAXMARKERS, $node['moremarkers']);
+        $this->assertSame(150, $large['people']['result']['total']);
+        $this->assertCount(20, $large['people']['result']['people'], 'one page of names');
     }
 
     /**

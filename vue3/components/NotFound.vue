@@ -28,9 +28,8 @@
     <h3>{{ store.state.strings.route_not_found }}</h3>
 
     <div class="learningpaths-edit-add">
-      <router-link 
-        :to="{ name: 'learningpaths-edit-overview' }" 
-        tag="button" 
+      <router-link
+        :to="{ name: 'learningpaths-edit-overview' }"
         class="btn btn-primary"
       >
         {{ store.state.strings.btnreload }}

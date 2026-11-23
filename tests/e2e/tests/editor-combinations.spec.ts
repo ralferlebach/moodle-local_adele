@@ -159,6 +159,9 @@ test.describe('ADELE-E2E-E2 — logical combinations by drag and drop', () => {
         await expect(fullname).toBeVisible();
         const label = (await dialog.locator(`label[for="${await fullname.getAttribute('id')}"]`).innerText()).trim();
         await expect(fullname, 'the field is named by its own label').toHaveAccessibleName(label);
+        // #18 AK5: the label puts the focus on its own field.
+        await dialog.locator(`label[for="${await fullname.getAttribute('id')}"]`).click();
+        await expect(fullname, 'a click on the label focuses the field').toBeFocused();
         await expect.poll(() => dialog.evaluate((d) => d.contains(document.activeElement))).toBe(true);
         await page.keyboard.press('Escape');
         await expect(dialog).toBeHidden();

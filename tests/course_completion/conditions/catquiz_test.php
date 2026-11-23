@@ -208,21 +208,16 @@ final class catquiz_test extends advanced_testcase {
      */
     public function test_get_completion_status_is_true(): void {
         global $DB;
-        // This case sets a PERCENTAGE threshold. Since local_catquiz is
-        // installed for real (4.5 line, ALiSe-v-1.2.0-legacy), the share of
-        // right answers is read from the attempt's progress record - which a
-        // mocked attempt does not have, so the threshold cannot be met. The
-        // case comes back with a generator that creates progress through
-        // local_catquiz's own API. Ability thresholds: uc09 and chain D.
-        if (class_exists('\\local_catquiz\\teststrategy\\progress')) {
-            $this->markTestIncomplete('Needs catquiz progress signals (share of right answers); see docstring.');
-        }
-
+        // The node sets a PERCENTAGE threshold (parent scale: 60 % right
+        // answers). local_catquiz computes that share from the attempt's
+        // progress record, which a test attempt does not have; the condition
+        // takes it through percentage_of_right_answers(), which this case
+        // supplies (until 2026-11-23 the case was marked incomplete).
         $this->dbmock->expects($this->exactly(2))
             ->method('get_records_sql')
             ->willReturnOnConsecutiveCalls($this->mockquizattempts, $this->bestids);
         $DB = $this->dbmock;
-        $status = $this->catquiz->get_completion_status($this->node, 2);
+        $status = $this->condition_with_share(80.0)->get_completion_status($this->node, 2);
 
         // Perform assertions.
         $this->assertIsArray($status);
@@ -233,6 +228,53 @@ final class catquiz_test extends advanced_testcase {
 
         $this->assertArrayHasKey('condition_2', $status['completed']);
         $this->assertNotFalse($status['completed']['condition_2']);
+    }
+
+    /**
+     * Below the share of right answers the node asks for, the condition is
+     * started but not met - the counter case to the one above.
+     */
+    public function test_get_completion_status_below_the_share_is_not_completed(): void {
+        global $DB;
+        $this->dbmock->expects($this->any())
+            ->method('get_records_sql')
+            ->willReturnOnConsecutiveCalls($this->mockquizattempts, $this->bestids);
+        $DB = $this->dbmock;
+        $status = $this->condition_with_share(40.0)->get_completion_status($this->node, 2);
+
+        $this->assertTrue($status['inbetween']['condition_2']);
+        $this->assertFalse($status['completed']['condition_2']);
+    }
+
+    /**
+     * The catquiz condition with a fixed share of right answers on every scale.
+     *
+     * @param float $percentage Share of right answers, 0-100.
+     * @return catquiz
+     */
+    private function condition_with_share(float $percentage): catquiz {
+        return new class ($percentage) extends catquiz {
+            /** @var float The share every scale gets. */
+            private float $share;
+
+            /**
+             * Constructor.
+             * @param float $share
+             */
+            public function __construct(float $share) {
+                $this->share = $share;
+            }
+
+            /**
+             * The fixed share for every scale with a threshold.
+             * @param array $scaleids
+             * @param object $record
+             * @return array
+             */
+            protected function percentage_of_right_answers(array $scaleids, $record): array {
+                return array_fill_keys($scaleids, ['percentage' => $this->share]);
+            }
+        };
     }
 
     /**

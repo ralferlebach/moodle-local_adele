@@ -17,7 +17,6 @@
 namespace local_adele;
 
 use advanced_testcase;
-use stdClass;
 use PHPUnit\Framework\Attributes\CoversClass;
 
 // phpcs:disable moodle.PHPUnit.TestCaseCovers.Missing
@@ -32,6 +31,14 @@ use PHPUnit\Framework\Attributes\CoversClass;
 #[CoversClass(catquiz::class)]
 final class catquiz_test extends advanced_testcase {
     /**
+     * The class_exists mock is global state; it must not reach the next case.
+     */
+    protected function tearDown(): void {
+        $this->reset_class_exists_mock();
+        parent::tearDown();
+    }
+
+    /**
      * Test the get_catquiz_tests function.
      */
     public function test_get_catquiz_tests_class_does_not_exist(): void {
@@ -43,60 +50,43 @@ final class catquiz_test extends advanced_testcase {
     }
 
     /**
-     * Test the get_catquiz_tests function.
+     * With catquiz installed, the tests of the path's courses are listed -
+     * templates and tests of other courses are not.
+     *
+     * Real records through catquiz's own query (testenvironment::
+     * get_environments), no mocked $DB. Until 2026-11-23 this case mocked $DB
+     * and passed course_node_id as an int, which the production code reads as
+     * an array; it errored when run alone and was skipped in the suite only
+     * because the class_exists mock of the previous case leaked into it.
      */
     public function test_get_catquiz_tests_class_exists_with_records(): void {
         global $DB;
-
-        // Check if the class exists in the environment.
-        if (!class_exists('local_catquiz\testenvironment')) {
-            $this->markTestSkipped('Class local_catquiz\testenvironment does not exist in this environment.');
+        $this->resetAfterTest();
+        $this->reset_class_exists_mock();
+        if (!\class_exists('local_catquiz\testenvironment')) {
+            // The CI installs local_catquiz (moodle-plugin-ci*.yml); a site
+            // without it has nothing to list.
+            $this->markTestSkipped('local_catquiz is not installed.');
         }
+        $incourse = $this->getDataGenerator()->create_course(['fullname' => 'Course on the path']);
+        $other = $this->getDataGenerator()->create_course(['fullname' => 'Course elsewhere']);
+        $now = time();
+        $test = fn(int $courseid, int $componentid, string $name) => $DB->insert_record('local_catquiz_tests', [
+            'componentid' => $componentid, 'component' => 'mod_adaptivequiz', 'courseid' => $courseid,
+            'name' => $name, 'json' => json_encode(['name' => $name]), 'status' => 1,
+            'timecreated' => $now, 'timemodified' => $now,
+        ]);
+        $listed = $test($incourse->id, 7, 'Test on the path');
+        $test($other->id, 8, 'Test elsewhere');
+        $test($incourse->id, 0, 'Template');
 
-        // Create a fresh DB mock scoped to this test only.
-        $DB = $this->getMockBuilder(stdClass::class)
-            ->addMethods(['get_records_sql'])
-            ->getMock();
+        $result = catquiz::get_catquiz_tests([['course_node_id' => [$incourse->id]]]);
 
-        // Mock class_exists to return true.
-        $this->mock_class_exists('local_catquiz\testenvironment', true);
-
-        $DB->expects($this->once())
-            ->method('get_records_sql')
-            ->willReturn([
-                (object)[
-                    'id' => 1,
-                    'json' => json_encode(['name' => 'Test Quiz']),
-                    'fullname' => 'Course Full Name',
-                    'courseid' => 123,
-                ],
-            ]);
-
-        $testenvironmentmock = $this->getMockBuilder('local_catquiz\testenvironment')
-            ->onlyMethods(['get_environments'])
-            ->disableOriginalConstructor()
-            ->getMock();
-
-        $testenvironmentmock->expects($this->never())
-            ->method('get_environments')
-            ->with('mod_adaptivequiz', 0, 2, true)
-            ->willReturn([
-                (object)[
-                    'id' => 1,
-                    'json' => json_encode(['name' => 'Test Quiz']),
-                    'fullname' => 'Course Full Name',
-                    'courseid' => 123,
-                ],
-            ]);
-
-        $result = catquiz::get_catquiz_tests([['course_node_id' => 123]]);
-
-        // Assertions.
-        $this->assertIsArray($result);
-        $this->assertCount(1, $result, 'Expected one record when the class exists');
-        $this->assertEquals('Test Quiz', $result[0]['name'], 'Expected name from decoded JSON');
-        $this->assertEquals('Course Full Name', $result[0]['coursename']);
-        $this->assertEquals(123, $result[0]['courseid']);
+        $this->assertCount(1, $result);
+        $this->assertSame('Test on the path', $result[0]['name']);
+        $this->assertSame('Course on the path', $result[0]['coursename']);
+        $this->assertEquals($incourse->id, $result[0]['courseid']);
+        $this->assertEquals($listed, $result[0]['id']);
     }
 
     /**

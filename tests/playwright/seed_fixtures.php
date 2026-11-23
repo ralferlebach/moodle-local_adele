@@ -1990,6 +1990,80 @@ if (!empty($imported['Linear A1'])) {
                 'timecreated' => time(), 'timemodified' => time(), 'createdby' => get_admin()->id]);
         }
     }
+
+    // Issues #12, #16 (re-audit 2026-11-22, DoD0-M3/DoD0-L4): several ADELE
+    // activities with DIFFERENT groupings in one course, on the same path.
+    // Course E2EG16M, groups Nord, Mitte, Sued; grouping "NM" = Nord + Mitte,
+    // grouping "MS" = Mitte + Sued. Activity "Nord-Mitte": separate groups,
+    // grouping NM; activity "Mitte-Sued": visible groups, grouping MS.
+    // Learners: Nele (Nord, 2/3), Mats (Mitte, 1/3), Sina (Sued, 3/3); Tessa
+    // teaches with editing rights (all groups).
+    $mhost = $DB->get_record('course', ['shortname' => 'E2EG16M']);
+    if (!$mhost) {
+        $mhost = create_course((object) [
+            'shortname' => 'E2EG16M',
+            'fullname' => 'E2E host course E2EG16M',
+            'category' => (int) $options['category'],
+            'summary' => 'Several ADELE activities with different groupings (local_adele #12, #16). Created by seed_fixtures.php.',
+            'summaryformat' => FORMAT_HTML,
+        ]);
+    }
+    foreach ($DB->get_records('adele', ['course' => $mhost->id]) as $activity) {
+        $cm = get_coursemodule_from_instance('adele', $activity->id, $mhost->id);
+        if ($cm) {
+            course_delete_module($cm->id);
+        }
+    }
+    $mgroups = [];
+    foreach (['Nord', 'Mitte', 'Sued'] as $gname) {
+        $gid = $DB->get_field('groups', 'id', ['courseid' => $mhost->id, 'name' => 'Gruppe ' . $gname]);
+        $mgroups[$gname] = $gid ?: groups_create_group((object) ['courseid' => $mhost->id, 'name' => 'Gruppe ' . $gname]);
+    }
+    $mgroupings = [];
+    foreach (['NM' => ['Nord', 'Mitte'], 'MS' => ['Mitte', 'Sued']] as $key => $members) {
+        $gid = $DB->get_field('groupings', 'id', ['courseid' => $mhost->id, 'name' => 'Gruppierung ' . $key]);
+        $mgroupings[$key] = $gid ?: groups_create_grouping((object) ['courseid' => $mhost->id, 'name' => 'Gruppierung ' . $key]);
+        foreach ($members as $gname) {
+            groups_assign_grouping($mgroupings[$key], $mgroups[$gname]);
+        }
+    }
+    $mnordmitte = local_adele_fixture_embed($mhost, 'E2E G16M Nord-Mitte', $gpathid);
+    $mmittesued = local_adele_fixture_embed($mhost, 'E2E G16M Mitte-Sued', $gpathid);
+    $DB->update_record('course_modules', (object) ['id' => $mnordmitte, 'groupmode' => SEPARATEGROUPS,
+        'groupingid' => $mgroupings['NM']]);
+    $DB->update_record('course_modules', (object) ['id' => $mmittesued, 'groupmode' => VISIBLEGROUPS,
+        'groupingid' => $mgroupings['MS']]);
+    rebuild_course_cache($mhost->id, true);
+    $minstance = $DB->get_record('enrol', ['courseid' => $mhost->id, 'enrol' => 'manual'], '*', IGNORE_MULTIPLE);
+    $groleids['editingteacher'] = $DB->get_field('role', 'id', ['shortname' => 'editingteacher']);
+    $mpeople = [
+        'NELE' => ['fx_gm_nele', 'Nele Nord', 'Nord', ['dndnode_1', 'dndnode_2'], 'student'],
+        'MATS' => ['fx_gm_mats', 'Mats Mitte', 'Mitte', ['dndnode_1'], 'student'],
+        'SINA' => ['fx_gm_sina', 'Sina Sued', 'Sued', ['dndnode_1', 'dndnode_2', 'dndnode_3'], 'student'],
+        'TESSA' => ['fx_gm_tessa', 'Tessa Lehrerin', null, null, 'editingteacher'],
+    ];
+    $groupfixture['multi'] = ['host' => $mhost, 'nordmitte' => $mnordmitte, 'mittesued' => $mmittesued, 'people' => []];
+    foreach ($mpeople as $key => [$username, $lastname, $gname, $completed, $role]) {
+        $person = local_adele_fixture_person($username, $lastname, $fixturepassword);
+        if ($manual && $minstance) {
+            $manual->enrol_user($minstance, $person->id, $groleids[$role]);
+        }
+        if ($gname !== null) {
+            groups_add_member($mgroups[$gname], $person->id);
+        }
+        $groupfixture['multi']['people'][$key] = $person;
+        if ($completed === null) {
+            continue;
+        }
+        $snapshot = ['tree' => $gjson['tree']];
+        foreach ($gjson['tree']['nodes'] as $node) {
+            $snapshot['user_path_relation'][$node['id']]['completionnode']['valid'] = in_array($node['id'], $completed, true);
+        }
+        $DB->delete_records('local_adele_path_user', ['user_id' => $person->id, 'learning_path_id' => $gpathid]);
+        $DB->insert_record('local_adele_path_user', (object) ['user_id' => $person->id, 'course_id' => $mhost->id,
+            'learning_path_id' => $gpathid, 'status' => 'active', 'json' => json_encode($snapshot),
+            'timecreated' => time(), 'timemodified' => time(), 'createdby' => get_admin()->id]);
+    }
 }
 $masteraccesshosts = [];
 foreach (['O2' => $masteraccesspath, 'O2T' => $masteraccesstimepath, 'O4' => $masterbothpath] as $key => $entry) {
@@ -2705,6 +2779,15 @@ if ($groupfixture) {
     foreach ($groupfixture['people'] as $key => $person) {
         printf("export ADELE_FIXTURE_G16_%s='%s'\n", $key, $person->username);
         printf("export ADELE_FIXTURE_G16_%s_NAME='%s'\n", $key, fullname($person));
+    }
+    if (!empty($groupfixture['multi'])) {
+        printf("export ADELE_FIXTURE_G16M_HOST='%d'\n", $groupfixture['multi']['host']->id);
+        printf("export ADELE_FIXTURE_G16M_NORDMITTE='%d'\n", $groupfixture['multi']['nordmitte']);
+        printf("export ADELE_FIXTURE_G16M_MITTESUED='%d'\n", $groupfixture['multi']['mittesued']);
+        foreach ($groupfixture['multi']['people'] as $key => $person) {
+            printf("export ADELE_FIXTURE_G16M_%s='%s'\n", $key, $person->username);
+            printf("export ADELE_FIXTURE_G16M_%s_NAME='%s'\n", $key, fullname($person));
+        }
     }
 }
 if ($multiembedhost) {

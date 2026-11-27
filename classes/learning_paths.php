@@ -1278,7 +1278,7 @@ class learning_paths {
                 'rostercourseid' => $courseid,
                 // Teachers enrolled through the teacher view (enrol_adele kind 3,
                 // local_adele #600) are no learners of the course.
-                'rosterteacherkind' => 3,
+                'rosterteacherkind' => enrol_state::TEACHER_GRANT_KIND,
                 'rosterenabled' => ENROL_INSTANCE_ENABLED,
                 'rostersuspended' => ENROL_USER_SUSPENDED,
                 'rosternow1' => $now,

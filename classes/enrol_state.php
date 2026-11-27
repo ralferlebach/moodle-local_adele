@@ -47,6 +47,14 @@ class enrol_state {
     const ENTITLING_STATUSES = ['accessible', 'completed'];
 
     /**
+     * The kind of enrol_adele instance that holds the enrolments granted
+     * through the teacher view (enrol_adele instance_manager::KIND_TEACHER,
+     * local_adele #600). Repeated here: local_adele does not depend on
+     * enrol_adele's classes being loadable.
+     */
+    const TEACHER_GRANT_KIND = 3;
+
+    /**
      * Course ids the user is entitled to right now on this learning path.
      *
      * Aggregated as a set across ALL nodes, so a shared target course stays
@@ -430,7 +438,13 @@ class enrol_state {
      * For the roster of an embedding. Somebody who is in the course only
      * through ADELE (host modes) has no own-right enrolment and is not
      * returned: such a learner is on the roster because of the path.
-     * Decides like {@see is_participant()}, for many users in two queries.
+     * Decides like {@see is_participant()}, for many users in two queries -
+     * with one addition for the roster: an active enrolment through the
+     * teacher view (enrol_adele kind 3, local_adele #600) is the person's
+     * own right in the course, and the roles it gives count. A tutor whose
+     * only way into the course is such a grant is staff of the course, not
+     * a learner - even with a snapshot of the path from an earlier time
+     * (re-audit 2026-11-27, section 3; it used to be listed as a learner).
      *
      * @param int $courseid The course.
      * @param int[] $userids The users to look at.
@@ -445,14 +459,22 @@ class enrol_state {
         }
         [$usersql, $userparams] = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED, 'usr');
         [$effsql, $effparams] = self::effective_enrolment_sql();
+        // The teacher grants of the course: active, inside their window.
+        $now = \core\di::get(\core\clock::class)->time();
+        $grantsql = "e.enrol = 'adele' AND e.customint2 = :grantkind AND e.status = :grantenabled
+                     AND ue.status = :grantactive
+                     AND (ue.timestart = 0 OR ue.timestart <= :grantnow1)
+                     AND (ue.timeend = 0 OR ue.timeend > :grantnow2)";
+        $grantparams = ['grantkind' => self::TEACHER_GRANT_KIND, 'grantenabled' => ENROL_INSTANCE_ENABLED,
+            'grantactive' => ENROL_USER_ACTIVE, 'grantnow1' => $now, 'grantnow2' => $now];
         $ownright = $DB->get_fieldset_sql(
             "SELECT DISTINCT ue.userid
                FROM {user_enrolments} ue
                JOIN {enrol} e ON e.id = ue.enrolid
               WHERE e.courseid = :courseid
-                    AND {$effsql}
+                    AND (({$effsql}) OR ({$grantsql}))
                     AND ue.userid {$usersql}",
-            ['courseid' => $courseid] + $effparams + $userparams
+            ['courseid' => $courseid] + $effparams + $grantparams + $userparams
         );
         if (!$ownright) {
             return [];
@@ -466,9 +488,13 @@ class enrol_state {
                 "SELECT ra.id, ra.userid, ra.roleid
                    FROM {role_assignments} ra
                   WHERE ra.contextid {$ctxsql}
-                        AND ra.component <> 'enrol_adele'
+                        AND (ra.component <> 'enrol_adele'
+                             OR ra.itemid IN (SELECT ge.id
+                                                FROM {enrol} ge
+                                               WHERE ge.courseid = :racourseid AND ge.enrol = 'adele'
+                                                     AND ge.customint2 = :rakind))
                         AND ra.userid {$ownsql}",
-                $ctxparams + $ownparams
+                $ctxparams + $ownparams + ['racourseid' => $courseid, 'rakind' => self::TEACHER_GRANT_KIND]
             );
             foreach ($assignments as $assignment) {
                 if (isset($needed[(int) $assignment->roleid])) {

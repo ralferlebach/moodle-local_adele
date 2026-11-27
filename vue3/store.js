@@ -244,7 +244,6 @@ export function createAppStore() {
                 // Learning-path-wide toggles: whether the feedback bubble and the info-symbol are
                 // shown to students. Default true (existing paths carry no settings) (#474).
                 feedbacksettings: { show_feedback: true, show_info: true },
-                feedback: null,
                 modules: null,
                 version: 0,
                 lpimages: 0,

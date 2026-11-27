@@ -29,7 +29,6 @@ import { mount } from '@vue/test-utils';
 import { createStore } from 'vuex';
 import ModalNode from '../../../components/modals/ModalNode.vue';
 import ModalCourse from '../../../components/modals/ModalCourse.vue';
-import FeedbackModal from '../../../components/modals/FeedbackModal.vue';
 import HelpingSlider from '../../../components/modals/HelpingSlider.vue';
 import CustomNode from '../../../components/nodes/CustomNode.vue';
 import LearningModule from '../../../components/flowchart/LearningModule.vue';
@@ -41,7 +40,6 @@ import {
 const strings = {
   modals_close: 'Close',
   modals_edit: 'Edit',
-  modals_edit_feedback: 'Edit feedback',
   modals_longname: 'Long name',
   modals_description: 'Description',
   estimate_duration: 'Estimated duration',
@@ -72,7 +70,6 @@ const makeStore = (domPrefix) => createStore({
     learningpath: { image: '', json: { tree: { nodes: [] } } },
     lpuserpathrelation: { image: '' },
     feedbacksettings: { show_feedback: false, show_info: false },
-    feedback: null,
   },
   mutations: { updatedNode() {} },
   actions: { saveLearningpath() {} },
@@ -112,7 +109,6 @@ const mountApplication = (store, host) => {
   return [
     mount(ModalNode, { props: { learningpath }, global, attachTo: attach() }),
     mount(ModalCourse, { global, attachTo: attach() }),
-    mount(FeedbackModal, { props: { learningpath }, global, attachTo: attach() }),
     mount(HelpingSlider, { global, attachTo: attach() }),
     mount(LearningModule, { props: moduleProps(), global, attachTo: attach() }),
     mount(CustomNode, {
@@ -228,7 +224,6 @@ describe('dialogs of two applications on one page (#18)', () => {
   it.each([
     [DIALOGS.node, 'nodeModal-title'],
     [DIALOGS.course, 'courseModal-title'],
-    [DIALOGS.feedback, 'feedbackModal-title'],
     [DIALOGS.tutorial, 'helpingSlider-title'],
   ])('dialog %s: a dialog, named by its own title, its close button named', (dialog, title) => {
     for (const host of hosts) {
@@ -261,11 +256,12 @@ describe('dialogs of two applications on one page (#18)', () => {
     expect(new Set(fields).size).toBe(fields.length);
   });
 
-  it('the feedback editor is a text box named by the dialog title', async () => {
-    const host = hosts[0];
-    const content = host.querySelector('[id="adele1-feedbackModal-content"]');
-    expect(content.getAttribute('role')).toBe('textbox');
-    expect(content.getAttribute('aria-labelledby')).toBe('adele1-feedbackModal-title');
+  it('the feedback dialog is gone: nothing names it any more (#18 DoD2, removed 2026-11-27)', () => {
+    expect(Object.keys(DIALOGS)).toEqual(['node', 'course', 'tutorial']);
+    for (const host of hosts) {
+      expect(host.querySelector('[id*="feedbackModal"]')).toBeNull();
+      expect(host.querySelector('[data-target*="feedbackModal"], [aria-controls*="feedbackModal"]')).toBeNull();
+    }
   });
 });
 

@@ -76,7 +76,6 @@
             @drop="onDrop"
             @wheel="onWheel"
           >
-            <FeedbackModal :learningpath="learningpathcompletion" />
             <VueFlow
               class="completions"
               :default-viewport="{ zoom: 1.0, x: 0, y: 0 }"
@@ -159,7 +158,6 @@ import { notify } from "@kyvg/vue3-notification"
 import CompletionLine from '../edges/ConditionLine.vue'
 import getNodeId from '../../composables/getNodeId'
 import FeedbackNode from '../nodes/feedbackNode.vue'
-import FeedbackModal from '../modals/FeedbackModal.vue'
 import ChildNodes from '../charthelper/childNodes.vue'
 import ParentNodes from '../charthelper/parentNodes.vue'
 import setZoomLevel from '../../composables/flowHelper/setZoomLevel'

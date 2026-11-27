@@ -112,7 +112,6 @@ export function dialogInstanceId(store, name) {
 export const DIALOGS = Object.freeze({
   node: 'nodeModal',
   course: 'courseModal',
-  feedback: 'feedbackModal',
   tutorial: 'helpingSlider',
 });
 

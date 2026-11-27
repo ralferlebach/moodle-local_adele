@@ -445,6 +445,9 @@ class enrol_state {
      * only way into the course is such a grant is staff of the course, not
      * a learner - even with a snapshot of the path from an earlier time
      * (re-audit 2026-11-27, section 3; it used to be listed as a learner).
+     * The roles of a grant count only while the grant itself does: Moodle
+     * keeps the role assignment of a suspended or expired enrolment, and that
+     * role gives nothing any more (re-audit 2026-11-27 evening, P2).
      *
      * @param int $courseid The course.
      * @param int[] $userids The users to look at.
@@ -489,12 +492,18 @@ class enrol_state {
                    FROM {role_assignments} ra
                   WHERE ra.contextid {$ctxsql}
                         AND (ra.component <> 'enrol_adele'
-                             OR ra.itemid IN (SELECT ge.id
-                                                FROM {enrol} ge
-                                               WHERE ge.courseid = :racourseid AND ge.enrol = 'adele'
-                                                     AND ge.customint2 = :rakind))
+                             OR EXISTS (SELECT 1
+                                          FROM {enrol} ge
+                                          JOIN {user_enrolments} gue ON gue.enrolid = ge.id AND gue.userid = ra.userid
+                                         WHERE ge.id = ra.itemid AND ge.courseid = :racourseid AND ge.enrol = 'adele'
+                                               AND ge.customint2 = :rakind AND ge.status = :raenabled
+                                               AND gue.status = :raactive
+                                               AND (gue.timestart = 0 OR gue.timestart <= :ranow1)
+                                               AND (gue.timeend = 0 OR gue.timeend > :ranow2)))
                         AND ra.userid {$ownsql}",
-                $ctxparams + $ownparams + ['racourseid' => $courseid, 'rakind' => self::TEACHER_GRANT_KIND]
+                $ctxparams + $ownparams + ['racourseid' => $courseid, 'rakind' => self::TEACHER_GRANT_KIND,
+                    'raenabled' => ENROL_INSTANCE_ENABLED, 'raactive' => ENROL_USER_ACTIVE,
+                    'ranow1' => $now, 'ranow2' => $now]
             );
             foreach ($assignments as $assignment) {
                 if (isset($needed[(int) $assignment->roleid])) {

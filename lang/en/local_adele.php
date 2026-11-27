@@ -387,7 +387,6 @@ $string['modals_close'] = 'Close';
 $string['modals_description'] = 'Node description:';
 $string['modals_deselect_button'] = ' Deselect';
 $string['modals_edit'] = 'Edit';
-$string['modals_edit_feedback'] = 'Edit feedback';
 $string['modals_how_to_learningpath'] = 'How to create a learning path';
 $string['modals_longname'] = 'Node title:';
 $string['modals_next'] = 'Next';

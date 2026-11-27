@@ -63,8 +63,30 @@ export const conditions = (page: Page): Locator => flow(page).locator('.vue-flow
  * @param nodeid The node, e.g. "dndnode_2".
  */
 export async function openAccessCriteria(page: Page, nodeid: string): Promise<void> {
+  await openCriteria(page, nodeid, 'fa-lock');
+}
+
+/**
+ * Open the completion criteria of a node from the path editor, zoomed out
+ * like the access criteria.
+ *
+ * @param page The page showing the path editor.
+ * @param nodeid The node, e.g. "dndnode_1".
+ */
+export async function openCompletionCriteria(page: Page, nodeid: string): Promise<void> {
+  await openCriteria(page, nodeid, 'fa-tasks');
+}
+
+/**
+ * Open one of a node's criteria editors by the icon of its button.
+ *
+ * @param page The page showing the path editor.
+ * @param nodeid The node.
+ * @param icon "fa-lock" (access) or "fa-tasks" (completion).
+ */
+async function openCriteria(page: Page, nodeid: string, icon: string): Promise<void> {
   // A real click: a node covered by another must make this fail.
-  await page.locator(`[data-testid="learningpath-node-${nodeid}"] button:has(i.fa-lock)`).first().click({ timeout: 15_000 });
+  await page.locator(`[data-testid="learningpath-node-${nodeid}"] button:has(i.${icon})`).first().click({ timeout: 15_000 });
   const pane = flow(page).locator('.vue-flow__pane').first();
   await expect(pane).toBeVisible({ timeout: 30_000 });
   // The editor fits its view 300 ms after opening, in one second of

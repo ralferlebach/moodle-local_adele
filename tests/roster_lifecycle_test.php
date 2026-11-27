@@ -361,4 +361,79 @@ final class roster_lifecycle_test extends groups_live_testcase {
         $this->assert_place($views, $tutor, false, 'nonlearner', 'with the grant and a snapshot');
         $this->assert_counts($views, 1, 1, 1, 'with the grant and a snapshot');
     }
+
+    /**
+     * Data for test_the_role_of_an_inactive_grant_does_not_count.
+     *
+     * @return array
+     */
+    public static function inactive_grant_provider(): array {
+        return [
+            'grant suspended' => ['suspended'],
+            'grant expired' => ['expired'],
+        ];
+    }
+
+    /**
+     * Re-audit 2026-11-27 (evening), P2 #13: a teacher of the course by a
+     * parallel enrolment of their own (manual, non-editing teacher) who was
+     * also granted the student role through the teacher view. While the
+     * grant is active its graded role counts - they take part. Once the grant
+     * is suspended or has expired, its role assignment stays in Moodle, but
+     * it gives nothing any more: the person is staff again, even with a
+     * snapshot of the path.
+     *
+     * @dataProvider inactive_grant_provider
+     * @param string $how 'suspended' or 'expired'
+     */
+    public function test_the_role_of_an_inactive_grant_does_not_count(string $how): void {
+        global $DB;
+        $stays = $this->newcomer('Stays');
+        $tutor = $this->getDataGenerator()->create_user(['lastname' => 'Tutor', 'firstname' => 'T']);
+        $this->getDataGenerator()->enrol_user($tutor->id, $this->host->id, 'teacher', 'manual');
+        $this->assertTrue(teacher_grants::add(
+            (int) $this->activity->cmid,
+            $this->lpid,
+            (int) $this->host->id,
+            (int) $tutor->id,
+            mode::ENROL_STUDENT,
+            mode::target_role(mode::ENROL_STUDENT)
+        ), 'granted the student role through the teacher view');
+        $DB->insert_record('local_adele_path_user', (object) [
+            'user_id' => $tutor->id, 'course_id' => $this->host->id, 'learning_path_id' => $this->lpid,
+            'status' => 'active', 'createdby' => 2,
+            'json' => json_encode(['tree' => ['nodes' => $this->nodes(), 'edges' => []],
+                'user_path_relation' => ['n1' => ['completionnode' => ['valid' => false]]]]),
+        ]);
+        $this->getDataGenerator()->create_group_member(['groupid' => $this->everybody->id, 'userid' => $tutor->id]);
+        $this->seen($tutor, 'c1', time());
+        $this->viewer = $this->teacher();
+
+        // Active grant with the student role: the person takes part.
+        $views = $this->views();
+        $this->assert_place($views, $tutor, true, null, 'with an active student grant');
+        $this->assert_counts($views, 2, 2, 2, 'with an active student grant');
+
+        // The grant goes inactive; its role assignment stays.
+        $grant = $DB->get_record_sql(
+            "SELECT ue.*, e.id AS instanceid FROM {user_enrolments} ue JOIN {enrol} e ON e.id = ue.enrolid
+              WHERE e.courseid = :c AND e.enrol = 'adele' AND e.customint2 = :kind AND ue.userid = :u",
+            ['c' => $this->host->id, 'kind' => instance_manager::KIND_TEACHER, 'u' => $tutor->id],
+            MUST_EXIST
+        );
+        if ($how === 'suspended') {
+            $DB->set_field('user_enrolments', 'status', ENROL_USER_SUSPENDED, ['id' => $grant->id]);
+        } else {
+            $DB->set_field('user_enrolments', 'timeend', time() - DAYSECS, ['id' => $grant->id]);
+        }
+        $this->assertTrue($DB->record_exists('role_assignments', [
+            'userid' => $tutor->id, 'component' => 'enrol_adele', 'itemid' => $grant->instanceid,
+        ]), 'the role assignment of the grant is still there');
+
+        $views = $this->views();
+        $this->assertTrue(learning_paths::is_roster_member((int) $this->host->id, (int) $tutor->id), 'still in the course');
+        $this->assert_place($views, $tutor, false, 'nonlearner', "with the grant {$how}");
+        $this->assert_place($views, $stays, true, null, "next to the tutor, grant {$how}");
+        $this->assert_counts($views, 1, 1, 1, "with the grant {$how}");
+    }
 }

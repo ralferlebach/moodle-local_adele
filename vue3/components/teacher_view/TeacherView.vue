@@ -73,19 +73,31 @@ let liveRefresh = null
  * node or person, none in parallel, paused while the page is hidden.
  */
 async function startLive() {
+  // The live data of one group: an answer arriving after another group was
+  // chosen is dropped (found 2026-11-26 for the lists, E2E G5).
+  const choice = store.state.groupchoice
+  const current = () => store.state.groupchoice === choice
   let snapshot = null
   try {
     snapshot = await store.dispatch('fetchLiveSnapshot')
+    if (!current()) {
+      return
+    }
     store.commit('setLiveSnapshot', snapshot)
     liveFailed.value = false
   } catch (e) {
     // No live data (an activity outside mod_adele, or a refusal): the view works without.
-    store.commit('setLiveSnapshot', null)
+    if (current()) {
+      store.commit('setLiveSnapshot', null)
+    }
     return
   }
   liveRefresh = useUserPathRefresh({
     fetch: () => store.dispatch('fetchLiveSnapshot'),
     onResult: (result) => {
+      if (!current()) {
+        return
+      }
       liveFailed.value = false
       store.commit('setLiveSnapshot', result)
     },

@@ -1,6 +1,6 @@
 import http from 'k6/http';
 import { check, sleep } from 'k6';
-import { Trend } from 'k6/metrics';
+import { Counter, Trend } from 'k6/metrics';
 
 /**
  * Minimal read-endpoint load plan for local_adele.
@@ -18,8 +18,15 @@ import { Trend } from 'k6/metrics';
  * behind the "completed" counter of node dndnode_1, through Moodle's AJAX
  * web service endpoint. Each gets its own duration trend and threshold.
  *
- * Required: BASE_URL, COURSEID, ADMIN_USER, ADMIN_PASSWORD.
- * Optional: VUS, DURATION, CONTEXTID.
+ * The live part is REQUIRED unless LIVE=off (re-audit 2026-11-26: a run
+ * without CONTEXTID used to pass as a "pages only" run and looked like a
+ * load test of the live data). Without CONTEXTID the run stops in setup();
+ * every answered live call counts in adele_live_calls, and a run that
+ * answered none fails its threshold - so a green run has measured the three
+ * live endpoints.
+ *
+ * Required: BASE_URL, COURSEID, ADMIN_USER, ADMIN_PASSWORD, CONTEXTID.
+ * Optional: VUS, DURATION, LIVE=off (pages only, on purpose).
  */
 
 const BASE_URL = __ENV.BASE_URL;
@@ -29,6 +36,8 @@ const ADMIN_PASSWORD = __ENV.ADMIN_PASSWORD;
 
 const overview = new Trend('adele_overview_duration', true);
 const CONTEXTID = Number(__ENV.CONTEXTID || 0);
+const LIVE = (__ENV.LIVE || 'required') !== 'off';
+const livecalls = new Counter('adele_live_calls');
 const live = {
   local_adele_get_live_snapshot: new Trend('adele_live_snapshot_duration', true),
   local_adele_get_group_overview: new Trend('adele_group_overview_duration', true),
@@ -46,7 +55,11 @@ export const options = {
     // The live calls are polled every 30 s by every open teacher view: they
     // have to stay well below the page budget. Loose as well until a first
     // run has measured them.
-    ...(CONTEXTID ? {
+    ...(LIVE ? {
+      // Each of the three answered at least once - not just one of them.
+      'adele_live_calls{method:local_adele_get_live_snapshot}': ['count>0'],
+      'adele_live_calls{method:local_adele_get_group_overview}': ['count>0'],
+      'adele_live_calls{method:local_adele_get_node_people}': ['count>0'],
       adele_live_snapshot_duration: ['p(95)<3000'],
       adele_group_overview_duration: ['p(95)<3000'],
       adele_node_people_duration: ['p(95)<3000'],
@@ -76,6 +89,9 @@ function callService(baseUrl, sesskey, methodname, args) {
   } catch (e) {
     answer = null;
   }
+  if (res.status === 200 && answer && answer.error === false) {
+    livecalls.add(1, { method: methodname });
+  }
   check(res, {
     [`${methodname}: HTTP 200`]: (r) => r.status === 200,
     [`${methodname}: no error`]: () => !!answer && answer.error === false,
@@ -91,6 +107,10 @@ function callService(baseUrl, sesskey, methodname, args) {
 export function setup() {
   if (!BASE_URL || !COURSEID || !ADMIN_USER || !ADMIN_PASSWORD) {
     throw new Error('BASE_URL, COURSEID, ADMIN_USER and ADMIN_PASSWORD are all required.');
+  }
+  if (LIVE && !CONTEXTID) {
+    throw new Error('CONTEXTID is required: the module context of an ADELE activity with live markers. '
+      + 'LIVE=off runs the pages only, on purpose.');
   }
   return { baseUrl: BASE_URL, courseid: COURSEID };
 }
@@ -130,7 +150,7 @@ export default function (data) {
     });
   }
 
-  if (CONTEXTID) {
+  if (LIVE) {
     // The session key from a page of the same session, as core/ajax has it.
     const page = http.get(`${data.baseUrl}/course/view.php?id=${data.courseid}`);
     const match = /"sesskey":"([^"]+)"/.exec(page.body || '');

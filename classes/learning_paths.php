@@ -1219,34 +1219,73 @@ class learning_paths {
 
     /**
      * Who is on the roster of a course: everybody with an ACTIVE enrolment
-     * there, by whatever method - and everybody ADELE itself has enrolled
-     * there, active or suspended.
+     * there, by whatever method - and the learners ADELE keeps enrolled
+     * "without access" there.
      *
-     * A suspension is one flag with two meanings. ADELE's own: "enrolled,
-     * without access" - the host mode "hidden" keeps its learners that way on
-     * purpose, they belong on their teacher's list. Everybody else's: a
-     * person or another system took this participant out - they keep their
-     * path (a suspension in the host course is without consequence for it),
-     * but they are not shown among the course's learners (#588, addendum of
-     * 2026-10-07).
+     * A suspension is one flag with several meanings. ADELE's host mode
+     * "hidden" keeps its learners suspended on purpose: "enrolled, without
+     * access" - they belong on their teacher's list (#588). Every other
+     * suspension takes the person out: a person or another system suspended
+     * them (they keep their path, a suspension in the host course is without
+     * consequence for it, but they are not shown among the course's learners -
+     * #588, addendum of 2026-10-07), or enrol_adele suspended a learner who
+     * left (no longer carried; the record stays for the grace period and goes
+     * then). An ADELE enrolment counts at all only as Moodle counts an
+     * enrolment: the instance enabled, the time window open (re-audit
+     * 2026-11-26, #13 AK1.5: until then the suspended, ended, not yet started
+     * and disabled ADELE enrolments all counted).
+     *
+     * Hence the second part: a SUSPENDED ADELE enrolment of an ENABLED
+     * instance inside its time window, for a path that has an embedding in
+     * host mode "hidden" in this course. Teacher-view enrolments (kind 3,
+     * local_adele #600) are never learners' enrolments. Known limit: in a
+     * course with a "hidden" embedding, a learner who left keeps showing
+     * until enrol_adele removes the suspended record after the grace period -
+     * the record cannot tell the two suspensions apart.
      *
      * @param int $courseid The course.
      * @return array [sql selecting the column "id", params]
      */
     public static function roster_members_sql(int $courseid): array {
+        global $DB;
         [$activesql, $params] = get_enrolled_sql(\context_course::instance($courseid), '', 0, true);
         $sql = "SELECT active.id
-                  FROM ({$activesql}) active
+                  FROM ({$activesql}) active";
+        // The "hidden" host mode lives in mod_adele; without it nothing is kept
+        // "without access".
+        if ($DB->get_manager()->table_exists('adele')) {
+            $sql .= "
                  UNION
                 SELECT rosterue.userid
                   FROM {user_enrolments} rosterue
                   JOIN {enrol} rostere ON rostere.id = rosterue.enrolid
+                  JOIN {user} rosteru ON rosteru.id = rosterue.userid AND rosteru.deleted = 0
                  WHERE rostere.courseid = :rostercourseid AND rostere.enrol = 'adele'
-                       AND COALESCE(rostere.customint2, 0) <> :rosterteacherkind";
-        $params['rostercourseid'] = $courseid;
-        // Teachers enrolled through the teacher view (enrol_adele kind 3,
-        // local_adele #600) are no learners of the course.
-        $params['rosterteacherkind'] = 3;
+                       AND COALESCE(rostere.customint2, 0) <> :rosterteacherkind
+                       AND rostere.status = :rosterenabled
+                       AND rosterue.status = :rostersuspended
+                       AND rosterue.timestart < :rosternow1
+                       AND (rosterue.timeend = 0 OR rosterue.timeend > :rosternow2)
+                       AND EXISTS (SELECT 1
+                                     FROM {adele} rostera
+                                    WHERE rostera.course = rostere.courseid
+                                          AND rostera.learningpathid = rostere.customint1
+                                          AND rostera.hostenrolmentmode = :rosterhidden)";
+            // Through the clock (#582); core's get_enrolled_sql() reads time()
+            // for the active ones, which is the same outside tests.
+            $now = \core\di::get(\core\clock::class)->time();
+            $params += [
+                'rostercourseid' => $courseid,
+                // Teachers enrolled through the teacher view (enrol_adele kind 3,
+                // local_adele #600) are no learners of the course.
+                'rosterteacherkind' => 3,
+                'rosterenabled' => ENROL_INSTANCE_ENABLED,
+                'rostersuspended' => ENROL_USER_SUSPENDED,
+                'rosternow1' => $now,
+                'rosternow2' => $now,
+                'rosterhidden' => 'hidden',
+            ];
+        }
         return [$sql, $params];
     }
 

@@ -2041,6 +2041,9 @@ if (!empty($imported['Linear A1'])) {
         'MATS' => ['fx_gm_mats', 'Mats Mitte', 'Mitte', ['dndnode_1'], 'student'],
         'SINA' => ['fx_gm_sina', 'Sina Sued', 'Sued', ['dndnode_1', 'dndnode_2', 'dndnode_3'], 'student'],
         'TESSA' => ['fx_gm_tessa', 'Tessa Lehrerin', null, null, 'editingteacher'],
+        // A non-editing teacher in group Mitte: one of "the other enrolled
+        // people" of Mitte (G5, #13; re-audit 2026-11-26).
+        'THEO' => ['fx_gm_theo', 'Theo Tutor', 'Mitte', null, 'teacher'],
     ];
     $groupfixture['multi'] = ['host' => $mhost, 'nordmitte' => $mnordmitte, 'mittesued' => $mmittesued, 'people' => []];
     foreach ($mpeople as $key => [$username, $lastname, $gname, $completed, $role]) {

@@ -171,14 +171,15 @@ describe('useStatusMessage - partial and missing data', () => {
     expect(resolve({ status_restriction: restriction, completion: { before: ['x'], after: [] } })).toBe('');
   });
 
-  it('"inbetween" with buckets present but all empty: no code (undefined), no exception', () => {
-    expect(resolve({ status_restriction: 'inbetween', completion: { before: [], inbetween: [], after: [] } })).toBeUndefined();
+  // Since 2026-11-26 the computed ends with '' instead of no value
+  // (vue/return-in-computed-property): the same "no code" as the default.
+  it('"inbetween" with buckets present but all empty: no code (""), no exception', () => {
+    expect(resolve({ status_restriction: 'inbetween', completion: { before: [], inbetween: [], after: [] } })).toBe('');
   });
 
-  it('"before" with buckets present but all empty: no code (undefined), no exception', () => {
-    // The composable finds no row for this case and returns nothing; pinned
-    // as it is, not invented.
-    expect(resolve({ status_restriction: 'before', completion: { before: [], inbetween: [], after: [] } })).toBeUndefined();
+  it('"before" with buckets present but all empty: no code (""), no exception', () => {
+    // The composable finds no row for this case: no code is guessed.
+    expect(resolve({ status_restriction: 'before', completion: { before: [], inbetween: [], after: [] } })).toBe('');
   });
 });
 

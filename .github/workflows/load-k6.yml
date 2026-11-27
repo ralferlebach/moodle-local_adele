@@ -30,8 +30,13 @@ name: Load test (k6)
         description: '[external] Password for that login'
         required: false
       contextid:
-        description: '[external] Module context id of an ADELE activity with live markers (empty: pages only)'
+        description: '[external] Module context id of an ADELE activity with live markers (required unless live=off)'
         required: false
+      live:
+        description: 'Live endpoints (snapshot, group overview, names): required, or off for a pages-only run on purpose'
+        type: choice
+        options: ['required', 'off']
+        default: required
       users:
         description: Seeded learners on the learning path (a larger cohort for the live data, re-audit 2026-11-22)
         default: '500'
@@ -181,6 +186,12 @@ jobs:
             cat /tmp/moodle-server.log || true
             exit 1
           fi
+          # Re-audit 2026-11-26: a missing context must not turn into a green
+          # "pages only" run that reads like a load test of the live data.
+          if [ "${{ github.event.inputs.live }}" != "off" ] && [ -z "${{ steps.params.outputs.contextid }}" -o "${{ steps.params.outputs.contextid }}" = "0" ]; then
+            echo "::error title=No ADELE activity::No module context for the live endpoints (selfcontained: mod_adele missing from the seed; external: input contextid). Set live=off for a pages-only run."
+            exit 1
+          fi
           k6 run \
             -e BASE_URL='${{ steps.params.outputs.base_url }}' \
             -e COURSEID='${{ steps.params.outputs.courseid }}' \
@@ -189,8 +200,27 @@ jobs:
             -e VUS='${{ github.event.inputs.vus }}' \
             -e DURATION='${{ github.event.inputs.duration }}' \
             -e CONTEXTID='${{ steps.params.outputs.contextid }}' \
+            -e LIVE='${{ github.event.inputs.live }}' \
             --summary-export=k6-summary.json \
             plugin/tests/load/adele-read-endpoints.js
+
+      # What was measured, where people look first: calls, p95, failures.
+      - name: Summarise the live endpoints
+        if: always()
+        run: |
+          [ -f k6-summary.json ] || exit 0
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          m = json.load(open('k6-summary.json'))['metrics']
+          print('| Metric | Count | p(95) ms |')
+          print('|---|---:|---:|')
+          for key in sorted(m):
+              if key.startswith(('adele_live_calls', 'adele_live_snapshot', 'adele_group_overview', 'adele_node_people', 'http_req_duration', 'http_req_failed', 'checks')):
+                  v = m[key]
+                  count = v.get('count', v.get('passes', ''))
+                  p95 = v.get('p(95)', '')
+                  print(f"| {key} | {count} | {round(p95, 1) if p95 != '' else ''} |")
+          PY
 
       - name: Show Moodle server log on failure
         if: failure() && github.event.inputs.mode == 'selfcontained'

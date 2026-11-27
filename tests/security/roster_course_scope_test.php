@@ -196,10 +196,15 @@ final class roster_course_scope_test extends advanced_testcase {
     public function test_a_learner_adele_keeps_suspended_stays_on_the_roster(): void {
         global $DB;
         // Hidden mode: in the course through an enrolment of ADELE's own
-        // method only, suspended.
+        // method only, suspended - the host enrolment of this path, whose
+        // embedding here is in host mode "hidden" (since 2026-11-26 the
+        // roster asks for exactly that; a suspension under a "visible"
+        // embedding takes the person out - roster_adele_enrolment_status_test).
+        $DB->set_field('adele', 'hostenrolmentmode', 'hidden', ['id' => $this->activityx->id]);
         $hidden = $this->getDataGenerator()->create_user();
         $enrolid = $DB->insert_record('enrol', (object) [
             'enrol' => 'adele', 'courseid' => $this->coursex->id, 'status' => ENROL_INSTANCE_ENABLED,
+            'customint1' => $this->lpid, 'customint2' => 2,
         ]);
         $DB->insert_record('user_enrolments', (object) [
             'enrolid' => $enrolid, 'userid' => $hidden->id, 'status' => ENROL_USER_SUSPENDED,

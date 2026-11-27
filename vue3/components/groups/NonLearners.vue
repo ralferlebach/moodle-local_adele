@@ -101,19 +101,33 @@ const reasonText = (person) => (person.reason === 'nonlearner'
   ? fill(strings.value.nonlearners_reason_nonlearner, person.roles)
   : strings.value.nonlearners_reason_nopath);
 
+// Number of the latest request: only its answer counts. Group changes in a
+// row send several requests, and their answers can arrive in any order - a
+// late answer for an earlier group used to overwrite the list of the group
+// chosen last (found in E2E G5, 2026-11-26).
+let latest = 0;
+
 /**
  * Load the list for the group shown.
  */
 async function load() {
+  const request = ++latest;
   loading.value = true;
   failed.value = false;
   try {
-    people.value = await store.dispatch('fetchNonLearners');
+    const answer = await store.dispatch('fetchNonLearners');
+    if (request === latest) {
+      people.value = answer;
+    }
   } catch (e) {
-    failed.value = true;
-    people.value = [];
+    if (request === latest) {
+      failed.value = true;
+      people.value = [];
+    }
   } finally {
-    loading.value = false;
+    if (request === latest) {
+      loading.value = false;
+    }
   }
 }
 
@@ -125,6 +139,9 @@ async function toggle() {
   if (open.value) {
     await load();
   } else {
+    // A request still under way answers into nothing.
+    latest++;
+    loading.value = false;
     people.value = [];
   }
 }

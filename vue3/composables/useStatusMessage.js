@@ -65,6 +65,11 @@ export function useStatusMessage(data) {
       default:
         return '';
     }
+    // A case without a matching combination: no status, as the default
+    // branch (until 2026-11-26 the computed ended without a value here -
+    // vue/return-in-computed-property; the consumers read undefined and ''
+    // alike, the explicit value makes it so).
+    return '';
   });
 
   return { statusMessage };

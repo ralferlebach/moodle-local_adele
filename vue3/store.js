@@ -200,6 +200,10 @@ export function createAppStore() {
                 // The group shown in an ADELE activity (#12): -1 the activity's
                 // default, 0 all participants; the server decides what is allowed.
                 groupid: -1,
+                // Counts the groups chosen (setGroupId). Answers requested
+                // before the latest choice are dropped; the overview
+                // resolving the default group (-1) is no choice.
+                groupchoice: 0,
                 // Group mode, groups, rankings and averages (#12), as the server gives them.
                 groupoverview: null,
                 // Markers and counters per node (#14, #15) while the teachers'
@@ -374,6 +378,7 @@ export function createAppStore() {
             },
             setGroupId(state, groupid) {
                 state.groupid = Number(groupid);
+                state.groupchoice++;
             },
             setGroupOverview(state, overview) {
                 state.groupoverview = overview;
@@ -503,6 +508,7 @@ export function createAppStore() {
                 return learningpath
             },
             async fetchUserPathRelations(context) {
+                const choice = context.state.groupchoice;
                 const lpUserPathRelations = await ajax('local_adele_get_user_path_relations',
                 {
                   userid: context.state.user,
@@ -510,16 +516,29 @@ export function createAppStore() {
                   contextid: context.state.contextid,
                   groupid: context.state.groupid,
                 });
+                // The answer requested before another group was chosen is
+                // dropped: group changes in a row send several requests whose
+                // answers can arrive in any order (found 2026-11-26, E2E G5).
+                // The overview resolving the default group (-1) is no choice -
+                // comparing the group itself dropped the first list of every
+                // page (local stand 2026-11-26, 18 E2E red).
+                if (context.state.groupchoice !== choice) {
+                  return;
+                }
                 context.commit('setLpUserPathRelations', lpUserPathRelations);
             },
             // Groups, non-learners, live data (#12 - #15): read only, the
             // server decides what the person may see.
             async fetchGroupOverview(context) {
+                const choice = context.state.groupchoice;
                 const overview = await ajax('local_adele_get_group_overview', {
                     contextid: context.state.contextid,
                     groupid: context.state.groupid,
                 }, true);
-                context.commit('setGroupOverview', overview);
+                // As above: only an answer requested since the last choice.
+                if (context.state.groupchoice === choice) {
+                    context.commit('setGroupOverview', overview);
+                }
                 return overview;
             },
             async fetchNonLearners(context) {

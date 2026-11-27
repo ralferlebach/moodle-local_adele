@@ -291,6 +291,51 @@ describe('NonLearners.vue (#13)', () => {
   });
 });
 
+describe('NonLearners.vue - answers out of order (found in E2E G5, 2026-11-26)', () => {
+  /**
+   * A fetch whose answers the test releases one by one, in any order.
+   */
+  const deferredFetch = () => {
+    const pending = [];
+    const fetchNonLearners = jest.fn(() => new Promise((resolve) => pending.push(resolve)));
+    return { fetchNonLearners, pending };
+  };
+
+  it('a slower answer for an earlier group does not overwrite the list of the group chosen last', async () => {
+    const { fetchNonLearners, pending } = deferredFetch();
+    const store = makeStore({}, { fetchNonLearners });
+    const wrapper = mount(NonLearners, { global: { plugins: [store] } });
+    await wrapper.find('button').trigger('click');
+    store.commit('setGroupId', 5);
+    await flushPromises();
+    store.commit('setGroupId', 4);
+    await flushPromises();
+    expect(fetchNonLearners).toHaveBeenCalledTimes(3);
+    // The answer for the last group (4) first, then the late ones.
+    pending[2]([{ userid: 9, fullname: 'Last Group', reason: 'nonlearner', roles: 'Teacher' }]);
+    await flushPromises();
+    pending[1]([{ userid: 8, fullname: 'Earlier Group', reason: 'nonlearner', roles: 'Teacher' }]);
+    pending[0]([{ userid: 7, fullname: 'First Group', reason: 'nonlearner', roles: 'Teacher' }]);
+    await flushPromises();
+    const rows = wrapper.findAll('[data-testid="adele-non-learner"]').map((r) => r.text());
+    expect(rows).toEqual(['Last Group - Takes no part as a learner (Teacher)']);
+    expect(wrapper.find('[role="status"]').text()).toBe('');
+  });
+
+  it('an answer arriving after the list was closed fills nothing', async () => {
+    const { fetchNonLearners, pending } = deferredFetch();
+    const store = makeStore({}, { fetchNonLearners });
+    const wrapper = mount(NonLearners, { global: { plugins: [store] } });
+    const toggle = wrapper.find('button');
+    await toggle.trigger('click');
+    await toggle.trigger('click');
+    pending[0]([{ userid: 7, fullname: 'Too Late', reason: 'nonlearner', roles: 'Teacher' }]);
+    await flushPromises();
+    expect(wrapper.find('[data-testid="adele-non-learner"]').exists()).toBe(false);
+    expect(toggle.attributes('aria-expanded')).toBe('false');
+  });
+});
+
 describe('NodeLive.vue (#14, #15)', () => {
   const node = {
     nodeid: 'n1', completed: 2, active: 3, moremarkers: 1,

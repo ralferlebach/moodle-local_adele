@@ -295,6 +295,25 @@ test.describe('ADELE-E2E-A18 — DOM ids once per page, references on their own 
         expect(await brokenReferences(page)).toEqual([]);
       });
 
+      await test.step('#18 AK7: Boost on a wide screen, where the minimap shows - no id twice', async () => {
+        // The minimap appears once the flow is wider than 768 px. Boost caps
+        // the width of the page content (measured: no minimap even at 2400 px),
+        // so the cap is lifted as a site with full-width content (custom CSS,
+        // a Boost child theme) has it (re-audit 2026-11-26: Boost and Classic
+        // both with the minimap visible).
+        await page.setViewportSize({ width: 2000, height: 1200 });
+        await page.goto(`/course/view.php?id=${fixture('ADELE_FIXTURE_M18_HOST')}`);
+        await expect(apps).toHaveCount(3, { timeout: 30_000 });
+        await expect(apps.nth(2).locator('.vue-flow__node').first()).toBeVisible({ timeout: 30_000 });
+        await page.addStyleTag({ content: '#page.drawers .main-inner, #region-main, #topofscroll { max-width: none !important; }' });
+        await page.setViewportSize({ width: 2400, height: 1200 });
+        await expect(page.locator('.vue-flow__minimap').first(), 'the minimap is shown').toBeVisible({ timeout: 30_000 });
+        expect(await page.locator('.vue-flow__minimap-node').count(), 'minimap nodes drawn').toBeGreaterThan(0);
+        expect(await duplicateIds(page)).toEqual([]);
+        expect(await brokenReferences(page)).toEqual([]);
+        await expect(page.locator('[id="dropdownMenuButton"]')).toHaveCount(0);
+      });
+
       await test.step('#18 AK4: the same page in the Classic theme - no id twice, no "dropdownMenuButton", '
         + 'the navigation link works', async () => {
         const course = fixture('ADELE_FIXTURE_M18_HOST');
@@ -306,6 +325,7 @@ test.describe('ADELE-E2E-A18 — DOM ids once per page, references on their own 
             'Classic is the theme of the page').toBe(true);
           await expect(apps).toHaveCount(3, { timeout: 30_000 });
           await expect(apps.nth(2).locator('.vue-flow__node').first()).toBeVisible({ timeout: 30_000 });
+          await expect(page.locator('.vue-flow__minimap').first(), 'the minimap is shown').toBeVisible({ timeout: 30_000 });
           expect(await duplicateIds(page)).toEqual([]);
           expect(await brokenReferences(page)).toEqual([]);
           await expect(page.locator('[id="dropdownMenuButton"]')).toHaveCount(0);

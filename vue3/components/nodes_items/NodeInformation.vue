@@ -140,8 +140,8 @@ import { appDomId } from '../../composables/domIds';
   const description = ref({})
   const estimate_duration = ref({})
 
-  const restriction = computed(() => props.data.completion.feedback.restriction.before || null )
-  const completion = computed(() => props.data.completion.feedback.completion.before || null )
+  const restriction = computed(() => props.data.completion.feedback.restriction.before || null )
+  const completion = computed(() => props.data.completion.feedback.completion.before || null )
 
   // The info list is rendered only when it has at least one non-empty entry. Guarding on the
   // raw collection was wrong: an object/array of empty strings ({id:''} / ['']) is truthy, so

@@ -49,6 +49,7 @@
 
 import { test, expect, Page, Locator } from '@playwright/test';
 import { env, loginAs } from '../support/env';
+import { enrolInDialog } from '../support/enrol';
 import {
   callService,
   fixture,
@@ -107,20 +108,9 @@ test.describe('ADELE-E2E-R3 — a course teacher becomes an ADELE assistant', ()
       await loginAs(page, env.adminUser, env.adminPassword);
       await page.goto(`/user/index.php?id=${course}`);
 
-      await page.getByRole('button', { name: /Enrol users|Nutzer.*einschreiben/i }).first().click();
-
-      // The participant picker is a Moodle autocomplete: type, then pick the
-      // entry by name rather than by position.
-      const picker = page.getByRole('combobox', { name: /Select users|Nutzer.*auswählen/i }).first();
-      await picker.fill(teachername);
-      await page.getByRole('option', { name: new RegExp(teachername) }).first().click();
-
       // The role matters: only the role named in the setting triggers the
       // assistant assignment.
-      await page.getByRole('combobox', { name: /Assign role|Rolle zuweisen/i })
-        .selectOption({ label: 'Teacher' });
-
-      await page.getByRole('button', { name: /^Enrol users|Nutzer einschreiben$/i }).last().click();
+      await enrolInDialog(page, teachername, 'Teacher');
       await expect(page.locator('table#participants tbody tr').filter({ hasText: teachername }))
         .toHaveCount(1, { timeout: 30_000 });
     });

@@ -167,7 +167,9 @@ final class user_path_relation_access_test extends advanced_testcase {
     }
 
     /**
-     * An enrolled participant can still read the leaderboard (StudentView.vue).
+     * An enrolled participant reads the participant list - with the own row
+     * only (local_adele #12 AK0-L2: learners are isolated without groups;
+     * before #12 the whole roster, 2 rows).
      */
     public function test_enrolled_participant_can_read_leaderboard(): void {
         $a = $this->getDataGenerator()->create_and_enrol($this->course, 'student');
@@ -178,7 +180,8 @@ final class user_path_relation_access_test extends advanced_testcase {
         $this->setUser($a);
         $result = get_lp_user_path_relations::execute($a->id, $this->lpid, $this->context->id);
 
-        $this->assertCount(2, $result);
+        $this->assertCount(1, $result);
+        $this->assertSame((int) $a->id, (int) $result[0]['id']);
     }
 
     /**

@@ -92,14 +92,13 @@
         >
           {{ store.state.strings.flowchart_cancel_confirmation }}
           <button
-            id="cancel-learning-path"
             class="btn btn-primary m-2"
             @click="goBack"
           >
             {{ store.state.strings.flowchart_back_button }}
           </button>
           <button
-            id="confim-cancel-learning-path"
+            data-testid="learningpath-cancel-confirm"
             class="btn btn-warning m-2"
             @click="goBackConfirmation(true)"
           >
@@ -155,6 +154,7 @@
 </template>
 
 <script setup>
+import { hasEdge } from '../composables/flowHelper/normalizeEdges';
 // Import needed libraries
 import { ref, onMounted, nextTick } from 'vue'
 import { onBeforeRouteUpdate, useRoute } from 'vue-router';
@@ -347,8 +347,9 @@ const finishEdit = () => {
   learningpath.value = null
 }
 
+// The path's edges keep one edge per connection (local_adele #603).
 const handleAddEdge = (edge) => {
-  if (edge && learningpath.value.json.tree.edges) {
+  if (edge && learningpath.value.json.tree.edges && !hasEdge(learningpath.value.json.tree.edges, edge)) {
     learningpath.value.json.tree.edges.push(edge)
   }
 }
@@ -423,6 +424,13 @@ const handleMoveNode = (params) => {
 @keyframes fadeIn {
   0% { opacity: 0; }
   100% { opacity: 1; }
+}
+
+/* No fade for people who asked their system for less motion (WCAG 2.3.3). */
+@media (prefers-reduced-motion: reduce) {
+  .fade-in {
+    animation: none;
+  }
 }
 
 .cancelConfi{

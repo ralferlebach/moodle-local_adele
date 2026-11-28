@@ -45,6 +45,7 @@ import {
   conditions,
   dropCondition,
   openAccessCriteria,
+  openCompletionCriteria,
   saveCriteria,
   storedConditionColumns,
 } from '../support/conditions';
@@ -64,6 +65,10 @@ const WINDOW = { start: '2030-01-15T10:00', end: '2030-01-15T12:00', startEpoch:
 
 /** The author's text for T03's access criterion. */
 const AUTHOR_TEXT = 'E1: Erst Testkurs 02 abschließen, dann im Zeitfenster beginnen.';
+// The author's text of a completion criterion: written in the feedback node of
+// the completion editor, where the unreachable feedback dialog used to sit
+// (#18 DoD2, the dialog removed with the client's approval of 2026-11-27).
+const COMPLETION_TEXT = 'E1: Abgeschlossen, sobald Testkurs 01 abgeschlossen ist.';
 
 /**
  * The stored access or completion criteria of one node, condition by
@@ -171,15 +176,36 @@ test.describe('ADELE-E2E-E1 — the reference path with its configuration, built
         // standard text", then write.
         const feedback = page.locator('.dndflowcompletion .vue-flow__node[data-id$="_feedback"]').first();
         await expect(feedback, 'the criterion offers a feedback field').toBeVisible({ timeout: 15_000 });
-        const standard = feedback.locator('input[type="checkbox"][id^="feedback_before_restriction_"]');
+        const standard = feedback.locator('input[type="checkbox"][id*="feedback_before_restriction_"]');
         if (await standard.isDisabled()) {
           await feedback.locator('button:has(i.fa-eye-slash)').click();
         }
         if (await standard.isChecked()) {
           await standard.uncheck();
         }
-        const text = feedback.locator('textarea[id^="feedback_before_restriction_textarea_"]');
+        const text = feedback.locator('textarea[id*="feedback_before_restriction_textarea_"]');
         await text.fill(AUTHOR_TEXT);
+        await text.blur();
+        await saveCriteria(page);
+        await saveLearningPath(page, app(page).locator('[data-testid="learningpath-save"]'));
+      });
+
+      await test.step('T01: an author text in the completion editor - no feedback dialog anywhere', async () => {
+        await reopen(page, title);
+        await openCompletionCriteria(page, 'dndnode_1');
+        await expect(page.locator('[id*="feedbackModal"]'), 'the removed dialog is not on the page').toHaveCount(0);
+        await expect(page.locator('[data-target*="feedbackModal"], [aria-controls*="feedbackModal"]')).toHaveCount(0);
+        const feedback = page.locator('.dndflowcompletion .vue-flow__node[data-id$="_feedback"]').first();
+        await expect(feedback, 'the completion criterion offers a feedback field').toBeVisible({ timeout: 15_000 });
+        const standard = feedback.locator('input[type="checkbox"][id*="feedback_before_"]').first();
+        if (await standard.isDisabled()) {
+          await feedback.locator('button:has(i.fa-eye-slash)').click();
+        }
+        if (await standard.isChecked()) {
+          await standard.uncheck();
+        }
+        const text = feedback.locator('textarea[id*="feedback_before_textarea_"]').first();
+        await text.fill(COMPLETION_TEXT);
         await text.blur();
         await saveCriteria(page);
         await saveLearningPath(page, app(page).locator('[data-testid="learningpath-save"]'));
@@ -208,6 +234,9 @@ test.describe('ADELE-E2E-E1 — the reference path with its configuration, built
         const texts = criteria.filter((c) => c.id.endsWith('_feedback'))
           .map((c) => (c.data as { feedback_before?: string }).feedback_before);
         expect(texts, 'the author\'s text is stored with the criterion').toContain(AUTHOR_TEXT);
+        const completiontexts = storedCriteria(title, 'dndnode_1', 'completion').filter((c) => c.id.endsWith('_feedback'))
+          .map((c) => (c.data as { feedback_before?: string }).feedback_before);
+        expect(completiontexts, 'the completion text is stored with its criterion').toContain(COMPLETION_TEXT);
       });
 
       await test.step('a new session: reopened, the editor shows all of it', async () => {
@@ -225,9 +254,13 @@ test.describe('ADELE-E2E-E1 — the reference path with its configuration, built
         const timed = conditions(page).filter({ has: page.locator('input[type="datetime-local"]') });
         await expect(timed.locator('input[type="datetime-local"]').nth(0)).toHaveValue(WINDOW.start);
         await expect(timed.locator('input[type="datetime-local"]').nth(1)).toHaveValue(WINDOW.end);
-        await expect(page.locator('.dndflowcompletion textarea[id^="feedback_before_restriction_textarea_"]').first())
+        await expect(page.locator('.dndflowcompletion textarea[id*="feedback_before_restriction_textarea_"]').first())
           .toHaveValue(AUTHOR_TEXT);
         await expect(conditionNode(page, 'condition_1')).toBeVisible();
+        await saveCriteria(page);
+        await openCompletionCriteria(page, 'dndnode_1');
+        await expect(page.locator('.dndflowcompletion textarea[id*="feedback_before_textarea_"]').first())
+          .toHaveValue(COMPLETION_TEXT);
       });
     } finally {
       if (lpid) {

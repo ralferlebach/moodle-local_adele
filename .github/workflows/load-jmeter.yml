@@ -66,7 +66,7 @@ jobs:
 
     steps:
       - name: Check out plugin
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           path: plugin
 
@@ -74,7 +74,7 @@ jobs:
         if: ${{ github.event.inputs.mode == 'selfcontained' }}
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.1'
+          php-version: '8.2'
           extensions: pgsql, gd, intl, zip, soap, mbstring, curl, xml, exif
           ini-values: max_input_vars=5000
 
@@ -203,7 +203,7 @@ jobs:
 
       - name: Upload results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: jmeter-results
           path: results.jtl

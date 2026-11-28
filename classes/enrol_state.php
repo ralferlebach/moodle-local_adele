@@ -47,6 +47,14 @@ class enrol_state {
     const ENTITLING_STATUSES = ['accessible', 'completed'];
 
     /**
+     * The kind of enrol_adele instance that holds the enrolments granted
+     * through the teacher view (enrol_adele instance_manager::KIND_TEACHER,
+     * local_adele #600). Repeated here: local_adele does not depend on
+     * enrol_adele's classes being loadable.
+     */
+    const TEACHER_GRANT_KIND = 3;
+
+    /**
      * Course ids the user is entitled to right now on this learning path.
      *
      * Aggregated as a set across ALL nodes, so a shared target course stays
@@ -289,6 +297,88 @@ class enrol_state {
     }
 
     /**
+     * The one definition of an effective course enrolment of one's own
+     * (mod_adele #30), as SQL over a user_enrolments alias and its enrol
+     * alias: not made by ADELE itself (mod_adele #37), the method enabled,
+     * the enrolment active (not suspended) and inside its time window.
+     *
+     * The site setting mod_adele/sourcesincludesuspended lets suspended
+     * enrolments count as well (the behaviour before #30); the time window
+     * and the method's status always count.
+     *
+     * @param string $ue Alias of {user_enrolments}.
+     * @param string $e Alias of {enrol}.
+     * @return array [string $sql, array $params] with unique named parameters.
+     */
+    public static function effective_enrolment_sql(string $ue = 'ue', string $e = 'e'): array {
+        static $counter = 0;
+        $counter++;
+        $p = 'effenrol' . $counter;
+        $now = \core\di::get(\core\clock::class)->time();
+        $sql = "{$e}.enrol <> 'adele'
+                AND {$e}.status = :{$p}enabled
+                AND ({$ue}.timestart = 0 OR {$ue}.timestart <= :{$p}now1)
+                AND ({$ue}.timeend = 0 OR {$ue}.timeend > :{$p}now2)";
+        $params = [$p . 'enabled' => ENROL_INSTANCE_ENABLED, $p . 'now1' => $now, $p . 'now2' => $now];
+        if (!self::suspended_enrolments_count()) {
+            $sql .= " AND {$ue}.status = :{$p}active";
+            $params[$p . 'active'] = ENROL_USER_ACTIVE;
+        }
+        return [$sql, $params];
+    }
+
+    /**
+     * Whether the site lets suspended enrolments count as a source
+     * (setting of mod_adele, off by default; mod_adele #30).
+     *
+     * @return bool
+     */
+    public static function suspended_enrolments_count(): bool {
+        return !empty(get_config('mod_adele', 'sourcesincludesuspended'));
+    }
+
+    /**
+     * Of the given courses: those in which the user holds an effective
+     * enrolment of their own ({@see effective_enrolment_sql()}).
+     *
+     * @param int $userid The user.
+     * @param int[] $courseids The courses.
+     * @return int[] Course ids.
+     */
+    public static function get_effectively_enrolled_courseids(int $userid, array $courseids): array {
+        global $DB;
+        $courseids = array_values(array_unique(array_map('intval', $courseids)));
+        if (!$courseids) {
+            return [];
+        }
+        [$insql, $inparams] = $DB->get_in_or_equal($courseids, SQL_PARAMS_NAMED, 'effc');
+        [$effsql, $effparams] = self::effective_enrolment_sql();
+        return array_map('intval', $DB->get_fieldset_sql(
+            "SELECT DISTINCT e.courseid
+               FROM {user_enrolments} ue
+               JOIN {enrol} e ON e.id = ue.enrolid
+              WHERE ue.userid = :effuserid
+                    AND {$effsql}
+                    AND e.courseid {$insql}",
+            ['effuserid' => $userid] + $effparams + $inparams
+        ));
+    }
+
+    /**
+     * Whether a user holds an effective enrolment of their own in a course
+     * and takes part in it as a participant - the full test of a
+     * participant source (mod_adele #30, #37; local_adele #587).
+     *
+     * @param int $courseid The course.
+     * @param int $userid The user.
+     * @return bool
+     */
+    public static function is_effective_participant(int $courseid, int $userid): bool {
+        return self::get_effectively_enrolled_courseids($userid, [$courseid])
+            && self::is_participant($courseid, $userid);
+    }
+
+    /**
      * Whether a user takes part in a course AS A PARTICIPANT, by their own
      * right (#587).
      *
@@ -348,7 +438,16 @@ class enrol_state {
      * For the roster of an embedding. Somebody who is in the course only
      * through ADELE (host modes) has no own-right enrolment and is not
      * returned: such a learner is on the roster because of the path.
-     * Decides like {@see is_participant()}, for many users in two queries.
+     * Decides like {@see is_participant()}, for many users in two queries -
+     * with one addition for the roster: an active enrolment through the
+     * teacher view (enrol_adele kind 3, local_adele #600) is the person's
+     * own right in the course, and the roles it gives count. A tutor whose
+     * only way into the course is such a grant is staff of the course, not
+     * a learner - even with a snapshot of the path from an earlier time
+     * (re-audit 2026-11-27, section 3; it used to be listed as a learner).
+     * The roles of a grant count only while the grant itself does: Moodle
+     * keeps the role assignment of a suspended or expired enrolment, and that
+     * role gives nothing any more (re-audit 2026-11-27 evening, P2).
      *
      * @param int $courseid The course.
      * @param int[] $userids The users to look at.
@@ -362,18 +461,23 @@ class enrol_state {
             return [];
         }
         [$usersql, $userparams] = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED, 'usr');
+        [$effsql, $effparams] = self::effective_enrolment_sql();
+        // The teacher grants of the course: active, inside their window.
         $now = \core\di::get(\core\clock::class)->time();
+        $grantsql = "e.enrol = 'adele' AND e.customint2 = :grantkind AND e.status = :grantenabled
+                     AND ue.status = :grantactive
+                     AND (ue.timestart = 0 OR ue.timestart <= :grantnow1)
+                     AND (ue.timeend = 0 OR ue.timeend > :grantnow2)";
+        $grantparams = ['grantkind' => self::TEACHER_GRANT_KIND, 'grantenabled' => ENROL_INSTANCE_ENABLED,
+            'grantactive' => ENROL_USER_ACTIVE, 'grantnow1' => $now, 'grantnow2' => $now];
         $ownright = $DB->get_fieldset_sql(
             "SELECT DISTINCT ue.userid
                FROM {user_enrolments} ue
                JOIN {enrol} e ON e.id = ue.enrolid
               WHERE e.courseid = :courseid
-                    AND e.enrol <> 'adele'
-                    AND e.status = :enabled
-                    AND (ue.timestart = 0 OR ue.timestart <= :now1)
-                    AND (ue.timeend = 0 OR ue.timeend > :now2)
+                    AND (({$effsql}) OR ({$grantsql}))
                     AND ue.userid {$usersql}",
-            ['courseid' => $courseid, 'enabled' => ENROL_INSTANCE_ENABLED, 'now1' => $now, 'now2' => $now] + $userparams
+            ['courseid' => $courseid] + $effparams + $grantparams + $userparams
         );
         if (!$ownright) {
             return [];
@@ -387,9 +491,19 @@ class enrol_state {
                 "SELECT ra.id, ra.userid, ra.roleid
                    FROM {role_assignments} ra
                   WHERE ra.contextid {$ctxsql}
-                        AND ra.component <> 'enrol_adele'
+                        AND (ra.component <> 'enrol_adele'
+                             OR EXISTS (SELECT 1
+                                          FROM {enrol} ge
+                                          JOIN {user_enrolments} gue ON gue.enrolid = ge.id AND gue.userid = ra.userid
+                                         WHERE ge.id = ra.itemid AND ge.courseid = :racourseid AND ge.enrol = 'adele'
+                                               AND ge.customint2 = :rakind AND ge.status = :raenabled
+                                               AND gue.status = :raactive
+                                               AND (gue.timestart = 0 OR gue.timestart <= :ranow1)
+                                               AND (gue.timeend = 0 OR gue.timeend > :ranow2)))
                         AND ra.userid {$ownsql}",
-                $ctxparams + $ownparams
+                $ctxparams + $ownparams + ['racourseid' => $courseid, 'rakind' => self::TEACHER_GRANT_KIND,
+                    'raenabled' => ENROL_INSTANCE_ENABLED, 'raactive' => ENROL_USER_ACTIVE,
+                    'ranow1' => $now, 'ranow2' => $now]
             );
             foreach ($assignments as $assignment) {
                 if (isset($needed[(int) $assignment->roleid])) {

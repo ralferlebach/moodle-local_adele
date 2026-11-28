@@ -118,7 +118,20 @@ class save_lp_user_path_relation extends external_api {
             require_capability('local/adele:teacheredit', $context);
             // A course right covers the learners of that course - not the
             // ones another course brought to the same path (#588).
-            if (!learning_paths::is_roster_member((int) $params['courseid'], (int) ($payload->route->userId ?? 0))) {
+            $learnerid = (int) ($payload->route->userId ?? 0);
+            if (!learning_paths::is_roster_member((int) $params['courseid'], $learnerid)) {
+                throw new \required_capability_exception($context, 'local/adele:teacheredit', 'nopermissions', '');
+            }
+            // ... and of the learners the activity's groups give the teacher
+            // (#12 AK0-L6, #16 AK0-M4), whichever context is named.
+            if (
+                !\local_adele\cohort::teacher_may_see(
+                    $context,
+                    (int) $params['courseid'],
+                    (int) $params['learningpathid'],
+                    $learnerid
+                )
+            ) {
                 throw new \required_capability_exception($context, 'local/adele:teacheredit', 'nopermissions', '');
             }
         }

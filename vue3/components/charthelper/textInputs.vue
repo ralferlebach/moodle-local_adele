@@ -26,6 +26,7 @@ import { ref, watch, onMounted } from 'vue';
 import absUrl from '../../composables/absUrl';
 import { notify } from "@kyvg/vue3-notification";
 import { useStore } from 'vuex'
+import { appDomId } from '../../composables/domIds';
 import userSearch from './userSearch.vue';
 
 const props = defineProps({
@@ -145,7 +146,7 @@ const editLearningpath = async (singlelearningpathid) => {
       <div class="col-12">
         <label
           class="font-weight-bold h4"
-          for="goalnameplaceholder"
+          :for="appDomId(store, 'goalnameplaceholder')"
         >
           {{ store.state.strings.fromlearningtitel }}
           <span
@@ -162,7 +163,8 @@ const editLearningpath = async (singlelearningpathid) => {
         </label>
         <div class="mb-2">
           <input
-            id="goalnameplaceholder"
+            :id="appDomId(store, 'goalnameplaceholder')"
+            name="goalnameplaceholder"
             data-testid="learningpath-title"
             v-model="goalname"
             v-autowidth="{ maxWidth: '960px', minWidth: '20px', comfortZone: 0 }"
@@ -176,7 +178,7 @@ const editLearningpath = async (singlelearningpathid) => {
       <div class="col-12">
         <label
           class="font-weight-bold h4"
-          for="goalsubjectplaceholder"
+          :for="appDomId(store, 'goalsubjectplaceholder')"
         >
           {{ store.state.strings.fromlearningdescription }}
           <span
@@ -193,10 +195,10 @@ const editLearningpath = async (singlelearningpathid) => {
         </label>
         <div class="mb-2">
           <textarea
-            id="goalsubjectplaceholder"
+            :id="appDomId(store, 'goalsubjectplaceholder')"
             data-testid="learningpath-description"
             v-model="goaldescription"
-            :name="store.state.strings.goalsubjectplaceholder"
+            name="goalsubjectplaceholder"
             v-autowidth="{ maxWidth: '960px', minWidth: '40%', comfortZone: 0 }"
             class="form-control fancy-input"
             :placeholder="store.state.strings.goalsubjectplaceholder"
@@ -256,10 +258,10 @@ const editLearningpath = async (singlelearningpathid) => {
               </div>
             </div>
             <div>
-              <label for="newImage">
+              <label :for="appDomId(store, 'path-default-image')">
                 {{ store.state.strings.uploadowndefaultimage }}
               </label>
-              <input type="file" id="newImage" @change="onFileChange">
+              <input type="file" :id="appDomId(store, 'path-default-image')" @change="onFileChange">
               <div
                 v-if="newImagePreview"
               > 

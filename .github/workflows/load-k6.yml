@@ -29,9 +29,17 @@ name: Load test (k6)
       admin_password:
         description: '[external] Password for that login'
         required: false
+      contextid:
+        description: '[external] Module context id of an ADELE activity with live markers (required unless live=off)'
+        required: false
+      live:
+        description: 'Live endpoints (snapshot, group overview, names): required, or off for a pages-only run on purpose'
+        type: choice
+        options: ['required', 'off']
+        default: required
       users:
-        description: Seeded learners on the learning path
-        default: '25'
+        description: Seeded learners on the learning path (a larger cohort for the live data, re-audit 2026-11-22)
+        default: '500'
         required: false
       vus:
         description: Concurrent virtual users
@@ -64,7 +72,7 @@ jobs:
 
     steps:
       - name: Check out plugin
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           path: plugin
 
@@ -72,7 +80,7 @@ jobs:
         if: ${{ github.event.inputs.mode == 'selfcontained' }}
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.1'
+          php-version: '8.2'
           extensions: pgsql, gd, intl, zip, soap, mbstring, curl, xml, exif
           ini-values: max_input_vars=5000
 
@@ -122,6 +130,7 @@ jobs:
             echo "base_url=$(get ADELE_BASE_URL)"
             echo "courseid=$(get ADELE_COURSE_ID)"
             echo "admin_user=$(get ADELE_ADMIN_USER)"
+            echo "contextid=$(get ADELE_LOAD_CONTEXTID)"
           } >> "$GITHUB_OUTPUT"
           echo "::add-mask::$(get ADELE_ADMIN_PASSWORD)"
           echo "admin_password=$(get ADELE_ADMIN_PASSWORD)" >> "$GITHUB_OUTPUT"
@@ -134,11 +143,13 @@ jobs:
             echo "courseid=${{ github.event.inputs.courseid }}" >> "$GITHUB_OUTPUT"
             echo "admin_user=${{ github.event.inputs.admin_user }}" >> "$GITHUB_OUTPUT"
             echo "admin_password=${{ github.event.inputs.admin_password }}" >> "$GITHUB_OUTPUT"
+            echo "contextid=${{ github.event.inputs.contextid }}" >> "$GITHUB_OUTPUT"
           else
             echo "base_url=${{ steps.selfcontained.outputs.base_url }}" >> "$GITHUB_OUTPUT"
             echo "courseid=${{ steps.selfcontained.outputs.courseid }}" >> "$GITHUB_OUTPUT"
             echo "admin_user=${{ steps.selfcontained.outputs.admin_user }}" >> "$GITHUB_OUTPUT"
             echo "admin_password=${{ steps.selfcontained.outputs.admin_password }}" >> "$GITHUB_OUTPUT"
+            echo "contextid=${{ steps.selfcontained.outputs.contextid }}" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Set up k6
@@ -175,6 +186,12 @@ jobs:
             cat /tmp/moodle-server.log || true
             exit 1
           fi
+          # Re-audit 2026-11-26: a missing context must not turn into a green
+          # "pages only" run that reads like a load test of the live data.
+          if [ "${{ github.event.inputs.live }}" != "off" ] && [ -z "${{ steps.params.outputs.contextid }}" -o "${{ steps.params.outputs.contextid }}" = "0" ]; then
+            echo "::error title=No ADELE activity::No module context for the live endpoints (selfcontained: mod_adele missing from the seed; external: input contextid). Set live=off for a pages-only run."
+            exit 1
+          fi
           k6 run \
             -e BASE_URL='${{ steps.params.outputs.base_url }}' \
             -e COURSEID='${{ steps.params.outputs.courseid }}' \
@@ -182,8 +199,28 @@ jobs:
             -e ADMIN_PASSWORD='${{ steps.params.outputs.admin_password }}' \
             -e VUS='${{ github.event.inputs.vus }}' \
             -e DURATION='${{ github.event.inputs.duration }}' \
+            -e CONTEXTID='${{ steps.params.outputs.contextid }}' \
+            -e LIVE='${{ github.event.inputs.live }}' \
             --summary-export=k6-summary.json \
             plugin/tests/load/adele-read-endpoints.js
+
+      # What was measured, where people look first: calls, p95, failures.
+      - name: Summarise the live endpoints
+        if: always()
+        run: |
+          [ -f k6-summary.json ] || exit 0
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          m = json.load(open('k6-summary.json'))['metrics']
+          print('| Metric | Count | p(95) ms |')
+          print('|---|---:|---:|')
+          for key in sorted(m):
+              if key.startswith(('adele_live_calls', 'adele_live_snapshot', 'adele_group_overview', 'adele_node_people', 'http_req_duration', 'http_req_failed', 'checks')):
+                  v = m[key]
+                  count = v.get('count', v.get('passes', ''))
+                  p95 = v.get('p(95)', '')
+                  print(f"| {key} | {count} | {round(p95, 1) if p95 != '' else ''} |")
+          PY
 
       - name: Show Moodle server log on failure
         if: failure() && github.event.inputs.mode == 'selfcontained'
@@ -191,7 +228,7 @@ jobs:
 
       - name: Upload results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: k6-summary
           path: k6-summary.json

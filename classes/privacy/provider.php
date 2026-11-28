@@ -92,6 +92,16 @@ class provider implements
             'privacy:metadata:local_adele_lp_editors'
         );
 
+        $collection->add_database_table(
+            'local_adele_activity',
+            [
+                'userid' => 'privacy:metadata:local_adele_activity:userid',
+                'courseid' => 'privacy:metadata:local_adele_activity:courseid',
+                'timeseen' => 'privacy:metadata:local_adele_activity:timeseen',
+            ],
+            'privacy:metadata:local_adele_activity'
+        );
+
         return $collection;
     }
 
@@ -115,6 +125,7 @@ class provider implements
                             SELECT 1 FROM {local_adele_path_user} lpu WHERE lpu.user_id = :userid2 OR lpu.createdby = :userid3
                        )
                        OR EXISTS (SELECT 1 FROM {local_adele_lp_editors} lpe WHERE lpe.userid = :userid4)
+                       OR EXISTS (SELECT 1 FROM {local_adele_activity} laa WHERE laa.userid = :userid5)
                    )";
 
         $params = [
@@ -123,6 +134,7 @@ class provider implements
             'userid2' => $userid,
             'userid3' => $userid,
             'userid4' => $userid,
+            'userid5' => $userid,
         ];
 
         $contextlist->add_from_sql($sql, $params);
@@ -162,6 +174,12 @@ class provider implements
         // Users who are editors.
         $sql = "SELECT DISTINCT userid
                   FROM {local_adele_lp_editors}
+                 WHERE userid > 0";
+        $userlist->add_from_sql('userid', $sql, []);
+
+        // Live activity (#14).
+        $sql = "SELECT DISTINCT userid
+                  FROM {local_adele_activity}
                  WHERE userid > 0";
         $userlist->add_from_sql('userid', $sql, []);
     }
@@ -254,10 +272,29 @@ class provider implements
                 (object) ['permissions' => $data]
             );
         }
+
+        // Export the live activity (#14): course and time last seen.
+        $activity = $DB->get_records('local_adele_activity', ['userid' => $userid], 'courseid ASC');
+        if (!empty($activity)) {
+            $data = [];
+            foreach ($activity as $row) {
+                $data[] = (object) [
+                    'courseid' => $row->courseid,
+                    'timeseen' => transform::datetime($row->timeseen),
+                ];
+            }
+            writer::with_context($systemcontext)->export_data(['live_activity'], (object) ['activity' => $data]);
+        }
     }
 
     /**
      * Delete all data for all users in the specified context.
+     *
+     * The participations and editor rights of everybody go; the learning
+     * paths stay - they are the site's content, embedded and worked on by
+     * others - with their author fields anonymised (no owner until somebody
+     * with local/adele:canmanage hands them on). ADELE's enrolments that
+     * hung on the participations are taken back.
      *
      * @param \context $context The specific context to delete data for.
      * @return void
@@ -268,11 +305,18 @@ class provider implements
         if ($context->contextlevel != CONTEXT_SYSTEM) {
             return;
         }
-
-        // Delete all records from all tables as this is system level data.
-        $DB->delete_records('local_adele_learning_paths');
+        $pairs = $DB->get_records_sql(
+            "SELECT DISTINCT " . $DB->sql_concat('learning_path_id', "'_'", 'user_id') . " AS pair,
+                    learning_path_id, user_id
+               FROM {local_adele_path_user}"
+        );
         $DB->delete_records('local_adele_path_user');
+        foreach ($pairs as $pair) {
+            self::take_back_enrolments((int) $pair->learning_path_id, (int) $pair->user_id);
+        }
         $DB->delete_records('local_adele_lp_editors');
+        $DB->delete_records('local_adele_activity');
+        $DB->set_field('local_adele_learning_paths', 'createdby', 0);
     }
 
     /**
@@ -282,30 +326,13 @@ class provider implements
      * @return void
      */
     public static function delete_data_for_user(approved_contextlist $contextlist): void {
-        global $DB;
-
         if (empty($contextlist->count())) {
             return;
         }
-
-        $userid = $contextlist->get_user()->id;
-        $systemcontext = \context_system::instance();
-
-        if (!in_array($systemcontext->id, $contextlist->get_contextids())) {
+        if (!in_array(\context_system::instance()->id, $contextlist->get_contextids())) {
             return;
         }
-
-        // Delete learning paths created by the user.
-        $DB->delete_records('local_adele_learning_paths', ['createdby' => $userid]);
-
-        // Delete path_user records where user is the participant.
-        $DB->delete_records('local_adele_path_user', ['user_id' => $userid]);
-
-        // Delete path_user records created by the user.
-        $DB->delete_records('local_adele_path_user', ['createdby' => $userid]);
-
-        // Delete editor permissions for the user.
-        $DB->delete_records('local_adele_lp_editors', ['userid' => $userid]);
+        self::delete_user((int) $contextlist->get_user()->id);
     }
 
     /**
@@ -315,32 +342,60 @@ class provider implements
      * @return void
      */
     public static function delete_data_for_users(approved_userlist $userlist): void {
+        if ($userlist->get_context()->contextlevel != CONTEXT_SYSTEM) {
+            return;
+        }
+        foreach ($userlist->get_userids() as $userid) {
+            self::delete_user((int) $userid);
+        }
+    }
+
+    /**
+     * Delete one person's data - and only theirs (decision 2026-10-17,
+     * mod_adele #33).
+     *
+     * - Their own participations go, with ADELE's enrolments that hung on them.
+     * - Their editor rights go.
+     * - Learning paths they created stay: the most senior remaining editor
+     *   takes them over (#571); without one the path is left without an
+     *   owner (createdby = 0) and shown as such to managers.
+     * - Participations of others that they created stay, anonymised.
+     *
+     * @param int $userid The person.
+     * @return void
+     */
+    private static function delete_user(int $userid): void {
         global $DB;
 
-        $context = $userlist->get_context();
+        $DB->delete_records('local_adele_activity', ['userid' => $userid]);
+        $lpids = $DB->get_fieldset_select('local_adele_path_user', 'learning_path_id', 'user_id = ?', [$userid]);
+        $DB->delete_records('local_adele_path_user', ['user_id' => $userid]);
+        foreach (array_unique(array_map('intval', $lpids)) as $lpid) {
+            self::take_back_enrolments($lpid, $userid);
+        }
+        $DB->set_field('local_adele_path_user', 'createdby', 0, ['createdby' => $userid]);
+        $DB->delete_records('local_adele_lp_editors', ['userid' => $userid]);
+        foreach ($DB->get_records('local_adele_learning_paths', ['createdby' => $userid], '', 'id') as $path) {
+            if (!\local_adele\ownership::handle_vanished_owner((int) $path->id, $userid)) {
+                $DB->set_field('local_adele_learning_paths', 'createdby', 0, ['id' => $path->id]);
+            }
+        }
+    }
 
-        if ($context->contextlevel != CONTEXT_SYSTEM) {
+    /**
+     * Take back ADELE's enrolments of a person on a path whose participation
+     * record is gone (target and host courses): without the record they
+     * would be orphaned (enrolments exist only for an active participation).
+     *
+     * @param int $lpid The learning path.
+     * @param int $userid The person.
+     * @return void
+     */
+    private static function take_back_enrolments(int $lpid, int $userid): void {
+        if (!class_exists('\enrol_adele\local\reconciler')) {
             return;
         }
-
-        $userids = $userlist->get_userids();
-
-        if (empty($userids)) {
-            return;
-        }
-
-        [$insql, $inparams] = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED);
-
-        // Delete learning paths created by these users.
-        $DB->delete_records_select('local_adele_learning_paths', "createdby $insql", $inparams);
-
-        // Delete path_user records where users are participants.
-        $DB->delete_records_select('local_adele_path_user', "user_id $insql", $inparams);
-
-        // Delete path_user records created by these users.
-        $DB->delete_records_select('local_adele_path_user', "createdby $insql", $inparams);
-
-        // Delete editor permissions for these users.
-        $DB->delete_records_select('local_adele_lp_editors', "userid $insql", $inparams);
+        \enrol_adele\local\reconciler::purge_user($lpid, $userid);
+        \enrol_adele\local\reconciler::purge_all_host_user($lpid, $userid);
     }
 }

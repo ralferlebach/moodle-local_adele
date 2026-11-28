@@ -539,5 +539,44 @@ function xmldb_local_adele_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2026100721, 'local', 'adele');
     }
 
+    // The plugin enrol_adele is a required companion; no enrol_manual fallback
+    // any more (decision 2026-10-17, mod_adele #20). The role setting of that
+    // fallback has no use left and goes.
+    if ($oldversion < 2026100734) {
+        unset_config('enroll_as_setting', 'local_adele');
+        upgrade_plugin_savepoint(true, 2026100734, 'local', 'adele');
+    }
+
+    // One edge per connection (local_adele #603): stored learning paths lose
+    // copies of a connection, an edge whose id another connection holds gets
+    // a free one; the paths of the people on them lose copies only. Counted
+    // and reported; a second run finds nothing. A preview without writing:
+    // php local/adele/cli/repair_path_edges.php.
+    if ($oldversion < 2026101800) {
+        \local_adele\path_edges::repair_stored(false, function (string $line): void {
+            mtrace('local_adele: ' . $line);
+        });
+        upgrade_plugin_savepoint(true, 2026101800, 'local', 'adele');
+    }
+
+    // Where a learner was last seen, for the live markers and node counters
+    // (#14, #15): one row per person and course, filled from now on.
+    if ($oldversion < 2026111900) {
+        $table = new xmldb_table('local_adele_activity');
+        $table->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE, null);
+        $table->add_field('userid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('courseid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('timeseen', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+        $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
+        $table->add_key('userid', XMLDB_KEY_FOREIGN, ['userid'], 'user', ['id']);
+        $table->add_key('courseid', XMLDB_KEY_FOREIGN, ['courseid'], 'course', ['id']);
+        $table->add_index('useridcourseid', XMLDB_INDEX_UNIQUE, ['userid', 'courseid']);
+        $table->add_index('timeseen', XMLDB_INDEX_NOTUNIQUE, ['timeseen']);
+        if (!$dbman->table_exists($table)) {
+            $dbman->create_table($table);
+        }
+        upgrade_plugin_savepoint(true, 2026111900, 'local', 'adele');
+    }
+
     return true;
 }

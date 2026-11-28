@@ -60,7 +60,7 @@ Feature: As an admin I perform editing of the adele learning plan.
     And I drag and drop HTML5 from ".learning-path-nodes-container .nodes > :nth-child(4)" to "[data-id='condition_1']" as "[data-id='source_and']"
     And I wait "1" seconds
     And I pan vue flow to "[data-id='condition_2']"
-    And I set the field "Enable Textarea" to "checked"
+    And I set the field "Edit text" to "checked"
     And I set the field "completion-condition_2-info" to "must be completed by teacher"
     And I click on "Update Information" "button" in the "[data-id='condition_2']" "css_element"
     And I wait "1" seconds

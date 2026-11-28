@@ -157,5 +157,8 @@ class local_adele_observer {
      */
     public static function user_deleted(base $event) {
         \local_adele\ownership::handle_user_deleted((int) $event->objectid);
+        // Where a deleted person was last seen goes with them (#14).
+        global $DB;
+        $DB->delete_records('local_adele_activity', ['userid' => (int) $event->objectid]);
     }
 }

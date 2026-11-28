@@ -27,14 +27,14 @@
     <div>
       <input
         type="checkbox"
-        id="enableTextarea"
+        :id="appDomId(store, `completion-${completion.node_id}-enable-info`)"
         @click="toggleCustomInformation"
         :checked="isTextareaEnabled"
       />
-      <label for="enableTextarea">{{ store.state.strings.enabletextarea_manual_check }}</label>
+      <label :for="appDomId(store, `completion-${completion.node_id}-enable-info`)">{{ store.state.strings.enabletextarea_manual_check }}</label>
     </div>
     <textarea
-      :id="`completion-${completion.node_id}-info`"
+      :id="appDomId(store, `completion-${completion.node_id}-info`)"
       class="form-control"
       v-model="textInput"
       :name="`completion-${completion.node_id}-info`"
@@ -54,6 +54,7 @@
 </template>
 
 <script setup>
+import { appDomId } from '../../../composables/domIds';
 import { ref } from 'vue';
 import { useStore } from 'vuex'; // Import Vuex store
 

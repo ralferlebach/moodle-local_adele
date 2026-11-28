@@ -34,8 +34,12 @@ import UserInformation from '../nodes_items/UserInformation.vue';
 import NodeInformation from '../nodes_items/NodeInformation.vue';
 import CourseCompletion from '../nodes_items/CourseCompletion.vue';
 import ExpandedCourses from '../nodes_items/ExpandedCourses.vue';
+import { stackControls, stackToggleId } from '../../composables/nodesHelper/expandedCourse';
 import truncatedText from '../../composables/nodesHelper/truncatedText';
+import { appDomId, appDomSelector, DIALOGS } from '../../composables/domIds';
 import { useNodeStatus } from '../../composables/useNodeStatus';
+import TeacherCourseAccess from '../nodes_items/TeacherCourseAccess.vue';
+import NodeLive from '../live/NodeLive.vue';
 
 const courses = computed(() => {
   if (
@@ -98,6 +102,16 @@ const props = defineProps({
 });
 // Load Store
 const store = useStore();
+
+// The dialogs this node opens, by their page-unique ids (#18).
+const dialogId = computed(() => ({
+  node: appDomId(store, DIALOGS.node),
+  course: appDomId(store, DIALOGS.course),
+}));
+const dialogTarget = computed(() => ({
+  node: appDomSelector(store, DIALOGS.node),
+  course: appDomSelector(store, DIALOGS.course),
+}));
 // Machine-readable identity and state of this node (#574) and its accessible
 // name (#575 B1). All three come from useNodeStatus, the single derivation
 // shared with the icon the sighted user sees; role="group" is what makes the
@@ -218,6 +232,11 @@ const nodeBackgroundColor = computed(() => {
 const courseExpanded = ref(false);
 const isBlocked = ref(false);
 const expandCourses = () => {
+  // While the panels fold in or out the button rests - marked, not disabled:
+  // a disabled button would drop the keyboard focus (TP-08).
+  if (isBlocked.value) {
+    return
+  }
   courseExpanded.value = !courseExpanded.value
   isBlocked.value = true
 }
@@ -225,6 +244,34 @@ const expandCourses = () => {
 const enableButton = () => {
   isBlocked.value = false
 };
+
+// The expand button of the stack: its state, what it controls, and Escape
+// folds the stack from its button or from one of its panels; the button then
+// keeps / takes the keyboard focus (#17, TP-08).
+const toggleButton = ref(null)
+// Prefixed per application (#18), as is every panel id it controls.
+const toggleId = computed(() => appDomId(store, stackToggleId(props.data.node_id)))
+const toggleControls = computed(() =>
+  courseExpanded.value
+    ? stackControls(props.data.node_id, props.data.course_node_id).split(' ').map((id) => appDomId(store, id)).join(' ')
+    : undefined
+)
+const toggleLabel = computed(() =>
+  (courseExpanded.value ? store.state.strings.collapse_courses : store.state.strings.expand_courses)
+  + ': ' + (props.data.fullname || store.state.strings.nodes_collection)
+)
+const collapseCourses = () => {
+  if (courseExpanded.value && !isBlocked.value) {
+    expandCourses()
+  }
+  // Escape is a keyboard action: the focus it moves is to be shown. In
+  // Firefox it was not (CI 2026-10-18, S17: :focus-visible false after
+  // Escape); focusVisible asks the browser to show it. Browsers without the
+  // option ignore it.
+  if (toggleButton.value && toggleButton.value.focus) {
+    toggleButton.value.focus({ preventScroll: true, focusVisible: true })
+  }
+}
 
 const deleteCondition = () => {
   emit('delete-node', props.data);
@@ -329,7 +376,9 @@ const deleteCondition = () => {
                   :title="store.state.strings.edit_course_node"
                   :aria-label="store.state.strings.edit_course_node + ': ' + (data.fullname || store.state.strings.nodes_collection)"
                   data-toggle="modal"
-                  data-target="#nodeModal"
+                  :data-target="dialogTarget.node"
+                  :aria-controls="dialogId.node"
+                  aria-haspopup="dialog"
                   @click="setNodeModal"
                 >
                   <i class="fas fa-pencil" />
@@ -341,12 +390,23 @@ const deleteCondition = () => {
               class="overlay"
             >
               <button
+                :id="toggleId"
+                ref="toggleButton"
+                type="button"
                 class="icon-link"
                 :title="courseExpanded ? store.state.strings.collapse_courses : store.state.strings.expand_courses"
-                :disabled="isBlocked"
+                :aria-label="toggleLabel"
+                :aria-expanded="courseExpanded ? 'true' : 'false'"
+                :aria-controls="toggleControls"
+                :data-testid="'stack-toggle-' + data.node_id"
+                :aria-disabled="isBlocked ? 'true' : undefined"
                 @click.stop="expandCourses"
+                @keydown.esc.stop.prevent="collapseCourses"
               >
-                <i :class="['fa', courseExpanded ? 'fa-minus-circle' : 'fa-plus-circle']" />
+                <i
+                  :class="['fa', courseExpanded ? 'fa-minus-circle' : 'fa-plus-circle']"
+                  aria-hidden="true"
+                />
               </button>
             </div>
           </div>
@@ -403,7 +463,10 @@ const deleteCondition = () => {
                     type="button"
                     class="btn btn-secondary btn-sm trash-button"
                     data-toggle="modal"
-                    data-target="#courseModal"
+                    :data-target="dialogTarget.course"
+                    :aria-controls="dialogId.course"
+                    aria-haspopup="dialog"
+                    :aria-label="store.state.strings.modals_edit + ' ' + (value.fullname || value.givenname || '')"
                     @click="setCourseModal(value.id)"
                   >
                     <i
@@ -439,10 +502,22 @@ const deleteCondition = () => {
             <ExpandedCourses
               :data="data"
               @doneFolding="enableButton"
+              @collapse="collapseCourses"
             />
           </div>
         </div>
       </div>
+      <!-- Live markers and counters in the teachers' overview (#14, #15). -->
+      <NodeLive
+        v-if="store.state.livesnapshot"
+        :nodeid="data.node_id"
+        :nodename="data.fullname || ''"
+        class="px-2"
+      />
+      <TeacherCourseAccess
+        :node-id="data.node_id"
+        :course-ids="data.course_node_id || []"
+      />
       <div class="card-footer">
 
         <CourseCarousel
@@ -501,6 +576,13 @@ const deleteCondition = () => {
 
 .icon-link:hover {
   color: lightgray; /* Hover effect */
+}
+/* A visible focus on the dark overlay (TP-08). */
+.icon-link:focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 6px #0f6cbf;
+  border-radius: 4px;
 }
 .custom-node {
   position: relative;

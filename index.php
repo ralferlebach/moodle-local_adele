@@ -74,6 +74,7 @@ echo $OUTPUT->render_from_template('local_adele/initview', [
   'editablepaths' => json_encode($learningpaths ?? []),
   'version' => $CFG->version,
   'stringsrev' => get_config('local_adele', 'version'),
+  'pathviewsettings' => \local_adele\path_view_settings::for_template(),
 ]);
 
 echo $OUTPUT->footer();

@@ -25,12 +25,12 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'local_adele';
-$plugin->release = '0.7.0';
-$plugin->version = 2026100728;
+$plugin->release = '0.8.0';
+$plugin->version = 2026112800;
 $plugin->requires = 2024100700;
 $plugin->maturity = MATURITY_BETA;
 $plugin->supported = [405, 405];
 $plugin->dependencies = [
-    'mod_adele' => 2026082902,
-    'enrol_adele' => 2026072500,
+    'mod_adele' => 2026112800,
+    'enrol_adele' => 2026112800,
 ];

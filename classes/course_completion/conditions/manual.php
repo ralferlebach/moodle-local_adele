@@ -29,7 +29,6 @@ namespace local_adele\course_completion\conditions;
 
 use local_adele\course_completion\course_completion;
 
-
 defined('MOODLE_INTERNAL') || die();
 
 require_once($CFG->dirroot . '/local/adele/lib.php');

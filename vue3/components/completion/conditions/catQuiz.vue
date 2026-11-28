@@ -41,7 +41,7 @@
       </div>
       <div v-if="parentscales.length > 0">
         <select
-          :id="`completion-${completion.node_id}-parent-scale`"
+          :id="appDomId(store, `completion-${completion.node_id}-parent-scale`)"
           v-model="selectedparentscale"
           :name="`completion-${completion.node_id}-parent-scale`"
           @change="updateScales"
@@ -87,23 +87,23 @@
                     v-if="scales.parent && scales.parent.showDetails"
                     class="dynamic-content-container"
                   >
-                    <label :for="`completion-${completion.node_id}-scale-value`">
+                    <label :for="appDomId(store, `completion-${completion.node_id}-scale-value`)">
                       {{ store.state.strings.conditions_scale_value }}
                     </label>
                     <input
-                      :id="`completion-${completion.node_id}-scale-value`"
+                      :id="appDomId(store, `completion-${completion.node_id}-scale-value`)"
                       v-model="scalevalue"
                       :name="`completion-${completion.node_id}-scale-value`"
                       class="form-control"
                     >
                     <label
-                      :for="`completion-${completion.node_id}-attempts`"
+                      :for="appDomId(store, `completion-${completion.node_id}-attempts`)"
                       class="mt-3"
                     >
                       {{ store.state.strings.conditions_attempts }}
                     </label>
                     <input
-                      :id="`completion-${completion.node_id}-attempts`"
+                      :id="appDomId(store, `completion-${completion.node_id}-attempts`)"
                       v-model="attempts"
                       :name="`completion-${completion.node_id}-attempts`"
                       class="form-control"
@@ -167,23 +167,23 @@
                     v-if="scale.showDetails"
                     class="dynamic-content-container"
                   >
-                    <label :for="`completion-${completion.node_id}-sub-scale-value`">
+                    <label :for="appDomId(store, `completion-${completion.node_id}-sub-scale-value`)">
                       {{ store.state.strings.conditions_scale_value }}
                     </label>
                     <input
-                      :id="`completion-${completion.node_id}-sub-scale-value`"
+                      :id="appDomId(store, `completion-${completion.node_id}-sub-scale-value`)"
                       v-model="scalevalue"
                       :name="`completion-${completion.node_id}-sub-scale-value`"
                       class="form-control"
                     >
                     <label
-                      :for="`completion-${completion.node_id}-sub-attempts`"
+                      :for="appDomId(store, `completion-${completion.node_id}-sub-attempts`)"
                       class="mt-3"
                     >
                       {{ store.state.strings.conditions_attempts }}
                     </label>
                     <input
-                      :id="`completion-${completion.node_id}-sub-attempts`"
+                      :id="appDomId(store, `completion-${completion.node_id}-sub-attempts`)"
                       v-model="attempts"
                       :name="`completion-${completion.node_id}-sub-attempts`"
                       class="form-control"
@@ -208,6 +208,7 @@
 <script setup>
 import { onMounted, ref, watch } from 'vue';
 import { useStore } from 'vuex';
+import { appDomId } from '../../../composables/domIds';
 import DropdownInput from '../../nodes_items/DropdownInput.vue'
 
 // Load Store

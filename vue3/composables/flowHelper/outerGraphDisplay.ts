@@ -31,7 +31,7 @@ interface Edge {
   sourceHandle?: string;
   targetHandle?: string;
   style?: Record<string, any>;
-  markerEnd?: MarkerType;
+  markerEnd?: MarkerType | { type: MarkerType };
   data: EdgeData;
 }
 
@@ -79,7 +79,8 @@ const outerGraphDisplay = (edges: Edge[], findNode: FindNode, addEdges: AddEdges
           style: {
             'stroke-width': 5,
           },
-          markerEnd: MarkerType.ArrowClosed,
+          // An object, so VueFlow names the marker per graph (#18).
+          markerEnd: { type: MarkerType.ArrowClosed },
           data: { hidden: false },
         };
         // Add the new edge

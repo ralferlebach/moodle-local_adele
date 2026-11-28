@@ -70,7 +70,7 @@ describe('manual_check.vue', () => {
       },
     });
 
-    const checkbox = wrapper.find('#enableTextarea');
+    const checkbox = wrapper.find('[id$="-enable-info"]');
     expect(checkbox.element.checked).toBe(false);
   });
 
@@ -85,7 +85,7 @@ describe('manual_check.vue', () => {
       },
     });
 
-    const checkbox = wrapper.find('#enableTextarea');
+    const checkbox = wrapper.find('[id$="-enable-info"]');
     await checkbox.setChecked();
     await checkbox.trigger('click');
     await nextTick()

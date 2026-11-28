@@ -58,7 +58,7 @@ describe('modQuiz.vue - the threshold', () => {
     ['100 %', '100', 100],
   ])('%s: typed %s, stored %s', async (_label, typed, stored) => {
     const wrapper = await editor({ quizid: '7', grade: 30 });
-    await wrapper.find('#grade').setValue(typed);
+    await wrapper.find('[id$="-grade"]').setValue(typed);
     await flushPromises();
     expect(lastEmitted(wrapper)).toEqual({ quizid: '7', grade: stored });
   });
@@ -68,20 +68,20 @@ describe('modQuiz.vue - the threshold', () => {
     ['below 0 is clamped to 0', '-5', 0],
   ])('%s (#499)', async (_label, typed, stored) => {
     const wrapper = await editor({ quizid: '7', grade: 30 });
-    await wrapper.find('#grade').setValue(typed);
+    await wrapper.find('[id$="-grade"]').setValue(typed);
     await flushPromises();
     expect(lastEmitted(wrapper)).toEqual({ quizid: '7', grade: stored });
-    expect(Number(wrapper.find('#grade').element.value)).toBe(stored);
+    expect(Number(wrapper.find('[id$="-grade"]').element.value)).toBe(stored);
   });
 
   it('without a quiz there is no threshold field, but a warning', async () => {
     const wrapper = await editor({});
-    expect(wrapper.find('#grade').exists()).toBe(false);
+    expect(wrapper.find('[id$="-grade"]').exists()).toBe(false);
     expect(wrapper.find('.adele-condition-warning').exists()).toBe(true);
   });
 
   it('a stored threshold is shown again', async () => {
     const wrapper = await editor({ quizid: '7', grade: 75 });
-    expect(Number(wrapper.find('#grade').element.value)).toBe(75);
+    expect(Number(wrapper.find('[id$="-grade"]').element.value)).toBe(75);
   });
 });

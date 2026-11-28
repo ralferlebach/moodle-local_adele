@@ -24,10 +24,18 @@
 <script setup>
 import { onMounted, onUnmounted } from 'vue';
 import { useVueFlow } from '@vue-flow/core'
+import { useStore } from 'vuex';
+import {
+  expandedCourseLabel,
+  expandedCourseNodeId,
+  expandedCourseShortname,
+  expandedCourseTitle,
+} from '../../composables/nodesHelper/expandedCourse';
 
 
 // load useVueFlow properties / functions
 const { findNode, removeNodes, addNodes } = useVueFlow()
+const store = useStore()
 
 const props = defineProps({
   data: {
@@ -37,10 +45,32 @@ const props = defineProps({
 });
 
 const emit = defineEmits([
-  'done-folding'
+  'done-folding',
+  'collapse',
 ]);
 
+// Escape in a panel of this stack folds the stack; the stack's expand button
+// takes the focus, so the keyboard does not lose its place (#17, TP-08). An
+// element inside the panel that handles Escape itself (the information card,
+// the course access list) stops the event first.
+const onKeydown = (event) => {
+  if (event.key !== 'Escape' || event.defaultPrevented) {
+    return
+  }
+  const active = document.activeElement
+  const wrapper = active && active.closest ? active.closest('.vue-flow__node') : null
+  if (!wrapper) {
+    return
+  }
+  const own = (props.data.course_node_id || []).map((id) => expandedCourseNodeId(props.data.node_id, id))
+  if (own.includes(wrapper.dataset.id)) {
+    event.preventDefault()
+    emit('collapse')
+  }
+}
+
 onMounted(() => {
+  document.addEventListener('keydown', onKeydown)
   const expandedNode = findNode(props.data.node_id)
   if (!expandedNode) return
 
@@ -54,9 +84,14 @@ onMounted(() => {
     nodeData.course_id = node_id // Add course_id to the copied data
     nodeData.showCard = false
 
+    // Identity by the real course id, readable by the course name (#17).
+    const title = expandedCourseTitle(expandedNode.data, node_id, store.state.availablecourses)
+    const shortname = expandedCourseShortname(expandedNode.data, node_id, store.state.availablecourses)
     const newnode = {
-      id: `${props.data.node_id}_expanded_courses_${node_id}`,
+      id: expandedCourseNodeId(props.data.node_id, node_id),
       type: 'expandedcourses',
+      ariaLabel: expandedCourseLabel(title, node_id, store.state.strings, shortname),
+      class: `adele-expanded-course adele-expanded-course-${node_id}`,
       data: nodeData,
       draggable: false,
       deletable: false,
@@ -73,11 +108,12 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  document.removeEventListener('keydown', onKeydown)
   let remove_nodes = []
   let reversed_course_node_id = [...props.data.course_node_id].reverse();
   reversed_course_node_id.forEach((node_id, index) => {
-    remove_nodes.push(props.data.node_id + '_expanded_courses_' + node_id)
-    let remove_node =findNode(props.data.node_id + '_expanded_courses_' + node_id)
+    remove_nodes.push(expandedCourseNodeId(props.data.node_id, node_id))
+    let remove_node = findNode(expandedCourseNodeId(props.data.node_id, node_id))
     if (remove_node) {
       remove_node.deletable = true
       setTimeout(() => {

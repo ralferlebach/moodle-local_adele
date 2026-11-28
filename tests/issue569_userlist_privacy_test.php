@@ -171,18 +171,94 @@ final class issue569_userlist_privacy_test extends advanced_testcase {
     }
 
     /**
-     * With 'Results of all other participants' (userlist = 1) the full
-     * leaderboard is intended and stays available to students.
+     * 'Results of all other participants' (userlist = 1) in an activity
+     * without groups (decision 2026-11-22; the setting applies without groups
+     * only): through the activity a learner gets the activity's learners,
+     * the other rows without id and username - a learner opens nobody's
+     * path. Through the course context the own row only (the next test).
+     * From #12 until this decision the learner got the own row here too.
      *
      * @return void
      */
-    public function test_all_results_setting_returns_the_full_roster(): void {
+    public function test_all_results_setting_lists_the_learners_without_ids(): void {
         $this->resetAfterTest(true);
         $this->build_world(1);
         $modulecontextid = context_module::instance($this->adele->cmid)->id;
 
         $relations = $this->fetch($this->student1, $modulecontextid);
         $this->assertCount(2, $relations);
+        $own = array_values(array_filter($relations, fn($row) => (int) $row['id'] === (int) $this->student1->id));
+        $other = array_values(array_filter($relations, fn($row) => (int) $row['id'] !== (int) $this->student1->id));
+        $this->assertCount(1, $own, 'the own row keeps its id');
+        $this->assertSame($this->student2->lastname, $other[0]['lastname']);
+        $this->assertLessThan(0, (int) $other[0]['id'], 'no user id of the other learner');
+        $this->assertSame('', $other[0]['username'], 'no username of the other learner');
+        // A request naming the other learner selects nothing more.
+        $this->assertCount(2, $this->fetch($this->student1, $modulecontextid, (int) $this->student2->id));
+        // Through the course context: the own row only.
+        $relations = $this->fetch($this->student1, (int) context_course::instance($this->course->id)->id);
+        $this->assertSame([(int) $this->student1->id], array_map('intval', array_column($relations, 'id')));
+    }
+
+    /**
+     * "All results" without groups opens the learners of THIS activity only:
+     * no other context widens the list (re-audit 2026-11-22, #12 AK0-L1/L2,
+     * #16 AK0-M4) - another module of the course, an ADELE activity of
+     * another path, an ADELE activity of the same path in a course the
+     * learner is not in.
+     *
+     * @return void
+     */
+    public function test_all_results_setting_other_contexts_give_no_more(): void {
+        global $DB;
+        $this->resetAfterTest(true);
+        $this->build_world(1);
+        $gen = self::getDataGenerator();
+        $own = [(int) $this->student1->id];
+
+        $forum = $gen->create_module('forum', ['course' => $this->course->id]);
+        $relations = $this->fetch($this->student1, (int) context_module::instance($forum->cmid)->id);
+        $this->assertSame($own, array_map('intval', array_column($relations, 'id')), 'another module of the course');
+
+        $otherpath = (int) $DB->insert_record('local_adele_learning_paths', (object) [
+            'name' => 'LP 569 other', 'description' => '', 'image' => '',
+            'json' => json_encode(['tree' => ['nodes' => [], 'edges' => []], 'modules' => null]),
+            'visibility' => 1, 'timecreated' => time(), 'timemodified' => time(), 'createdby' => 2,
+        ]);
+        $otheractivity = $gen->create_module('adele', ['course' => $this->course->id, 'learningpathid' => $otherpath,
+            'view' => 1, 'userlist' => 1, 'participantslist' => 1]);
+        $relations = $this->fetch($this->student1, (int) context_module::instance($otheractivity->cmid)->id);
+        $this->assertSame($own, array_map('intval', array_column($relations, 'id')), 'an ADELE activity of another path');
+
+        $elsewhere = $gen->create_course();
+        $stranger = $gen->create_user();
+        $gen->enrol_user($stranger->id, $elsewhere->id, 'student');
+        $foreign = $gen->create_module('adele', ['course' => $elsewhere->id, 'learningpathid' => $this->lpid,
+            'view' => 1, 'userlist' => 1, 'participantslist' => 1]);
+        try {
+            $relations = $this->fetch($this->student1, (int) context_module::instance($foreign->cmid)->id);
+            $this->assertSame($own, array_map('intval', array_column($relations, 'id')), 'the path in a foreign course');
+        } catch (\required_capability_exception | \require_login_exception $e) {
+            // Refused outright: nothing either.
+            $this->assertNotEmpty($e->getMessage());
+        }
+    }
+
+    /**
+     * With groups the setting is not in effect: 'all results' opens no
+     * roster through the participant list (the rankings of a group are
+     * get_group_overview's), whatever is stored.
+     *
+     * @return void
+     */
+    public function test_all_results_setting_with_groups_returns_the_own_row(): void {
+        global $DB;
+        $this->resetAfterTest(true);
+        $this->build_world(1);
+        $DB->set_field('course_modules', 'groupmode', SEPARATEGROUPS, ['id' => $this->adele->cmid]);
+        rebuild_course_cache($this->course->id, true);
+        $relations = $this->fetch($this->student1, context_module::instance($this->adele->cmid)->id);
+        $this->assertSame([(int) $this->student1->id], array_map('intval', array_column($relations, 'id')));
     }
 
     /**

@@ -72,7 +72,8 @@ class learning_paths {
         $data->description = $params['description'];
         $data->image = $params['image'];
         $data->timemodified = \core\di::get(\core\clock::class)->time();
-        $data->json = $params['json'];
+        // One edge per connection, whatever the client sent (local_adele #603).
+        [$data->json] = path_edges::normalize_json($params['json']);
         $id = 0;
         if ($params['learningpathid'] == 0) {
             $data->timecreated = \core\di::get(\core\clock::class)->time();
@@ -198,7 +199,7 @@ class learning_paths {
         global $DB;
         $data = new stdClass();
         $data->id = $params['id'];
-        $data->json = $params['json'];
+        [$data->json] = path_edges::normalize_json($params['json']);
         $data->createdby = '100';
         $data->timemodified = \core\di::get(\core\clock::class)->time();
         return $DB->update_record('local_adele_learning_paths', $data);
@@ -290,6 +291,9 @@ class learning_paths {
         );
         $learningpath = self::get_image_paths($learningpath);
         $learningpath = (array) $learningpath;
+        // Drawn with one edge per connection, also before the path is saved
+        // again (local_adele #603).
+        [$learningpath['json']] = path_edges::normalize_json($learningpath['json'] ?? null);
         // Owner info for the editors panel: golden crown + "Owner:" label (#488),
         // orphaned marker when the owner vanished (#571).
         $ownerid = (int) ($learningpath['createdby'] ?? 0);
@@ -379,6 +383,8 @@ class learning_paths {
                 $copyindex++;
             }
             $learningpath->id = null;
+            // The copy gets one edge per connection (local_adele #603).
+            [$learningpath->json] = path_edges::normalize_json($learningpath->json);
             $learningpath->createdby = $USER->id;
             if ($copyindex > 1) {
                 $learningpath->name .= ' ' . $copyindex;
@@ -805,8 +811,12 @@ class learning_paths {
             }
         }
         $coursenames = $courseids
-            ? $DB->get_records_list('course', 'id', array_values($courseids), '', 'id, fullname')
+            ? $DB->get_records_list('course', 'id', array_values($courseids), '', 'id, fullname, shortname')
             : [];
+        // A person's path is drawn with one edge per connection (local_adele #603).
+        if (isset($json->tree->edges) && is_array($json->tree->edges)) {
+            $json->tree->edges = path_edges::normalize($json->tree->edges)['edges'];
+        }
 
         foreach ($json->tree->nodes as $node) {
             $node->draggable = false;
@@ -862,9 +872,11 @@ class learning_paths {
      * Attach resolved course full names to a node's course_node_id_description,
      * so the frontend can label course cards independently of the filtered
      * availablecourses pool (issue #457). Existing (teacher-given) names are kept.
+     * The course's own short and full name go beside it, so a panel of a
+     * stacked node names its course unmistakably (mod_adele #17).
      *
      * @param object $node The decoded learning-path node.
-     * @param array $coursenames Map of courseid => record with ->fullname.
+     * @param array $coursenames Map of courseid => record with ->fullname (and ->shortname).
      * @return void
      */
     public static function attachcoursenames($node, $coursenames) {
@@ -887,6 +899,10 @@ class learning_paths {
                 // Use the raw fullname, matching how get_availablecourses already
                 // exposes course names (c.fullname, PARAM_TEXT, no format_string).
                 $node->data->course_node_id_description->{$key}->fullname = $coursenames[$courseid]->fullname;
+            }
+            $node->data->course_node_id_description->{$key}->coursefullname = $coursenames[$courseid]->fullname;
+            if (isset($coursenames[$courseid]->shortname)) {
+                $node->data->course_node_id_description->{$key}->shortname = $coursenames[$courseid]->shortname;
             }
         }
     }
@@ -955,7 +971,10 @@ class learning_paths {
         $completioncolumnprogress = [];
         foreach ($node->data->course_node_id as $coursenodeid) {
             $course = learning_path_update::get_course($coursenodeid);
-            $courseprogrressarray[$coursenodeid] = (int) progress::get_course_progress_percentage($course, $userid);
+            // A deleted node course has no progress (#601).
+            $courseprogrressarray[$coursenodeid] = $course
+                ? (int) progress::get_course_progress_percentage($course, $userid)
+                : 0;
         }
         arsort($courseprogrressarray);
         $sortedcourseprogress = array_values($courseprogrressarray);
@@ -1200,30 +1219,73 @@ class learning_paths {
 
     /**
      * Who is on the roster of a course: everybody with an ACTIVE enrolment
-     * there, by whatever method - and everybody ADELE itself has enrolled
-     * there, active or suspended.
+     * there, by whatever method - and the learners ADELE keeps enrolled
+     * "without access" there.
      *
-     * A suspension is one flag with two meanings. ADELE's own: "enrolled,
-     * without access" - the host mode "hidden" keeps its learners that way on
-     * purpose, they belong on their teacher's list. Everybody else's: a
-     * person or another system took this participant out - they keep their
-     * path (a suspension in the host course is without consequence for it),
-     * but they are not shown among the course's learners (#588, addendum of
-     * 2026-10-07).
+     * A suspension is one flag with several meanings. ADELE's host mode
+     * "hidden" keeps its learners suspended on purpose: "enrolled, without
+     * access" - they belong on their teacher's list (#588). Every other
+     * suspension takes the person out: a person or another system suspended
+     * them (they keep their path, a suspension in the host course is without
+     * consequence for it, but they are not shown among the course's learners -
+     * #588, addendum of 2026-10-07), or enrol_adele suspended a learner who
+     * left (no longer carried; the record stays for the grace period and goes
+     * then). An ADELE enrolment counts at all only as Moodle counts an
+     * enrolment: the instance enabled, the time window open (re-audit
+     * 2026-11-26, #13 AK1.5: until then the suspended, ended, not yet started
+     * and disabled ADELE enrolments all counted).
+     *
+     * Hence the second part: a SUSPENDED ADELE enrolment of an ENABLED
+     * instance inside its time window, for a path that has an embedding in
+     * host mode "hidden" in this course. Teacher-view enrolments (kind 3,
+     * local_adele #600) are never learners' enrolments. Known limit: in a
+     * course with a "hidden" embedding, a learner who left keeps showing
+     * until enrol_adele removes the suspended record after the grace period -
+     * the record cannot tell the two suspensions apart.
      *
      * @param int $courseid The course.
      * @return array [sql selecting the column "id", params]
      */
     public static function roster_members_sql(int $courseid): array {
+        global $DB;
         [$activesql, $params] = get_enrolled_sql(\context_course::instance($courseid), '', 0, true);
         $sql = "SELECT active.id
-                  FROM ({$activesql}) active
+                  FROM ({$activesql}) active";
+        // The "hidden" host mode lives in mod_adele; without it nothing is kept
+        // "without access".
+        if ($DB->get_manager()->table_exists('adele')) {
+            $sql .= "
                  UNION
                 SELECT rosterue.userid
                   FROM {user_enrolments} rosterue
                   JOIN {enrol} rostere ON rostere.id = rosterue.enrolid
-                 WHERE rostere.courseid = :rostercourseid AND rostere.enrol = 'adele'";
-        $params['rostercourseid'] = $courseid;
+                  JOIN {user} rosteru ON rosteru.id = rosterue.userid AND rosteru.deleted = 0
+                 WHERE rostere.courseid = :rostercourseid AND rostere.enrol = 'adele'
+                       AND COALESCE(rostere.customint2, 0) <> :rosterteacherkind
+                       AND rostere.status = :rosterenabled
+                       AND rosterue.status = :rostersuspended
+                       AND rosterue.timestart < :rosternow1
+                       AND (rosterue.timeend = 0 OR rosterue.timeend > :rosternow2)
+                       AND EXISTS (SELECT 1
+                                     FROM {adele} rostera
+                                    WHERE rostera.course = rostere.courseid
+                                          AND rostera.learningpathid = rostere.customint1
+                                          AND rostera.hostenrolmentmode = :rosterhidden)";
+            // Through the clock (#582); core's get_enrolled_sql() reads time()
+            // for the active ones, which is the same outside tests.
+            $now = \core\di::get(\core\clock::class)->time();
+            $params += [
+                'rostercourseid' => $courseid,
+                // Teachers enrolled through the teacher view (enrol_adele kind 3,
+                // local_adele #600) are no learners of the course.
+                'rosterteacherkind' => enrol_state::TEACHER_GRANT_KIND,
+                'rosterenabled' => ENROL_INSTANCE_ENABLED,
+                'rostersuspended' => ENROL_USER_SUSPENDED,
+                'rosternow1' => $now,
+                'rosternow2' => $now,
+                'rosterhidden' => 'hidden',
+            ];
+        }
         return [$sql, $params];
     }
 

@@ -76,8 +76,17 @@
     },
     "extends": [
       "eslint:recommended",
-      "plugin:vue/essential"
-    ]
+      "plugin:vue/vue3-essential"
+    ],
+    "parserOptions": {
+      "parser": "@typescript-eslint/parser",
+      "ecmaVersion": 2022,
+      "sourceType": "module"
+    },
+    "globals": {
+      "M": "readonly",
+      "__ADELE_SOURCE_HASH__": "readonly"
+    }
   },
   "browserslist": [
     "Chrome >= 45",

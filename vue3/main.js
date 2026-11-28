@@ -29,12 +29,17 @@ import Notifications from '@kyvg/vue3-notification'
 import { createAppRouter } from './router/router'
 import tooltipDirective from './directives/tooltip';
 import A11yLiveRegion from './components/A11yLiveRegion.vue';
+import { parsePathViewSettings } from './composables/flowHelper/pathViewSettings';
+import { nextAppDomPrefix } from './composables/domIds';
 
 
 // Enables the Composition API
 window.__VUE_OPTIONS_API__ = true;
 // Disable devtools in production
 window.__VUE_PROD_DEVTOOLS__ = false;
+// The sources this bundle was built from (build gate, buildtools/check-bundle.js).
+// eslint-disable-next-line no-undef
+window.ADELE_SOURCE_HASH = typeof __ADELE_SOURCE_HASH__ === 'undefined' ? '' : __ADELE_SOURCE_HASH__;
 
 function init() {
     // We need to overwrite the variable for lazy loading.
@@ -61,9 +66,14 @@ function init() {
     localAdeleAppElements.forEach((localAdeleAppElement) => {
         if (!localAdeleAppElement.__vue_app__) {
             const app = createApp({});
+            // Page-unique DOM ids per application (#18): several ADELE
+            // applications on one page must not share the ids of their dialogs.
+            const domPrefix = nextAppDomPrefix();
+            app.config.idPrefix = domPrefix;
             app.use(VueInputAutowidth);
             app.use(Notifications);
             const store = createAppStore();
+            store.state.domPrefix = domPrefix;
             // The plugin version keys the localStorage string cache, so every
             // plugin upgrade invalidates stale cached strings automatically.
             store.dispatch('loadComponentStrings', localAdeleAppElement.getAttribute('stringsrev'));
@@ -86,6 +96,8 @@ function init() {
             const quizSettingValue = localAdeleAppElement.getAttribute('quizsetting');
             store.state.quizsetting = quizSettingValue;
             store.state.wwwroot = localAdeleAppElement.getAttribute('wwwroot');
+            // Refresh and auto-focus of an open path, site-wide (mod_adele #26, #27).
+            store.state.pathviewsettings = parsePathViewSettings(localAdeleAppElement.getAttribute('pathviewsettings'));
             const editablepathsValue = localAdeleAppElement.getAttribute('editablepaths');
             store.state.editablepaths = JSON.parse(editablepathsValue);
             store.state.version = canUseNewFaIconsnewVersion(localAdeleAppElement.getAttribute('version'));

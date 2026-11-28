@@ -25,7 +25,11 @@
     }
 }}
 
-<div id="local-adele-app-{{learningpath}}"
+{{!
+    The id carries the template's uniqid (#18): a course page shows every
+    mod_adele activity, and two of them may show the same learning path.
+}}
+<div id="local-adele-app-{{learningpath}}-{{uniqid}}"
     name="local-adele-app"
     user="{{userid}}"
     contextid="{{contextid}}"
@@ -50,6 +54,9 @@
     {{#stringsrev}}
       stringsrev="{{stringsrev}}"
     {{/stringsrev}}
+    {{#pathviewsettings}}
+      pathviewsettings="{{pathviewsettings}}"
+    {{/pathviewsettings}}
     {{#wwwroot}}
       wwwroot="{{wwwroot}}"
     {{/wwwroot}}

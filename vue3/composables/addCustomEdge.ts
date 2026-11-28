@@ -35,7 +35,7 @@ interface CustomEdge {
     'position': string;
     'z-index': number;
   };
-  markerEnd: MarkerType;
+  markerEnd: { type: MarkerType };
 }
 
 const  addCustomEdge = (source: string, target: string): CustomEdge => {
@@ -50,7 +50,8 @@ const  addCustomEdge = (source: string, target: string): CustomEdge => {
           'position': 'relative',
           'z-index': -10
         },
-        markerEnd: MarkerType.ArrowClosed,
+        // An object, so VueFlow names the marker per graph (#18).
+        markerEnd: { type: MarkerType.ArrowClosed },
        };
 
     return previewEdge;

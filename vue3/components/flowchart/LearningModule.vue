@@ -39,10 +39,10 @@
       >
         <div class="row">
           <div class="col-md-12">
-            <label for="title" class="form-label">
+            <label :for="ids.addTitle" class="form-label">
               {{ store.state.strings.flowchart_title }}
             </label>
-            <input type="text" id="title" v-model="title" class="form-control">
+            <input type="text" :id="ids.addTitle" v-model="title" class="form-control">
             <div
               v-if="showValidation"
               class="titleValidation"
@@ -54,11 +54,11 @@
         </div>
         <div class="row mt-2">
           <div class="col-md-12">
-            <label for="color" class="form-label">
+            <label :for="ids.addColor" class="form-label">
               {{ store.state.strings.flowchart_color }}
             </label>
-            <input type="color" id="color" v-model="color" class="form-control" list="presetColors">
-            <datalist id="presetColors">
+            <input type="color" :id="ids.addColor" v-model="color" class="form-control" :list="ids.addColors">
+            <datalist :id="ids.addColors">
               <option>#000000</option>
               <option>#333333</option>
               <option>#666666</option>
@@ -114,6 +114,7 @@
         </div>
         <a
           href=""
+          :aria-label="store.state.strings.edit + ': ' + module.name"
           @click.prevent="editLearningModule(module)"
         >
           <i
@@ -127,10 +128,10 @@
             class="col-12 text-center mt-2"
           >
             <div class="col-md-12">
-              <label for="canceltitle" class="form-label">
+              <label :for="ids.editTitle" class="form-label">
                 {{ store.state.strings.flowchart_title }}
               </label>
-              <input type="text" id="canceltitle" v-model="cancelTitle" class="form-control">
+              <input type="text" :id="ids.editTitle" v-model="cancelTitle" class="form-control">
               <div
                 v-if="showValidation"
                 class="titleValidation"
@@ -141,11 +142,11 @@
             </div>
             <div class="row mt-2">
               <div class="col-md-12">
-                <label for="color" class="form-label">
+                <label :for="ids.editColor" class="form-label">
                   {{ store.state.strings.flowchart_color }}
                 </label>
-                <input type="color" id="color" v-model="cancelColor" class="form-control" list="presetColors">
-                <datalist id="presetColors">
+                <input type="color" :id="ids.editColor" v-model="cancelColor" class="form-control" :list="ids.editColors">
+                <datalist :id="ids.editColors">
                 <option>#000000</option>
                 <option>#333333</option>
                 <option>#666666</option>
@@ -198,7 +199,8 @@
 
 <script setup>
 
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { appDomId } from '../../composables/domIds';
 import { useStore } from 'vuex';
 
 // Defined props from the parent component
@@ -229,6 +231,16 @@ const cancelColor = ref('')
 
 // Load Store and Router
 const store = useStore();
+// Page-unique ids (#18): the add form and the edit form can be open at the
+// same time and both had a field "color" and a list "presetColors".
+const ids = computed(() => ({
+  addTitle: appDomId(store, 'module-add-title'),
+  addColor: appDomId(store, 'module-add-color'),
+  addColors: appDomId(store, 'module-add-colors'),
+  editTitle: appDomId(store, 'module-edit-title'),
+  editColor: appDomId(store, 'module-edit-color'),
+  editColors: appDomId(store, 'module-edit-colors'),
+}));
 
 const emit = defineEmits(['changedModule']);
 

@@ -30,6 +30,7 @@ import formatIntersetingNodes from '../../composables/nodesHelper/formatInterset
 import zoneOwner from '../../composables/nodesHelper/zoneOwner'
 import LearningModule from './LearningModule.vue'
 import { useStore } from 'vuex';
+import { appDomId } from '../../composables/domIds';
 import truncatedText from '../../composables/nodesHelper/truncatedText';
 const store = useStore()
 const { project, vueFlowRef, findNode, nodes, addNodes, removeNodes, addEdges } = useVueFlow()
@@ -417,7 +418,7 @@ function changeTab(index) {
         type="text"
       >
         <input
-          id="searchTerm"
+          :id="appDomId(store, 'path-sidebar-search')"
           v-model="searchTerm"
           class="form-control"
           :placeholder="strings.placeholder_search"

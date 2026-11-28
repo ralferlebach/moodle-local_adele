@@ -37,7 +37,7 @@ async function chooser(nodes, current, stored) {
     global: { plugins: [makeStore({ node: { node_id: current }, learningpath: makeLearningPath(nodes) })] },
   });
   await flushPromises();
-  const options = () => wrapper.findAll('#courseSelect option').filter((o) => o.attributes('disabled') === undefined).map((o) => o.text());
+  const options = () => wrapper.findAll('[id$="-course"] option').filter((o) => o.attributes('disabled') === undefined).map((o) => o.text());
   const last = () => {
     const events = wrapper.emitted('update:modelValue') || [];
     return events.length ? events[events.length - 1][0] : undefined;
@@ -55,22 +55,22 @@ describe('specific_course.vue', () => {
   it('one other node: offered; choosing it stores it', async () => {
     const c = await chooser([node('dndnode_1', 'Testkurs 01'), node('dndnode_2', 'Testkurs 02')], 'dndnode_2');
     expect(c.options()).toEqual(['Testkurs 01']);
-    await c.wrapper.find('#courseSelect').setValue('dndnode_1');
+    await c.wrapper.find('[id$="-course"]').setValue('dndnode_1');
     expect(c.last()).toEqual({ courseid: 'dndnode_1' });
   });
 
   it('a change of the choice is stored', async () => {
     const nodes = [node('dndnode_1', 'Testkurs 01'), node('dndnode_2', 'Testkurs 02'), node('dndnode_3', 'Testkurs 03')];
     const c = await chooser(nodes, 'dndnode_3');
-    await c.wrapper.find('#courseSelect').setValue('dndnode_1');
-    await c.wrapper.find('#courseSelect').setValue('dndnode_2');
+    await c.wrapper.find('[id$="-course"]').setValue('dndnode_1');
+    await c.wrapper.find('[id$="-course"]').setValue('dndnode_2');
     expect(c.last()).toEqual({ courseid: 'dndnode_2' });
   });
 
   it('a stored choice is selected again and emitted', async () => {
     const nodes = [node('dndnode_1', 'Testkurs 01'), node('dndnode_2', 'Testkurs 02')];
     const c = await chooser(nodes, 'dndnode_2', { courseid: 'dndnode_1' });
-    expect(c.wrapper.find('#courseSelect').element.value).toBe('dndnode_1');
+    expect(c.wrapper.find('[id$="-course"]').element.value).toBe('dndnode_1');
     expect(c.last()).toEqual({ courseid: 'dndnode_1' });
   });
 
@@ -78,7 +78,7 @@ describe('specific_course.vue', () => {
     const nodes = [node('dndnode_1', 'Testkurs 01'), node('dndnode_2', 'Testkurs 02')];
     const c = await chooser(nodes, 'dndnode_2', { courseid: 'dndnode_9' });
     expect(c.options()).toEqual(['Testkurs 01']);
-    expect(c.wrapper.find('#courseSelect').element.value).not.toBe('dndnode_1');
+    expect(c.wrapper.find('[id$="-course"]').element.value).not.toBe('dndnode_1');
     expect(c.last()).toEqual({ courseid: 'dndnode_9' });
   });
 });

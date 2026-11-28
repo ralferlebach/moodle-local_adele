@@ -27,6 +27,7 @@ import { createStore } from 'vuex';
 import moodleAjax from 'core/ajax';
 import moodleStorage from 'core/localstorage';
 import Notification from 'core/notification';
+import { withUniqueEdges } from './composables/flowHelper/normalizeEdges';
 
 // Criteria that need a manual selection: label => the data.value field that must be set.
 // An empty selection leaks its placeholder / is unsatisfiable, so it must not be saved
@@ -194,6 +195,26 @@ export function createAppStore() {
         state() {
             return {
                 view: 'defaultView',
+                // The prefix of this application's DOM ids (#18), set in main.js.
+                domPrefix: '',
+                // The group shown in an ADELE activity (#12): -1 the activity's
+                // default, 0 all participants; the server decides what is allowed.
+                groupid: -1,
+                // Counts the groups chosen (setGroupId). Answers requested
+                // before the latest choice are dropped; the overview
+                // resolving the default group (-1) is no choice.
+                groupchoice: 0,
+                // Group mode, groups, rankings and averages (#12), as the server gives them.
+                groupoverview: null,
+                // Markers and counters per node (#14, #15) while the teachers'
+                // overview is open: nodeid => node of the snapshot.
+                livesnapshot: null,
+                livenodes: {},
+                // Where a teacher left the overview for a learner (#15 AK3.5):
+                // viewport, scroll position and the control to focus again.
+                returnpoint: null,
+                // Refresh and auto-focus of an open path (mod_adele #26, #27).
+                pathviewsettings: null,
                 // False in a read-only teacher's view (mod_adele #39).
                 canedit: true,
                 user: null,
@@ -223,7 +244,6 @@ export function createAppStore() {
                 // Learning-path-wide toggles: whether the feedback bubble and the info-symbol are
                 // shown to students. Default true (existing paths carry no settings) (#474).
                 feedbacksettings: { show_feedback: true, show_info: true },
-                feedback: null,
                 modules: null,
                 version: 0,
                 lpimages: 0,
@@ -235,6 +255,12 @@ export function createAppStore() {
                 // Text of the accessibility live region (#575 B4). Written by
                 // announce(), read by A11yLiveRegion.vue, never rendered visibly.
                 announcement: '',
+                // Teacher view of mod_adele: the tile whose courses are shown
+                // (issue "Kurszugriff in der Lehrendenansicht"), and the
+                // server's answer for the courses of this embedding - null
+                // while not asked, { loading } while asking.
+                activeNodeId: null,
+                nodeCourseAccess: null,
             };
         },
         getters: {
@@ -248,6 +274,12 @@ export function createAppStore() {
             },
             setFocusUser(state, id) {
                 state.focususer = id;
+            },
+            setActiveNode(state, nodeid) {
+                state.activeNodeId = nodeid || null;
+            },
+            setNodeCourseAccess(state, access) {
+                state.nodeCourseAccess = access;
             },
             setUserlistCollapsed(state, collapsed) {
                 state.userlistcollapsed = collapsed;
@@ -339,6 +371,27 @@ export function createAppStore() {
           },
             setLpUserPathRelations(state, data){
                 state.lpuserpathrelations = data;
+            },
+            setReturnPoint(state, point) {
+                state.returnpoint = point;
+            },
+            setGroupId(state, groupid) {
+                state.groupid = Number(groupid);
+                state.groupchoice++;
+            },
+            setGroupOverview(state, overview) {
+                state.groupoverview = overview;
+                if (overview && state.groupid < 0) {
+                    state.groupid = overview.groupid;
+                }
+            },
+            setLiveSnapshot(state, snapshot) {
+                state.livesnapshot = snapshot;
+                const nodes = {};
+                (snapshot ? snapshot.nodes : []).forEach((node) => {
+                    nodes[node.nodeid] = node;
+                });
+                state.livenodes = nodes;
             },
             setLpUserPathRelation(state, data){
                 state.lpuserpathrelation = data;
@@ -454,13 +507,59 @@ export function createAppStore() {
                 return learningpath
             },
             async fetchUserPathRelations(context) {
+                const choice = context.state.groupchoice;
                 const lpUserPathRelations = await ajax('local_adele_get_user_path_relations',
                 {
                   userid: context.state.user,
                   learningpathid: context.state.learningPathID,
                   contextid: context.state.contextid,
+                  groupid: context.state.groupid,
                 });
+                // The answer requested before another group was chosen is
+                // dropped: group changes in a row send several requests whose
+                // answers can arrive in any order (found 2026-11-26, E2E G5).
+                // The overview resolving the default group (-1) is no choice -
+                // comparing the group itself dropped the first list of every
+                // page (local stand 2026-11-26, 18 E2E red).
+                if (context.state.groupchoice !== choice) {
+                  return;
+                }
                 context.commit('setLpUserPathRelations', lpUserPathRelations);
+            },
+            // Groups, non-learners, live data (#12 - #15): read only, the
+            // server decides what the person may see.
+            async fetchGroupOverview(context) {
+                const choice = context.state.groupchoice;
+                const overview = await ajax('local_adele_get_group_overview', {
+                    contextid: context.state.contextid,
+                    groupid: context.state.groupid,
+                }, true);
+                // As above: only an answer requested since the last choice.
+                if (context.state.groupchoice === choice) {
+                    context.commit('setGroupOverview', overview);
+                }
+                return overview;
+            },
+            async fetchNonLearners(context) {
+                return ajax('local_adele_get_non_learners', {
+                    contextid: context.state.contextid,
+                    groupid: context.state.groupid,
+                }, true);
+            },
+            async fetchLiveSnapshot(context) {
+                return ajax('local_adele_get_live_snapshot', {
+                    contextid: context.state.contextid,
+                    groupid: context.state.groupid,
+                }, true);
+            },
+            async fetchNodePeople(context, { nodeid, kind, page }) {
+                return ajax('local_adele_get_node_people', {
+                    contextid: context.state.contextid,
+                    groupid: context.state.groupid,
+                    nodeid,
+                    kind,
+                    page,
+                }, true);
             },
             async fetchUserPathRelation(context, route) {
                 const lpUserPathRelation = await ajax('local_adele_get_user_path_relation',
@@ -571,7 +670,7 @@ export function createAppStore() {
                       name: payload.name,
                       description: payload.description,
                       image: payload.image,
-                      json: JSON.stringify(payload.json),
+                      json: JSON.stringify(withUniqueEdges(payload.json)),
                       contextid: context.state.contextid,
                     }, true);
                 } catch (error) {
@@ -714,6 +813,51 @@ export function createAppStore() {
                 lpid: params.lpid,
                 userid: params.userid,
               });
+            },
+            // The node courses of this embedding and whether the teacher can
+            // open each - asked anew on every activation of a tile, so a
+            // withdrawn access is not shown from an old answer. Decided on the
+            // server (mod_adele); a refusal leaves no course listed as open.
+            async fetchNodeCourseAccess(context) {
+                context.commit('setNodeCourseAccess', { loading: true, courses: [] });
+                try {
+                    const answer = await ajax('mod_adele_get_node_course_access', {
+                        contextid: context.state.contextid,
+                    }, true);
+                    context.commit('setNodeCourseAccess', {
+                        loading: false,
+                        mode: answer.mode,
+                        source: answer.source,
+                        courses: answer.courses,
+                    });
+                } catch (e) {
+                    context.commit('setNodeCourseAccess', { loading: false, error: true, courses: [] });
+                }
+            },
+            // "Request access" (local_adele #600, TP2): the dialog's data for one
+            // course, and the request itself - sent only when the teacher says
+            // so, refused or accepted by the server; the caller shows what came
+            // back, nothing optimistic.
+            async fetchAccessRequest(context, courseid) {
+                return await ajax('mod_adele_get_access_request', {
+                    contextid: context.state.contextid,
+                    courseid: Number(courseid),
+                }, true);
+            },
+            // Enrol oneself into a node course (TP4) - the role is the server's.
+            async enrolInNodeCourse(context, courseid) {
+                return await ajax('mod_adele_enrol_in_node_course', {
+                    contextid: context.state.contextid,
+                    courseid: Number(courseid),
+                }, true);
+            },
+            async sendAccessRequest(context, params) {
+                return await ajax('mod_adele_send_access_request', {
+                    contextid: context.state.contextid,
+                    courseid: Number(params.courseid),
+                    recipientid: Number(params.recipientid),
+                    message: String(params.message),
+                }, true);
             },
             // Transfer the ownership of a learning path (Adele Manager only, #488).
             async setLpOwner(context, params) {

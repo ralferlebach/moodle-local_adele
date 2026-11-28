@@ -25,6 +25,7 @@
   // Import needed libraries
   import { computed, onMounted, ref, watch } from 'vue';
   import { useStore } from 'vuex';
+import { appDomId } from '../../composables/domIds';
   import * as nodeColors from '../../config/nodeColors';
 
   const props = defineProps({
@@ -128,7 +129,7 @@
     showCard.value = false
     cardStyle.value.zIndex = 3
   }
-  const cardId = computed(() => 'adele-node-information-' + props.data.node_id)
+  const cardId = computed(() => appDomId(store, 'adele-node-information-' + props.data.node_id))
   const toggleLabel = computed(() => {
     const what = store.state.strings.a11y_node_information || ''
     return props.data.fullname ? what + ': ' + props.data.fullname : what
@@ -139,8 +140,8 @@
   const description = ref({})
   const estimate_duration = ref({})
 
-  const restriction = computed(() => props.data.completion.feedback.restriction.before || null )
-  const completion = computed(() => props.data.completion.feedback.completion.before || null )
+  const restriction = computed(() => props.data.completion.feedback.restriction.before || null )
+  const completion = computed(() => props.data.completion.feedback.completion.before || null )
 
   // The info list is rendered only when it has at least one non-empty entry. Guarding on the
   // raw collection was wrong: an object/array of empty strings ({id:''} / ['']) is truthy, so

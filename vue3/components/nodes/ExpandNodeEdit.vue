@@ -27,8 +27,19 @@
 import { computed, onMounted } from 'vue';
 import absUrl from '../../composables/absUrl';
 import { useStore } from 'vuex';
+import { appDomId } from '../../composables/domIds';
 import ExpandNodeInformation from '../nodes_items/ExpandNodeInformation.vue';
 import * as nodeColors from '../../config/nodeColors';
+import TeacherCourseAccess from '../nodes_items/TeacherCourseAccess.vue';
+import {
+  expandedCourseDescription,
+  expandedCourseFullname,
+  expandedCourseLabel,
+  expandedCourseNodeId,
+  expandedCoursePanelId,
+  expandedCourseShortname,
+  expandedCourseTitle,
+} from '../../composables/nodesHelper/expandedCourse';
 
 // Load Store
 const store = useStore();
@@ -44,10 +55,8 @@ const props = defineProps({
   },
 });
 
-const goToCourse = () => {
-  let course_link = store.state.wwwroot + '/course/view.php?id=' + props.data.course_id
-  window.open(course_link, '_blank');
-}
+// The course is opened by a link - it is navigation - in a new tab, as before.
+const courseUrl = computed(() => store.state.wwwroot + '/course/view.php?id=' + encodeURIComponent(props.data.course_id));
 
 const cover_image = computed(() => absUrl(get_cover_image(props.data), store.state.wwwroot));
 
@@ -113,17 +122,50 @@ const courses = computed(() => {
 // availablecourses pool: prefer the name carried in the node data
 // (course_node_id_description, now populated server-side for students too),
 // then the availablecourses entry, then a generic fallback (issue #457).
-const courseTitle = computed(() => {
-  const cid = props.data.course_id;
-  const desc = props.data.course_node_id_description;
-  if (desc && desc[cid] && desc[cid].fullname) {
-    return desc[cid].fullname;
-  }
-  if (courses.value[0]) {
-    return courses.value[0].givenname || courses.value[0].fullname;
-  }
-  return 'Subcourse';
-});
+const courseTitle = computed(() =>
+  expandedCourseTitle(props.data, props.data.course_id, store.state.availablecourses) || 'Subcourse'
+);
+
+const courseShortname = computed(() =>
+  expandedCourseShortname(props.data, props.data.course_id, store.state.availablecourses)
+);
+
+// The panel's readable name: the course name with its short name and id, so
+// two courses of the same name are told apart (#17).
+const courseLabel = computed(() =>
+  expandedCourseLabel(
+    expandedCourseTitle(props.data, props.data.course_id, store.state.availablecourses),
+    props.data.course_id,
+    store.state.strings,
+    courseShortname.value
+  )
+);
+
+// DOM ids of this panel: unique on the page (stack and course in them).
+// Prefixed per application (#18): two embeds of one path show the same panels.
+const panelId = computed(() => appDomId(store, expandedCoursePanelId(props.data.node_id, props.data.course_id)));
+const headingId = computed(() => panelId.value + '-heading');
+const descriptionId = computed(() => panelId.value + '-desc');
+
+// Shown below the name and read as the panel's description: short name, the
+// course's own full name, course id, status in words (#17, TP-08).
+const courseDescription = computed(() =>
+  expandedCourseDescription({
+    title: courseTitle.value,
+    shortname: courseShortname.value,
+    fullname: expandedCourseFullname(props.data, props.data.course_id, store.state.availablecourses),
+    courseid: props.data.course_id,
+    completed: isCourseCompleted.value,
+  }, store.state.strings)
+);
+
+const goToCourseLabel = computed(() =>
+  (store.state.strings.go_to_course || 'Go to course') + ': ' + courseTitle.value
+  + ' (' + (store.state.strings.opens_in_new_tab || 'opens in a new tab') + ')'
+);
+
+// The VueFlow node of this panel (the course access finds its wrapper by it).
+const accessNodeId = computed(() => expandedCourseNodeId(props.data.node_id, props.data.course_id));
 
 onMounted(() => {
   setTimeout(() => {
@@ -137,8 +179,18 @@ onMounted(() => {
   <transition name="unfold">
     <div v-if="data.showCard">
       <div
+        :id="panelId"
         class="card test"
+        role="group"
+        :aria-labelledby="headingId"
+        :aria-describedby="descriptionId"
         :style="[{ minHeight: '200px', width: '400px' }, parentStyle]"
+        :data-course-id="data.course_id"
+        :data-node-id="data.node_id"
+        :data-course-shortname="courseShortname || undefined"
+        :data-status="isCourseCompleted ? 'completed' : 'open'"
+        :data-testid="`expanded-course-${data.course_id}`"
+        :title="courseLabel"
       >
         <div class="card-header text-center" :style="headerBackgroundColor">
           <ExpandNodeInformation
@@ -148,9 +200,19 @@ onMounted(() => {
           />
           <div class="row justify-content-center">
             <div class="col-10">
-              <h5 style="color: #000;">
+              <h5
+                :id="headingId"
+                style="color: #000;"
+              >
                 {{ courseTitle }}
               </h5>
+              <p
+                :id="descriptionId"
+                class="small mb-0 adele-expanded-course-desc"
+                style="color: #000;"
+              >
+                {{ courseDescription }}
+              </p>
             </div>
           </div>
         </div>
@@ -168,16 +230,27 @@ onMounted(() => {
             }"
           >
             <div class="overlay">
-              <button
+              <a
                 class="icon-link"
+                :href="courseUrl"
+                target="_blank"
+                rel="noopener"
                 :title="store.state.strings.go_to_course"
-                @click="goToCourse"
+                :aria-label="goToCourseLabel"
+                @click.stop
               >
-                <i class="fas fa-play" />
-              </button>
+                <i
+                  class="fas fa-play"
+                  aria-hidden="true"
+                />
+              </a>
             </div>
           </div>
         </div>
+        <TeacherCourseAccess
+          :node-id="accessNodeId"
+          :course-ids="[data.course_id]"
+        />
       </div>
     </div>
   </transition>
@@ -228,5 +301,12 @@ onMounted(() => {
 }
 .icon-link:hover {
   color: lightgray; /* Hover effect */
+}
+/* A visible focus on the dark overlay (TP-08). */
+.icon-link:focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 6px #0f6cbf;
+  border-radius: 4px;
 }
 </style>

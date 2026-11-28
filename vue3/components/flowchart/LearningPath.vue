@@ -60,6 +60,10 @@
           :pattern-color="dark ? '#FFFFFB' : '#aaa'"
           gap="8"
         />
+        <!-- Default edges with page-unique DOM ids (#18). -->
+        <template #edge-default="edgeProps">
+          <ScopedEdge v-bind="edgeProps" />
+        </template>
         <template #node-custom="{ data }">
           <CustomNode
             :data="data"
@@ -103,7 +107,16 @@
         <MiniMap
           v-if="shouldShowMiniMap"
           node-color="grey"
-        />
+        >
+          <!-- Minimap nodes without the node's id (#18 AK7): one slot per node type shown. -->
+          <template
+            v-for="type in miniMapNodeTypes"
+            :key="type"
+            #[`node-${type}`]="shape"
+          >
+            <MiniMapNodeShape v-bind="shape" />
+          </template>
+        </MiniMap>
         <Panel position="top-right">
           <div class="adele-view-controls">
             <button
@@ -164,6 +177,7 @@
 </template>
 
 <script setup>
+import ScopedEdge from '../edges/ScopedEdge.vue'
 // Import needed libraries
 import { ref, watch, nextTick, onMounted, computed, onUnmounted } from 'vue'
 import { VueFlow, useVueFlow, Panel } from '@vue-flow/core'
@@ -176,6 +190,7 @@ import { Background } from '@vue-flow/background'
 import Modal from '../modals/ModalNode.vue'
 import CourseModal from '../modals/ModalCourse.vue'
 import { MiniMap } from '@vue-flow/minimap'
+import MiniMapNodeShape from './MiniMapNodeShape.vue'
 import getNodeId from '../../composables/getNodeId'
 import DropzoneNode from '../nodes/DropzoneNode.vue'
 import ModuleNode from '../nodes/ModuleNode.vue'
@@ -185,6 +200,7 @@ import { notify } from "@kyvg/vue3-notification"
 import shiftNodesDown from '../../composables/shiftNodesDown'
 import setStartingNode from '../../composables/setStartingNode';
 import addCustomEdge from '../../composables/addCustomEdge';
+import { hasEdge } from '../../composables/flowHelper/normalizeEdges';
 import removeDropzones from '../../composables/removeDropzones';
 import addAutoCompletions from '../../composables/conditions/addAutoCompletions'
 import addStagCompletions from '../../composables/conditions/addStagCompletions'
@@ -252,11 +268,54 @@ const finishEdit = () => {
 
 // load useVueFlow properties / functions
 const { nodes, edges, findNode, onConnect, addEdges, zoomTo,
-    addNodes, removeNodes, fitView, viewport, setCenter,
+    addNodes, removeNodes, fitView, viewport, setCenter, setViewport,
     toObject, getEdges, onNodeDragStop, updateNode } = useVueFlow({
 nodes: [],
 edges: [],
 })
+
+// Every node type on the graph gets the minimap node without an id.
+const miniMapNodeTypes = computed(() => [...new Set(['default', ...nodes.value.map((node) => node.type || 'default')])]);
+
+// Coming back from a learner opened from the live data (#15 AK3.5): the
+// overview as the teacher left it - viewport, scroll position, and the focus
+// on the marker or counter that led away - instead of a fresh fit.
+const returnPoint = store.state.view === 'teacher'
+  && store.state.returnpoint
+  && Number(store.state.returnpoint.learningpathid) === Number(store.state.learningPathID)
+  ? store.state.returnpoint
+  : null;
+let restoring = !!returnPoint;
+
+/**
+ * Put the overview back as the teacher left it, then forget the return point.
+ */
+function restoreReturnPoint() {
+  if (returnPoint.viewport) {
+    setViewport(returnPoint.viewport);
+  }
+  if (typeof window !== 'undefined' && typeof window.scrollTo === 'function') {
+    window.scrollTo(0, returnPoint.scrolly || 0);
+  }
+  store.commit('setReturnPoint', null);
+  if (returnPoint.focus) {
+    // The node's live data arrive with the first snapshot; wait for the control.
+    let tries = 0;
+    const focusLater = () => {
+      const root = document.querySelector('[id^="local-adele-app"]') || document;
+      const target = root.querySelector(`[data-testid="${returnPoint.focus}"]`);
+      if (target) {
+        target.focus({ preventScroll: true });
+      } else if (tries++ < 50) {
+        setTimeout(focusLater, 100);
+      }
+    };
+    focusLater();
+  }
+  setTimeout(() => {
+    restoring = false;
+  }, 500);
+}
 
 onMounted(() => {
   store.state.undoNodes = []
@@ -270,7 +329,9 @@ onMounted(() => {
         // Re-fit the whole path whenever the canvas resizes - window resize or the
         // space freed by hiding the user list - so all nodes stay reachable (#480).
         clearTimeout(fitTimeout);
-        fitTimeout = setTimeout(() => fitView({ padding: 0.2, duration: 400 }), 150);
+        if (!restoring) {
+          fitTimeout = setTimeout(() => fitView({ padding: 0.2, duration: 400 }), 150);
+        }
         break;
       }
     }
@@ -282,7 +343,11 @@ onMounted(() => {
   }
   setTimeout(() => {
     nextTick().then(() => {
-      fitView({ duration: 1000 })
+      if (returnPoint) {
+        restoreReturnPoint();
+      } else {
+        fitView({ duration: 1000 })
+      }
     })
   }, 300)
 });
@@ -343,6 +408,23 @@ const onDrag = ($event) => {
 
 const onNodeClickCall = (event) => {
   zoomstep.value = onNodeClick(event, setCenter, store )
+  activateForTeacher(event.node.id)
+}
+
+/**
+ * Teacher view of mod_adele: the activated tile shows its courses (issue
+ * "Kurszugriff in der Lehrendenansicht"). The access is asked anew on every
+ * activation - a course the teacher has lost access to meanwhile must not be
+ * offered from an old answer.
+ *
+ * @param {string} nodeid The vue-flow node id.
+ */
+function activateForTeacher(nodeid) {
+  if (store.state.view !== 'teacher' || !nodeid || nodeid === 'starting_node' || nodeid.startsWith('dropzone')) {
+    return
+  }
+  store.commit('setActiveNode', nodeid)
+  store.dispatch('fetchNodeCourseAccess')
 }
 
 // Prevent default event if node has been dropped
@@ -366,8 +448,14 @@ if (params.source !== store.state.startnode) {
  params.source = store.state.startnode;
 }
 
-addEdges(addCustomEdge( params.target, params.source));
-emit('add-edge', addCustomEdge( params.target, params.source));
+// One edge per connection (local_adele #603): connecting two nodes that are
+// connected already adds nothing - neither to the graph nor to the path.
+const newEdge = addCustomEdge(params.target, params.source)
+if (hasEdge(edges.value, newEdge)) {
+  return
+}
+addEdges(newEdge);
+emit('add-edge', addCustomEdge(params.target, params.source));
 
 props.learningpath.json.tree =
 recalculateParentChild(props.learningpath.json.tree, 'parentCourse', 'childCourse', 'starting_node')
@@ -452,6 +540,22 @@ function insertFromDialog(choice) {
  * @param {KeyboardEvent} event The keydown on the canvas.
  */
 function onCanvasKeydown(event) {
+  // Teacher view: Enter or Space on a focused tile activates it, like a
+  // click - only on the tile itself, not on a control inside it.
+  if (
+    store.state.view === 'teacher' &&
+    (event.key === 'Enter' || event.key === ' ') &&
+    document.activeElement &&
+    document.activeElement.classList.contains('vue-flow__node')
+  ) {
+    const id = document.activeElement.getAttribute('data-id')
+    const node = id ? findNode(id) : null
+    if (node) {
+      event.preventDefault()
+      onNodeClickCall({ node })
+    }
+    return
+  }
   if (event.key !== 'Delete') {
     return
   }
@@ -625,14 +729,24 @@ function insertCourseNode(type, data) {
         }
         addNodes([newNode])
       }
-      // Add the new edge
-      addEdges(addCustomEdge(source, target));
+      // Add the new edge - once (local_adele #603).
+      const droppedEdge = addCustomEdge(source, target)
+      if (!hasEdge(edges.value, droppedEdge)) {
+        addEdges(droppedEdge);
+      }
     } else if (!intersectedNode.value.dropzone.id.includes('_or')) {
       // Add Completion addAutoAndCompletions.
       newNode = addAutoCompletions(newNode, store)
       addNodes([newNode])
       if (addConditions.newEdges) {
-        addEdges(addConditions.newEdges)
+        // Only connections the graph does not have yet (local_adele #603).
+        const fresh = []
+        addConditions.newEdges.forEach((edge) => {
+          if (!hasEdge(edges.value, edge) && !hasEdge(fresh, edge)) {
+            fresh.push(edge)
+          }
+        })
+        addEdges(fresh)
       }
     }
     let tree = toObject()

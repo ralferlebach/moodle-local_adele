@@ -28,6 +28,7 @@ import { Handle, Position } from '@vue-flow/core'
 import {  useVueFlow } from '@vue-flow/core'
 import { computed, onMounted, ref, watch, defineExpose } from 'vue';
 import { useStore } from 'vuex';
+import { appDomId } from '../../composables/domIds';
 
 const store = useStore()
 
@@ -199,18 +200,18 @@ defineExpose({
                 {{ store.state.strings.nodes_feedback_before }}
               </div>
               <input
-                :id="'feedback_before_' + data.childCondition"
+                :id="appDomId(store, 'feedback_before_' + data.childCondition)"
                 v-model="feedback.feedback_before_checkmark"
                 class="form-check-input"
                 type="checkbox"
                 :disabled="!feedback.visibility"
                 @change="renderFeedback('before', true)"
               >
-              <label :for="'feedback_before_' + data.childCondition">
+              <label :for="appDomId(store, 'feedback_before_' + data.childCondition)">
                 {{ store.state.strings.nodes_feedback_use_default }}
               </label>
               <textarea
-                :id="'feedback_before_textarea_' + data.childCondition"
+                :id="appDomId(store, 'feedback_before_textarea_' + data.childCondition)"
                 v-model="feedback.feedback_before"
                 :name="store.state.strings.nodes_no_feedback"
                 class="form-control"
@@ -224,18 +225,18 @@ defineExpose({
                 {{ store.state.strings.nodes_feedback_inbetween }}
               </div>
               <input
-                :id="'feedback_inbetween_' + data.childCondition"
+                :id="appDomId(store, 'feedback_inbetween_' + data.childCondition)"
                 v-model="feedback.feedback_inbetween_checkmark"
                 class="form-check-input"
                 type="checkbox"
                 :disabled="!feedback.visibility"
                 @change="renderFeedback('inbetween', true)"
               >
-              <label :for="'feedback_inbetween_' + data.childCondition">
+              <label :for="appDomId(store, 'feedback_inbetween_' + data.childCondition)">
                 {{ store.state.strings.nodes_feedback_use_default }}
               </label>
               <textarea
-                :id="'feedback_inbetween_textarea_' + data.childCondition"
+                :id="appDomId(store, 'feedback_inbetween_textarea_' + data.childCondition)"
                 v-model="feedback.feedback_inbetween"
                 :name="store.state.strings.nodes_no_feedback"
                 class="form-control"
@@ -249,18 +250,18 @@ defineExpose({
                 {{ store.state.strings.nodes_feedback_after }}
               </div>
               <input
-                :id="'feedback_after_' + data.childCondition"
+                :id="appDomId(store, 'feedback_after_' + data.childCondition)"
                 v-model="feedback.feedback_after_checkmark"
                 class="form-check-input"
                 type="checkbox"
                 :disabled="!feedback.visibility"
                 @change="renderFeedback('after', true)"
               >
-              <label :for="'feedback_after_' + data.childCondition">
+              <label :for="appDomId(store, 'feedback_after_' + data.childCondition)">
                 {{ store.state.strings.nodes_feedback_use_default }}
               </label>
               <textarea
-                :id="'feedback_after_textarea_' + data.childCondition"
+                :id="appDomId(store, 'feedback_after_textarea_' + data.childCondition)"
                 v-model="feedback.feedback_after"
                 :name="store.state.strings.nodes_no_feedback"
                 class="form-control"

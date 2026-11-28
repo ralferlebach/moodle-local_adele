@@ -28,16 +28,12 @@ declare(strict_types=1);
 namespace local_adele\external;
 
 use context;
-use external_api;
-use external_function_parameters;
-use external_value;
-use external_single_structure;
-use external_multiple_structure;
+use core_external\external_api;
+use core_external\external_function_parameters;
+use core_external\external_value;
+use core_external\external_single_structure;
+use core_external\external_multiple_structure;
 use local_adele\learning_paths;
-
-defined('MOODLE_INTERNAL') || die();
-
-require_once($CFG->libdir . '/externallib.php');
 
 /**
  * External Service for local adele.
@@ -59,6 +55,9 @@ class get_lp_user_path_relations extends external_api {
             'userid'  => new external_value(PARAM_INT, 'userid', VALUE_REQUIRED),
             'learningpathid'  => new external_value(PARAM_INT, 'learningpathid', VALUE_REQUIRED),
             'contextid'  => new external_value(PARAM_INT, 'contextid', VALUE_REQUIRED),
+            // The group a teacher chose in an ADELE activity (#12): -1 the
+            // activity's default, 0 all participants.
+            'groupid'  => new external_value(PARAM_INT, 'groupid', VALUE_DEFAULT, -1),
             ]
         );
     }
@@ -69,13 +68,15 @@ class get_lp_user_path_relations extends external_api {
      * @param int $userid
      * @param int $learningpathid
      * @param int $contextid
+     * @param int $groupid
      * @return array
      */
-    public static function execute($userid, $learningpathid, $contextid): array {
+    public static function execute($userid, $learningpathid, $contextid, $groupid = -1): array {
         $params = self::validate_parameters(self::execute_parameters(), [
             'userid' => $userid,
             'learningpathid' => $learningpathid,
             'contextid' => $contextid,
+            'groupid' => $groupid,
         ]);
         global $USER;
         require_login();
@@ -126,54 +127,94 @@ class get_lp_user_path_relations extends external_api {
         }
         $relations = learning_paths::get_learning_user_relations($params);
 
-        // The mod_adele setting 'Participant results' = 'Only own results' must
-        // hold HERE, not only in the client: the UserList.vue filter still
-        // shipped every participant's name, progress and rank to any enrolled
-        // student's browser (#569). Teachers and path editors keep the full
-        // roster; filtering after ranking keeps the caller's true rank.
-        if (!$isprivileged && isset($relations[0]) && self::only_own_results($context, $params)) {
+        // A teacher sees the learners the activity's groups give them (#12
+        // AK0-L1/L6, #16 AK0-M2/M4): through the activity's module context
+        // the group chosen there (a foreign group is refused); through any
+        // other context - the course, another module, an activity of another
+        // path - no more than the path's activities in the course give
+        // together. Before, only the module context of the path's activity
+        // was filtered, and the course context returned the whole roster.
+        if ($isprivileged && isset($relations[0])) {
+            $scope = \local_adele\cohort::teacher_scope(
+                $context,
+                (int) $params['courseid'],
+                (int) $params['learningpathid'],
+                (int) $params['groupid']
+            );
+            if ($scope !== null) {
+                $relations = self::rerank(array_values(array_filter(
+                    $relations,
+                    static fn($relation) => isset($scope[(int) $relation['id']])
+                )));
+            }
+        }
+
+        // A learner (#12 AK0-L2, #16 AK0-M4, decision 2026-11-22):
+        // - through the module context of an activity WITHOUT groups whose
+        // 'Participant results' says 'results of all other participants':
+        // the ranking of that activity's learners (cohort: course roster,
+        // active path, participation by role), ranked among themselves.
+        // The other rows carry no id and no username - a learner can open
+        // nobody's path, the client only needs a key;
+        // - everywhere else - 'only own results' (#569), an activity with
+        // groups (the rankings of a group are get_group_overview's), the
+        // course or any other context - the own row only. Filtering after
+        // ranking keeps the caller's true rank.
+        if (!$isprivileged && isset($relations[0])) {
             $ownid = (int) $USER->id;
-            $relations = array_values(array_filter(
-                $relations,
-                static function ($relation) use ($ownid) {
-                    return (int) $relation['id'] === $ownid;
+            $scope = \local_adele\cohort::learner_roster_scope(
+                $context,
+                (int) $params['courseid'],
+                (int) $params['learningpathid']
+            );
+            if ($scope !== null) {
+                $relations = self::rerank(array_values(array_filter(
+                    $relations,
+                    static fn($relation) => (int) $relation['id'] === $ownid || isset($scope[(int) $relation['id']])
+                )));
+                foreach ($relations as $index => &$relation) {
+                    if ((int) $relation['id'] !== $ownid) {
+                        $relation['id'] = -($index + 1);
+                        $relation['username'] = '';
+                    }
                 }
-            ));
+                unset($relation);
+            } else {
+                $relations = array_values(array_filter(
+                    $relations,
+                    static function ($relation) use ($ownid) {
+                        return (int) $relation['id'] === $ownid;
+                    }
+                ));
+            }
         }
 
         return $relations;
     }
 
     /**
-     * Whether the calling context demands the 'Only own results' filter (#569).
+     * Ranks again after a filter: the same rule as the roster (progress,
+     * then completed nodes; equal values share a rank).
      *
-     * Called from the mod_adele activity that shows this path (module context)
-     * the instance's own userlist setting decides; for every other call the
-     * strictest embedding of this path in the course wins.
-     *
-     * @param context $context The context the SPA was booted with.
-     * @param array $params Validated parameters (learningpathid, courseid).
-     * @return bool
+     * @param array $relations Rows of the roster, in roster order.
+     * @return array
      */
-    protected static function only_own_results(context $context, array $params): bool {
-        global $DB;
-        if ($context->contextlevel == CONTEXT_MODULE) {
-            $cm = get_coursemodule_from_id('adele', $context->instanceid);
-            if ($cm) {
-                // Only the activity that shows THIS path speaks for it: another
-                // ADELE activity of the course, set to 'all results' for a
-                // different path, must not lift the restriction.
-                $instance = $DB->get_record('adele', ['id' => $cm->instance], 'id, learningpathid, userlist');
-                if ($instance && (int) $instance->learningpathid === (int) $params['learningpathid']) {
-                    return (int) $instance->userlist == 2;
-                }
+    protected static function rerank(array $relations): array {
+        $previous = null;
+        foreach ($relations as $index => &$relation) {
+            if (
+                $previous !== null
+                && $previous['progress']['progress'] === $relation['progress']['progress']
+                && $previous['progress']['completed_nodes'] === $relation['progress']['completed_nodes']
+            ) {
+                $relation['rank'] = $previous['rank'];
+            } else {
+                $relation['rank'] = $index + 1;
             }
+            $previous = $relation;
         }
-        return $DB->record_exists('adele', [
-            'course' => $params['courseid'],
-            'learningpathid' => $params['learningpathid'],
-            'userlist' => 2,
-        ]);
+        unset($relation);
+        return $relations;
     }
 
     /**

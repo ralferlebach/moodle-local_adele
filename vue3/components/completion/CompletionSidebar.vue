@@ -27,6 +27,7 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import { useVueFlow } from '@vue-flow/core'
 import { useStore } from 'vuex';
+import { appDomId } from '../../composables/domIds';
 
 const store = useStore()
 const { project, vueFlowRef, addNodes, addEdges, removeNodes} = useVueFlow()
@@ -313,7 +314,7 @@ const filteredConditions = computed(() => {
       {{ store.state.strings.completion_list_of_criteria }} {{ type }} {{ store.state.strings.completion_criteria }}
     </div>
     <input
-      id="searchTerm"
+      :id="appDomId(store, 'completion-sidebar-search')"
       v-model="searchTerm"
       class="form-control"
       :placeholder="strings.placeholder_search"

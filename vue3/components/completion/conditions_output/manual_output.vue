@@ -24,13 +24,13 @@
 <template>
   <div class="form-check">
     <input
-      :id="data.node_id + '_manual_completion'"
+      :id="appDomId(store, data.node_id + '_manual_completion')"
       class="form-check-input"
       type="checkbox"
       :checked="modelValue"
       @change="$emit('update:modelValue', $event.target.checked)"
     >
-    <label :for="data.node_id + '_manual_completion'">
+    <label :for="appDomId(store, data.node_id + '_manual_completion')">
       {{ store.state.strings.conditions_finish_course }}
     </label>
   </div>
@@ -39,6 +39,7 @@
 <script setup>
 
 import { useStore } from 'vuex';
+import { appDomId } from '../../../composables/domIds';
 const store = useStore();
 
 defineProps({

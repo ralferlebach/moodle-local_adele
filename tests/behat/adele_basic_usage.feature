@@ -165,7 +165,7 @@ Feature: As an admin I perform basic adele actions - create, update, duplicate, 
     And I wait "3" seconds
     And "[data-id='condition_1']" "css_element" should exist
     And exactly one "[data-id='condition_1']" element should exist
-    And exactly one "#restriction-condition_1-duration" element should exist
+    And exactly one "[name='restriction-condition_1-duration']" element should exist
     And the field "restriction-condition_1-format" matches value "0"
     And the field "restriction-condition_1-option" matches value "1"
     And the field "restriction-condition_1-duration" matches value "2"

@@ -23,6 +23,7 @@
  */
 
 namespace local_adele;
+
 use context_system;
 use moodle_exception;
 use moodle_url;

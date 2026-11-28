@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { writeFileSync } from 'node:fs';
+import { renameSync, writeFileSync } from 'node:fs';
 import { Locator, Page, expect } from '@playwright/test';
 
 /**
@@ -263,7 +263,20 @@ export function setServerTime(epoch: number): void {
     throw new Error('No test clock: ADELE_FAKETIME_FILE is not set.');
   }
   const offset = Math.round(epoch - Date.now() / 1000);
-  writeFileSync(file, `${offset >= 0 ? '+' : ''}${offset}s\n`);
+  writeClockFile(file, `${offset >= 0 ? '+' : ''}${offset}s\n`);
+}
+
+/**
+ * Write the clock file in one step: a reader (libfaketime reads it on every
+ * clock call) never sees it truncated or half written.
+ *
+ * @param file The clock file.
+ * @param content The offset.
+ */
+function writeClockFile(file: string, content: string): void {
+  const temp = `${file}.${process.pid}.tmp`;
+  writeFileSync(temp, content);
+  renameSync(temp, file);
 }
 
 /**
@@ -305,12 +318,34 @@ export function reseedFixtures(): void {
 }
 
 /**
+ * Move the server clock with the browser out of the way.
+ *
+ * A request still running on the web server while the clock jumps - a poll
+ * of the page just left - may wait for a deadline it computed on the other
+ * side of the jump (CI 2026-11-21, mod_adele: a jump back by a month stalled
+ * the web server for good). So the page leaves the site first and the
+ * server gets a moment to finish what it serves, then the clock moves.
+ *
+ * @param page The test's page.
+ * @param epoch The instant the server should see as "now"; null: the real time.
+ */
+export async function moveServerClock(page: Page, epoch: number | null): Promise<void> {
+  await page.goto('about:blank');
+  await page.waitForTimeout(1000);
+  if (epoch === null) {
+    resetServerTime();
+  } else {
+    setServerTime(epoch);
+  }
+}
+
+/**
  * Put the server back on the real time.
  */
 export function resetServerTime(): void {
   const file = process.env.ADELE_FAKETIME_FILE;
   if (file) {
-    writeFileSync(file, '+0s\n');
+    writeClockFile(file, '+0s\n');
   }
 }
 
@@ -744,7 +779,7 @@ export async function setEnrolmentStatus(
  * @param page A page showing an embedded path.
  */
 export async function participantList(page: Page): Promise<string[]> {
-  const rows: ParticipantRow[] = await page.locator('#adele-userlist-table tbody tr').evaluateAll((trs) =>
+  const rows: ParticipantRow[] = await page.locator('[data-testid="adele-userlist-table"] tbody tr').evaluateAll((trs) =>
     trs.map((tr) => {
       const cells = Array.from(tr.querySelectorAll('td'));
       const text = (index: number) => (cells[cells.length - index]?.textContent || '').trim();
@@ -924,8 +959,11 @@ export async function setSystemRole(page: Page, rolename: string, person: string
     const [list, search, button] = held
       ? [others, page.locator('#addselect_searchtext'), page.locator('#add')]
       : [holders, page.locator('#removeselect_searchtext'), page.locator('#remove')];
-    // Searched for: a long list is not shown in full.
-    await search.fill(person);
+    // Searched for: a long list (more than 100 people) is not shown in
+    // full. Typed key by key - Moodle's user selector searches on key
+    // events, a filled-in value alone does not start the search.
+    await search.fill('');
+    await search.pressSequentially(person, { delay: 20 });
     const option = list.locator('option').filter({ hasText: person });
     await expect(option, `${person} must be offered in the list`).toHaveCount(1, { timeout: 30_000 });
     await list.selectOption({ label: (await option.innerText()).trim() });

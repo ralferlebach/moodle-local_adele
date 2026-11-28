@@ -25,11 +25,11 @@
 <template>
   <div>
     <div
-      id="nodeModal"
+      :id="ids.dialog"
       tabindex="-1"
       role="dialog"
       class="modal fade"
-      aria-labelledby="exampleModalLabel"
+      :aria-labelledby="ids.title"
       aria-hidden="true"
     >
       <div
@@ -39,7 +39,7 @@
         <div class="modal-content">
           <div class="modal-header bg-primary text-white">
             <h5
-              id="exampleModalLabel"
+              :id="ids.title"
               class="modal-title"
             >
               {{ store.state.strings.modals_edit }} {{ fullname }}
@@ -48,33 +48,33 @@
               type="button"
               class="close text-white"
               data-dismiss="modal"
-              aria-label="Close"
+              :aria-label="store.state.strings.modals_close"
             >
               <span aria-hidden="true">&times;</span>
             </button>
           </div>
           <div class="modal-body">
             <div class="form-group">
-              <label for="fullname">
+              <label :for="ids.fullname">
                 <b>
                   {{ store.state.strings.modals_longname }}
                 </b>
               </label>
               <input
-                id="fullname"
+                :id="ids.fullname"
                 v-model="fullname"
                 class="form-control"
                 type="text"
               >
             </div>
             <div class="form-group">
-              <label for="description">
+              <label :for="ids.description">
                 <b>
                   {{ store.state.strings.modals_description }}
                 </b>
               </label>
               <textarea
-                id="description"
+                :id="ids.description"
                 v-model="description"
                 :name="store.state.strings.modals_no_description"
                 class="form-control"
@@ -83,7 +83,7 @@
               />
             </div>
             <div class="form-group">
-              <label for="estimate_duration">
+              <label :for="ids.duration">
                 <b>
                   {{ store.state.strings.estimate_duration }}
                   <i class="fas fa-spinner" />
@@ -91,7 +91,7 @@
                 </b>
               </label>
               <input
-                id="estimate_duration"
+                :id="ids.duration"
                 v-model="estimate_duration"
                 class="form-control"
                 type="text"
@@ -220,10 +220,23 @@
 // import dependancies
 import { useStore } from 'vuex'
 import absUrl from '../../composables/absUrl';
-import { onMounted, ref, watch, computed } from 'vue';
+import { onMounted, ref, watch, computed, onBeforeUnmount } from 'vue';
+import { DIALOGS, dialogInstanceId } from '../../composables/domIds';
 
 // define constants
 const store = useStore();
+// Page-unique ids (#18): the course dialog has fields of the same names.
+// One id per instance of this dialog in the application (#18 AK2): the
+// first is the one the openers name, a further one gets a number.
+const dialogId = dialogInstanceId(store, DIALOGS.node);
+onBeforeUnmount(dialogId.release);
+const ids = computed(() => ({
+  dialog: dialogId.base,
+  title: `${dialogId.base}-title`,
+  fullname: `${dialogId.base}-fullname`,
+  description: `${dialogId.base}-description`,
+  duration: `${dialogId.base}-estimate-duration`,
+}));
 const learningpathModal = ref(null);
 const fullname = ref('')
 const description = ref('')

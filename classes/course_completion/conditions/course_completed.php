@@ -160,7 +160,9 @@ class course_completed implements course_completion {
         foreach ($courses as $courseid) {
             $course = learning_path_update::get_course($courseid);
             $completed = false;
-            if ($course->enablecompletion) {
+            // A course deleted since it was put into the path counts as not
+            // completed, without progress (#601).
+            if ($course && $course->enablecompletion) {
                 // Get the course completion instance.
                 $completion = new completion_info($course);
                 $progress = progress::get_course_progress_percentage($course, $userid);

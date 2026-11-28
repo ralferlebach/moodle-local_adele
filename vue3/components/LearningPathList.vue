@@ -45,7 +45,9 @@
         type="button"
         class="btn btn-secondary  mt-4 mb-4 btn-block"
         data-toggle="modal"
-        data-target="#helpingSlider"
+        :data-target="tutorialTarget"
+        :aria-controls="tutorialId"
+        aria-haspopup="dialog"
       >
         {{ store.state.strings.main_intro_slider }}
         <i
@@ -324,6 +326,7 @@ import { useStore } from 'vuex'
 import { useRouter } from 'vue-router';
 import { notify } from "@kyvg/vue3-notification"
 import HelpingSlider from '../components/modals/HelpingSlider.vue'
+import { appDomId, appDomSelector, DIALOGS } from '../composables/domIds';
 
 const filteredLpItem = computed(() => {
   if (search.value != '' && ' ') {
@@ -389,6 +392,9 @@ const toggleVisibility = (learningPath) => {
 
 // Load Store and Router
 const store = useStore()
+// The tutorial dialog, by its page-unique id (#18).
+const tutorialId = computed(() => appDomId(store, DIALOGS.tutorial));
+const tutorialTarget = computed(() => appDomSelector(store, DIALOGS.tutorial));
 const router = useRouter()
 
 // Define constants that will be referenced

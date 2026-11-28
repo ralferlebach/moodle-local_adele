@@ -83,6 +83,11 @@ module.exports = {
     './components/nodes_items/UserFeedbackBlock.vue': { statements: 100, branches: 90, functions: 100, lines: 100 },
     './components/charthelper/userSearch.vue': { statements: 87, branches: 74, functions: 81, lines: 91 },
     './components/nodes/feedbackNodeRestriction.vue': { statements: 87, branches: 70, functions: 62, lines: 90 },
+    // The teacher course access (local_adele #600, TP1-TP4), measured 2026-10-16.
+    './components/nodes_items/TeacherCourseAccess.vue': { statements: 50, branches: 35, functions: 57, lines: 93 },
+    './components/nodes_items/CourseAccessRequestDialog.vue': { statements: 91, branches: 68, functions: 79, lines: 95 },
+    './components/nodes_items/CourseEnrolConfirmDialog.vue': { statements: 89, branches: 45, functions: 73, lines: 92 },
+    './components/nodes_items/modalFocus.js': { statements: 86, branches: 75, functions: 100, lines: 86 },
   },
   testEnvironment: 'jsdom',           // Use jsdom for DOM simulation
   moduleNameMapper: {

@@ -25,6 +25,7 @@ const webpack = require('webpack');
 const { VueLoaderPlugin } = require('vue-loader');
 const TerserPlugin = require('terser-webpack-plugin');
 const path = require('path');
+const { sourceHash } = require('./buildtools/sourcehash');
 
 module.exports = (env, options) => {
 
@@ -104,7 +105,9 @@ module.exports = (env, options) => {
         plugins: [
             new VueLoaderPlugin(),
             new webpack.DefinePlugin({
-                'process.env.NODE_ENV': JSON.stringify(isProduction ? 'production' : 'development')
+                'process.env.NODE_ENV': JSON.stringify(isProduction ? 'production' : 'development'),
+                // Build gate (#18 DoD6): buildtools/check-bundle.js compares it with the sources.
+                __ADELE_SOURCE_HASH__: JSON.stringify('adele-source-hash:' + sourceHash()),
             })
         ],
         watchOptions: {

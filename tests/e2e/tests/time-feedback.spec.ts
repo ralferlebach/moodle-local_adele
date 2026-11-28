@@ -49,7 +49,7 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { fixture, hasServerClock, reseedFixtures, resetServerTime, setServerTime } from '../support/fixtures';
+import { fixture, hasServerClock, moveServerClock, reseedFixtures } from '../support/fixtures';
 import {
   COLOUR,
   EN,
@@ -71,8 +71,8 @@ test.beforeEach(() => reseedFixtures());
 test.describe('ADELE-E2E-F — what a learner reads on a node with a condition on time', () => {
   test.skip(!hasServerClock(), 'needs the server test clock (libfaketime): ADELE_FAKETIME_LIB and ADELE_FAKETIME_FILE');
 
-  test.afterEach(() => {
-    resetServerTime();
+  test.afterEach(async ({ page }) => {
+    await moveServerClock(page, null);
   });
 
   test('F1/F2 a fixed window, 2032-01-15 10:00 to 12:00 UTC: before, inside, after', { tag: ['@story:F1', '@story:F2', '@story:T2'] }, async ({ page }) => {
@@ -109,7 +109,7 @@ test.describe('ADELE-E2E-F — what a learner reads on a node with a condition o
     });
 
     await test.step('inside: unlocked, and until when', async () => {
-      setServerTime(boundary(3, 'START') + AFTER_BUFFER);
+      await moveServerClock(page, boundary(3, 'START') + AFTER_BUFFER);
       const node = await learnerReads(page, 'TIME', 'dndnode_1', 'accessible');
       expect(node.feedback).toBe(
         `${EN.unlocked} You have access to this node until 15/01/32, 12:00. ${EN.todo} ${EN.completeCourse}`
@@ -129,7 +129,7 @@ test.describe('ADELE-E2E-F — what a learner reads on a node with a condition o
     });
 
     await test.step('after: the node can no longer be unlocked, and the bubble shows it', async () => {
-      setServerTime(boundary(3, 'END') + AFTER_BUFFER);
+      await moveServerClock(page, boundary(3, 'END') + AFTER_BUFFER);
       const node = await learnerReads(page, 'TIME', 'dndnode_1', 'not_accessible');
       expect(node.feedback).toBe(`${EN.gone} ${EN.todo} ${EN.completeCourse}`);
       expect(node.colour).toBe(COLOUR.gone);
@@ -181,7 +181,7 @@ test.describe('ADELE-E2E-F — what a learner reads on a node with a condition o
     });
 
     await test.step('inside the window: AND unlocked for one, the other is asked for the predecessor only', async () => {
-      setServerTime(boundary(4, 'START') + AFTER_BUFFER);
+      await moveServerClock(page, boundary(4, 'START') + AFTER_BUFFER);
       const met = await learnerReads(page, 'AND', 'dndnode_2', 'accessible');
       expect(met.feedback).toBe(
         `${EN.unlocked} You have access to this node until 15/01/33, 12:00. ${EN.todo} ${EN.completeCourse}`
@@ -201,7 +201,7 @@ test.describe('ADELE-E2E-F — what a learner reads on a node with a condition o
     });
 
     await test.step('after the window: AND can no longer be unlocked, OR stays open through its predecessor', async () => {
-      setServerTime(boundary(4, 'END') + AFTER_BUFFER);
+      await moveServerClock(page, boundary(4, 'END') + AFTER_BUFFER);
       const over = await learnerReads(page, 'AND', 'dndnode_2', 'not_accessible');
       expect(over.feedback).toBe(`${EN.gone} ${EN.todo} ${EN.completeCourse}`);
       expect(over.colour).toBe(COLOUR.gone);

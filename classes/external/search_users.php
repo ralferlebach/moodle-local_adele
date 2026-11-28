@@ -15,6 +15,7 @@
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
 namespace local_adele\external;
+
 use external_api;
 use external_function_parameters;
 use external_value;

@@ -28,6 +28,9 @@ interface Node {
   deletable: boolean;
 }
 
+import { uniqueEdges } from './flowHelper/normalizeEdges';
+import { scopeMarkers } from './domIds';
+
 interface Edge {
   id: string,
   deletable: boolean;
@@ -39,6 +42,10 @@ interface FlowChart {
 }
 
 const  loadFlowChart = (flow: FlowChart, view: string): FlowChart => {
+    // One edge per connection (local_adele #603): a stored duplicate is not drawn.
+    flow.edges = uniqueEdges(flow.edges) as Edge[]
+    // Markers named per graph, not per page (#18).
+    scopeMarkers(flow.edges)
     if (view == 'teacher') {
       flow.nodes.forEach((nodes) => {
         nodes.draggable = false

@@ -41,12 +41,12 @@
       <div class="form-group">
         <label
           class="form-label"
-          for="grade"
+          :for="appDomId(store, `completion-${completion.node_id}-grade`)"
         >
           {{ store.state.strings.conditions_min_grad }}
         </label>
         <input
-          id="grade"
+          :id="appDomId(store, `completion-${completion.node_id}-grade`)"
           v-model="grade"
           type="number"
           min="0"
@@ -62,6 +62,7 @@
 <script setup>
 import { onMounted, ref, watch } from 'vue';
 import { useStore } from 'vuex';
+import { appDomId } from '../../../composables/domIds';
 import DropdownInput from '../../nodes_items/DropdownInput.vue'
 
 // Load Store

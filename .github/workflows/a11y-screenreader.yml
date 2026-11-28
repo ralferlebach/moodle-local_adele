@@ -22,8 +22,9 @@ name: Accessibility Screenreader
 # The site is a throwaway built for this run; its accounts and the tunnel
 # address end with the run.
 #
-# EVERY run uploads ONE artefact, whatever the outcome: HTML report, video of
-# every test, the spoken phrase log of every test as a plain transcript,
+# EVERY run uploads ONE artefact, whatever the outcome: HTML report, videos
+# (green or cancelled run: of every test; red run: of the failed tests only,
+# decision 2026-11-22), the spoken phrase log of every test as a plain transcript,
 # results.json, junit.xml and the console output. For this suite the
 # recording of a PASSING run is the point: it lets a sighted reviewer follow
 # what a blind user would have heard.
@@ -92,7 +93,7 @@ jobs:
 
     steps:
       - name: Check out plugin
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           path: plugin
 
@@ -153,14 +154,33 @@ jobs:
             [mod/adaptivequiz/catmodel/catquiz]="ralferlebach/moodle-adaptivequizcatmodel_catquiz|$CATQUIZ_REF"
             [local/catquiz]="ralferlebach/moodle-local_catquiz|$CATQUIZ_REF"
           )
+          # Submodules are fetched one by one: a submodule pinned to a commit
+          # its repository no longer has (local_catquiz pins
+          # catquizcentralhub/host to ec77e605, gone from that repository -
+          # CI 2026-11-19) falls back to the repository's default branch,
+          # with a warning, instead of stopping the run.
+          fetch_submodules() {
+            local dir="$1" key name subpath url
+            [ -f "$dir/.gitmodules" ] || return 0
+            git -C "$dir" config -f .gitmodules --get-regexp '^submodule\..*\.path$' |
+            while read -r key subpath; do
+              name="${key#submodule.}"; name="${name%.path}"
+              url="$(git -C "$dir" config -f .gitmodules --get "submodule.$name.url")"
+              if ! git -C "$dir" submodule update --init --depth 1 -- "$subpath" >/dev/null 2>&1; then
+                echo "::warning::$(basename "$dir"): submodule $subpath is pinned to a commit $url does not have - using its default branch."
+                rm -rf "${dir:?}/$subpath"
+                git clone --quiet --depth 1 "$url" "$dir/$subpath"
+              fi
+            done
+          }
           # Order matters: the adapter lives INSIDE mod/adaptivequiz.
           for path in local/wunderbyte_table mod/adaptivequiz mod/adaptivequiz/catmodel/catquiz local/catquiz; do
             repo="${EXTRA[$path]%%|*}"
             ref="${EXTRA[$path]##*|}"
             src="$RUNNER_TEMP/src_$(basename "$repo")"
             rm -rf "$src"
-            git clone --quiet --depth 1 --branch "$ref" --recurse-submodules --shallow-submodules \
-              "https://github.com/$repo.git" "$src"
+            git clone --quiet --depth 1 --branch "$ref" "https://github.com/$repo.git" "$src"
+            fetch_submodules "$src"
             dest="$MOODLE_WEBROOT/$path"
             rm -rf "$dest"; mkdir -p "$(dirname "$dest")"
             cp -a "$src" "$dest"
@@ -258,7 +278,7 @@ jobs:
           sed 's/PASSWORD=.*/PASSWORD=***/' handoff/site.env
 
       - name: Hand the site to the Windows job
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: nvda-site
           path: handoff/site.env
@@ -308,10 +328,10 @@ jobs:
           mkdir -p "$RUNNER_TEMP/a11y-export"
 
       - name: Check out plugin
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: '22'
 
@@ -418,11 +438,20 @@ jobs:
           } > "$summary"
           cat "$summary" >> "$GITHUB_STEP_SUMMARY"
 
+      # A red run delivers the videos of the failed tests only (decision
+      # 2026-11-22); the transcripts of all tests stay.
+      - name: Keep the videos of the failed tests only
+        if: failure()
+        run: |
+          node tests/e2e/support/keep-failed-videos.mjs \
+            "$EXPORT_DIR/results.json" "$EXPORT_DIR" \
+            | tee -a "$EXPORT_DIR/summary.md" | tee -a "$GITHUB_STEP_SUMMARY"
+
       # One artefact, always: passed, failed or cancelled.
       - name: Upload report, videos and transcripts
         if: always()
         continue-on-error: true
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: a11y-screenreader-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/a11y-export
@@ -435,7 +464,7 @@ jobs:
 
       - name: Signal completion
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: nvda-done
           path: done/done.txt
